@@ -2,10 +2,9 @@
 
 import { Book, BookMarked, Bug, ChevronsUpDown, Cog, Gauge, House, User } from "lucide-react";
 import * as React from "react"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
+import { Sidebar, SidebarContent, SidebarHeader, SidebarMenuButton } from "./ui/sidebar";
 import { NavMain } from "./nav-main";
 import { NavSecondary } from "./nav-secondary";
-import { SignOutButton } from "./sign-out-button";
 import { Epics } from "@/lib/supabase/test-cases";
 
 const data = {
@@ -83,13 +82,6 @@ export function AppSidebar({epics, ...props }: React.ComponentProps<typeof Sideb
                 <NavMain items={data.navMain} />
                 <NavSecondary epics={epics} />
             </SidebarContent>
-            <SidebarFooter>
-                <SidebarMenu>
-                    <SidebarMenuItem>
-                        <SignOutButton />
-                    </SidebarMenuItem>
-                </SidebarMenu>
-            </SidebarFooter>
         </Sidebar>
     )
 }
