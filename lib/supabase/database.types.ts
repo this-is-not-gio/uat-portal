@@ -14,7 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      epics: {
+      testing_suites: {
         Row: {
           code: string | null
           created_at: string
@@ -164,7 +164,7 @@ export type Database = {
             foreignKeyName: "sections_epic_id_fkey"
             columns: ["epic_id"]
             isOneToOne: false
-            referencedRelation: "epics"
+            referencedRelation: "testing_suites"
             referencedColumns: ["id"]
           },
         ]

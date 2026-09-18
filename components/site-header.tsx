@@ -1,14 +1,60 @@
+"use client";
 
-import { Button } from "./ui/button";
-import { Separator } from "./ui/separator";
-import { SidebarTrigger } from "./ui/sidebar";
+import Link from "next/link";
+import { Fragment } from "react";
+import { usePathname } from "next/navigation";
+import {
+	Breadcrumb,
+	BreadcrumbItem,
+	BreadcrumbLink,
+	BreadcrumbList,
+	BreadcrumbPage,
+	BreadcrumbSeparator,
+} from "./ui/breadcrumb";
+import type { TestingSuites } from "@/lib/supabase/Init";
 
-export function SiteHeader() {
-    return (
-        <header className="flex shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear ">
-            <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:py-4 lg:px-4">
-                <SidebarTrigger className="-ml-1 text-black" />
-            </div>
-        </header>
-    )
+const SEGMENT_LABELS: Record<string, string> = {
+	dashboard: "Dashboard",
+	masterPlan: "Master Plan",
+	testingsuite: "Testing Suites",
+};
+
+function labelForSegment(segment: string, testingSuites: TestingSuites) {
+	const suite = testingSuites.find((testingSuite) => testingSuite.id === segment);
+	if (suite) return suite.title;
+	return SEGMENT_LABELS[segment] ?? decodeURIComponent(segment);
+}
+
+export function SiteHeader({ testingSuites }: { testingSuites: TestingSuites }) {
+	const pathname = usePathname();
+	const segments = pathname.split("/").filter(Boolean);
+
+	const crumbs = segments.map((segment, index) => ({
+		href: "/" + segments.slice(0, index + 1).join("/"),
+		label: labelForSegment(segment, testingSuites),
+		isLast: index === segments.length - 1,
+	}));
+
+	return (
+		<header className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear p-4 ">
+			<Breadcrumb>
+				<BreadcrumbList>
+					{crumbs.map((crumb) => (
+						<Fragment key={crumb.href}>
+							<BreadcrumbItem className="">
+								{crumb.isLast ? (
+									<BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+								) : (
+									<BreadcrumbLink render={<Link href={crumb.href} />}>
+										{crumb.label}
+									</BreadcrumbLink>
+								)}
+							</BreadcrumbItem>
+							{!crumb.isLast && <BreadcrumbSeparator />}
+						</Fragment>
+					))}
+				</BreadcrumbList>
+			</Breadcrumb>
+		</header>
+	);
 }

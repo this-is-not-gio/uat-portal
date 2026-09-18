@@ -91,7 +91,7 @@ function toTestCase(row: TestCaseRow): TestCase {
 export async function getEpicBySlug(slug: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("epics")
+    .from("testing_suites")
     .select("id, name, description, slug, code")
     .eq("slug", slug)
     .maybeSingle();
@@ -118,7 +118,7 @@ export async function getSectionsByEpicId(epicId: string): Promise<Section[]> {
   return data.map((s) => ({ id: s.id, name: s.name, orderIndex: s.order_index }));
 }
 
-export async function getTestCasesByEpicId(epicId: string): Promise<TestCase[]> {
+export async function getTestCasesByTestSuitesId(epicId: string): Promise<TestCase[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("test_cases")
@@ -131,32 +131,3 @@ export async function getTestCasesByEpicId(epicId: string): Promise<TestCase[]> 
   return (data as unknown as TestCaseRow[]).map(toTestCase);
 }
 
-
-export type Epics = {
-    id: string;
-    title: string;
-    slug: string;
-    section: {
-        id: string;
-        name: string;
-    }[];
-}
-
-export async function getAllEpics() {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("epics")
-      .select("id, name, description, slug, code,sections (id, name)")
-      .order("name", { ascending: true });
-
-    if (error) throw error;
-    return data.map((epic) => ({
-        id: epic.id,
-        title: epic.name,
-        slug: epic.slug,
-        section: epic.sections.map((section) => ({
-            id: section.id,
-            name: section.name
-        }))
-    }));
-}
