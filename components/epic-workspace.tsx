@@ -1,10 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Board } from "@/components/board/board";
-import { DataTable } from "@/components/table/data-table";
-import { uatTicketColumns } from "@/components/table/uat-ticket-columns";
-import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SquareKanban, Sheet } from "lucide-react";
 import type { TestCase } from "@/components/types";

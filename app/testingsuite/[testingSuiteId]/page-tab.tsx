@@ -121,12 +121,166 @@ const mockTestCases: TestCase[] = [
 			},
 		],
 	},
+	{
+		id: "TC-005",
+		title: "Validate required document uploads",
+		description: "Verify the system requires all mandatory supporting documents before an application can proceed.",
+		section: "Application Intake",
+		priority: "medium",
+		roleAssignee: "Action-Officer",
+		lane: "pass",
+		order: 4,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Attempt to submit an application without uploading a mandatory document.",
+				expectedResults: [{ id: "res-1", result: "System blocks submission and lists the missing document." }],
+			},
+		],
+	},
+	{
+		id: "TC-006",
+		title: "Flag duplicate company registration",
+		description: "Verify the system detects and flags a registration attempt for an already-registered company.",
+		section: "Application Intake",
+		priority: "high",
+		roleAssignee: "Action-Officer",
+		lane: "fail",
+		order: 5,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Submit a registration using details that match an existing company record.",
+				expectedResults: [{ id: "res-1", result: "System flags the application as a possible duplicate for review." }],
+			},
+		],
+	},
+	{
+		id: "TC-007",
+		title: "Escalate stalled application past SLA",
+		description: "Verify an application pending SEC endorsement beyond the SLA window is escalated automatically.",
+		section: "SEC Endorsement",
+		priority: "medium",
+		roleAssignee: "Supervisor",
+		lane: "backlog",
+		order: 6,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Leave an application in 'Pending SEC Endorsement' status past the configured SLA.",
+				expectedResults: [{ id: "res-1", result: "Application is escalated and a notification is sent to the supervisor." }],
+			},
+		],
+	},
+	{
+		id: "TC-008",
+		title: "Reject endorsement with missing SEC remarks",
+		description: "Verify SEC endorsement cannot be rejected without providing a reason.",
+		section: "SEC Endorsement",
+		priority: "medium",
+		roleAssignee: "Supervisor",
+		lane: "fail",
+		order: 7,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Attempt to reject an application's SEC endorsement without entering remarks.",
+				expectedResults: [{ id: "res-1", result: "System blocks the rejection and prompts for remarks." }],
+			},
+		],
+	},
+	{
+		id: "TC-009",
+		title: "Route endorsed application to Division Manager",
+		description: "Verify an application approved at SEC endorsement is routed to the correct Division Manager queue.",
+		section: "SEC Endorsement",
+		priority: "high",
+		roleAssignee: "Division-Manager",
+		lane: "pass",
+		order: 8,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Approve an application's SEC endorsement.",
+				expectedResults: [{ id: "res-1", result: "Application appears in the assigned Division Manager's queue." }],
+			},
+		],
+	},
+	{
+		id: "TC-010",
+		title: "Allow resubmission after rejection",
+		description: "Verify a rejected application can be corrected and resubmitted without creating a duplicate record.",
+		section: "Application Intake",
+		priority: "medium",
+		roleAssignee: "Action-Officer",
+		lane: "backlog",
+		order: 9,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Correct a rejected application's flagged fields and resubmit.",
+				expectedResults: [{ id: "res-1", result: "Application updates in place and re-enters the intake queue." }],
+			},
+		],
+	},
+	{
+		id: "TC-011",
+		title: "Deputy Commissioner final sign-off",
+		description: "Verify the Deputy Commissioner can grant final sign-off once all prior approvals are complete.",
+		section: "Certificate Issuance",
+		priority: "high",
+		roleAssignee: "Deputy-Commissioner",
+		lane: "pass",
+		order: 10,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Review a fully-approved application and grant final sign-off.",
+				expectedResults: [{ id: "res-1", result: "Application status changes to 'Approved' and certificate generation is triggered." }],
+			},
+		],
+	},
+	{
+		id: "TC-012",
+		title: "Prevent certificate reissue for revoked application",
+		description: "Verify a revoked application cannot have its certificate reissued.",
+		section: "Certificate Issuance",
+		priority: "low",
+		roleAssignee: "Deputy-Commissioner",
+		lane: "fail",
+		order: 11,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Attempt to reissue a certificate for an application marked 'Revoked'.",
+				expectedResults: [{ id: "res-1", result: "System blocks the action and displays a revoked-status error." }],
+			},
+		],
+	},
+	{
+		id: "TC-013",
+		title: "Insurance Commissioner audit review",
+		description: "Verify the Insurance Commissioner can view an audit trail of all approval actions on an application.",
+		section: "Certificate Issuance",
+		priority: "low",
+		roleAssignee: "Insurance Commissioner",
+		lane: "backlog",
+		order: 12,
+		stepsToExecute: [
+			{
+				id: "step-1",
+				step: "Open the audit trail for a fully-processed application.",
+				expectedResults: [{ id: "res-1", result: "All approval steps, actors, and timestamps are displayed in order." }],
+			},
+		],
+	},
 ];
 
 export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 	const [tab, setTab] = useState("overview");
 	const [activeSection, setActiveSection] = useState("all");
-	const [TestCases, setTestCases] = useState<TestCase[]>(testCases);
+	const [TestCases, setTestCases] = useState<TestCase[]>(mockTestCases);
+	const [viewMode, setViewMode] = useState<"table" | "board">("table");
 
 	// const sections = Array.from(
 	// 	new Set(testCases.map((testCase) => testCase.section).filter(Boolean))
@@ -527,7 +681,7 @@ export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 									</ComboboxList>
 								</ComboboxContent>
 							</Combobox>
-							<Tabs defaultValue="table" className="min-h-0 flex flex-row">
+							<Tabs defaultValue="table" className="min-h-0 flex flex-row" onValueChange={(value) => setViewMode(value as "table" | "board")}>
 							<TabsList className="">
 								<TabsTrigger value="table" className="w-1/2">
 									<Sheet className="h-4 w-4" />
@@ -538,12 +692,19 @@ export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 							</TabsList>
 							</Tabs>
 						</div>
-						{/* <DataTable
-							columns={columns}
-							data={mockTestCases}
-							renderRowDetail={(testCase) => <TestCaseSheet testCase={testCase} />}
-						/> */}
-						<Board testCases={TestCases} setTestCases={setTestCases} />
+						<Tabs value={viewMode} className="min-h-0 flex-1">
+							<TabsContent value="table" className="min-h-0 flex-1">
+								<DataTable
+								columns={columns}
+								data={mockTestCases}
+								renderRowDetail={(testCase) => <TestCaseSheet testCase={testCase} />}
+							/>
+							</TabsContent>
+							<TabsContent value="board" className="min-h-0 flex-1">
+								<Board testCases={TestCases} setTestCases={setTestCases} />
+							</TabsContent>	
+						</Tabs>
+						
 					</div>
 				</TabsContent>
 			</Tabs>
