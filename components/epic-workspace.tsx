@@ -24,7 +24,7 @@ export function EpicWorkspace({
 }: {
 	initialTestCases: TestCase[];
 }) {
-	const [testCases, setTestCases] = useState<TestCase[]>(initialTestCases);
+	
 	const [viewMode, setViewMode] = useState<"table" | "board">("table");
 	const [selectedFramework, setSelectedFramework] = useState<string | null>(null);
 	const frameworks = ["Next.js", "SvelteKit", "Nuxt.js", "Remix", "Astro"]
@@ -58,14 +58,14 @@ export function EpicWorkspace({
 			</div>
 			<Tabs value={viewMode} className="min-h-0 flex-1 w-full flex flex-col">
 				<TabsContent value="board" className="flex min-h-0 flex-col">
-					<Board testCases={testCases} setTestCases={setTestCases} />
+					{/* <Board testCases={testCases} setTestCases={setTestCases} /> */}
 				</TabsContent>
 				<TabsContent value="table" className="flex min-h-0 flex-col">
-					<DataTable
+					{/* <DataTable
 						columns={uatTicketColumns}
 						data={testCases}
 						renderRowDetail={(testCase) => <TestCaseSheet testCase={testCase} />}
-					/>
+					/> */}
 				</TabsContent>
 			</Tabs>
 		</div>

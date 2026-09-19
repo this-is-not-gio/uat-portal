@@ -10,13 +10,14 @@ export type TestingSuites = {
         id: string;
         name: string;
     }[];
+    created_at: string;
 }[]
 
 export async function getTestingSuites(){
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("testing_suites")
-      .select("id, name, description, slug, code,sections (id, name)")
+      .select("id, name, description, slug, code, sections (id, name), created_at")
       .order("name", { ascending: true });
     if (error) throw error;
     return data.map((testingSuite) => ({
@@ -28,6 +29,7 @@ export async function getTestingSuites(){
         section: testingSuite.sections.map((section) => ({
             id: section.id,
             name: section.name
-        }))
+        })),
+        created_at: testingSuite.created_at,
     }));
 }

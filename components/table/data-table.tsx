@@ -13,6 +13,8 @@ import {
 import { Sheet, SheetTrigger } from "@/components/ui/sheet"
 
 import { features, type DataTableFeatures } from "./data-table-features"
+import { ClipboardCheck, ClipboardIcon, ClipboardXIcon } from "lucide-react"
+import { Badge } from "../ui/badge"
 
 interface DataTableProps<TData extends RowData> {
 	columns: ColumnDef<DataTableFeatures, TData>[]
@@ -41,7 +43,7 @@ export function DataTable<TData extends RowData>({
 							<TableRow key={headerGroup.id}>
 								{
 									headerGroup.headers.map((header) => (
-										<TableHead key={header.id} className="bg-gray-50 px-4">
+										<TableHead key={header.id} className="bg-gray-50 text-xs first:pl-4 last:pr-4 last:text-right">
 											{header.isPlaceholder ? null : (
 												<table.FlexRender header={header}/>
 											)}
@@ -57,7 +59,7 @@ export function DataTable<TData extends RowData>({
 						table.getRowModel().rows.length ? (
 							table.getRowModel().rows.map((row) => {
 								const cells = row.getVisibleCells().map((cell) => (
-									<TableCell key={cell.id} className="px-4 text-sm">
+									<TableCell key={cell.id} className="first:pl-4 last:pr-4 text-sm">
 										<table.FlexRender cell={cell}/>
 									</TableCell>
 								))
@@ -90,6 +92,7 @@ export function DataTable<TData extends RowData>({
 					}
 				</TableBody>
 			</Table>
+			
 		</div>
 	)
 

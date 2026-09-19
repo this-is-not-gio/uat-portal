@@ -25,6 +25,8 @@ import {
 	Folder,
 	Sheet,
 	SquareKanban,
+	ClipboardXIcon,
+	ClipboardIcon,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,8 +46,10 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { DataTable } from "@/components/table/data-table";
-import { uatTicketColumns } from "@/components/table/uat-ticket-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
+import { columns } from "@/components/table/columns";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
+import { Board } from "@/components/board/board";
 
 
 const mockTestCases: TestCase[] = [
@@ -122,6 +126,7 @@ const mockTestCases: TestCase[] = [
 export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 	const [tab, setTab] = useState("overview");
 	const [activeSection, setActiveSection] = useState("all");
+	const [TestCases, setTestCases] = useState<TestCase[]>(testCases);
 
 	// const sections = Array.from(
 	// 	new Set(testCases.map((testCase) => testCase.section).filter(Boolean))
@@ -454,7 +459,7 @@ export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 					</ScrollArea>
 				</TabsContent>
 				<TabsContent value="test-cases" className="w-full h-full min-h-0 flex flex-row">
-					<div className="w-100 shrink-0 border-r flex flex-col px-4">
+					<div className="w-70 shrink-0 border-r flex flex-col px-2">
 						<SidebarContent>
 							<SidebarGroup>
 								<SidebarGroupLabel>Suite Sections</SidebarGroupLabel>
@@ -471,6 +476,44 @@ export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 						</SidebarContent>
 					</div>
 					<div className="flex-1 p-4 flex flex-col gap-4 overflow-y-hidden">
+						<div className="">
+							<Breadcrumb>
+								<BreadcrumbList>
+									<BreadcrumbItem>
+										<p className="text-xs text-muted-foreground">Test Suite</p>
+									</BreadcrumbItem>
+									<BreadcrumbSeparator />
+									<BreadcrumbItem>
+										<p className="text-xs text-muted-foreground">SEC Endorsement</p>
+									</BreadcrumbItem>
+									<BreadcrumbSeparator />
+									<BreadcrumbItem>
+										<p className="text-xs text-muted-foreground">SEC Endorsement</p>
+									</BreadcrumbItem>
+									<BreadcrumbSeparator />
+									<BreadcrumbItem>
+										<p className="text-xs text-muted-foreground">SEC Endorsement</p>
+									</BreadcrumbItem>
+								</BreadcrumbList>
+							</Breadcrumb>
+						</div>
+						<div className="bg-gray-50/30 px-4 py-3 border rounded-md flex flex-row items-center justify-between">
+							<div className="flex flex-row items-center gap-2">
+								<ClipboardIcon size={16} />
+								<p className="flex flex-row items-center gap-2 font-medium">{/* Section Name */}Login and Authentication</p>
+								<Badge variant="secondary" className="text-xs">2 Test Cases</Badge>
+							</div>
+							<div className="flex flex-row items-center gap-2">
+								<div className="py-1 px-2 border border-red-700 bg-red-200 rounded-md flex flex-row items-center gap-1">
+									<p className="text-xs text-red-950 font-semibold">1 Failed Test Case</p>
+									<ClipboardXIcon data-icon="inline-start" size={15} className="text-red-950" />
+								</div>
+								<div className="py-1 px-2 border border-green-700 bg-green-200  rounded-md flex flex-row items-center gap-1">
+									<p className="text-xs text-green-950 font-semibold">10 Passed Test Case</p>
+									<ClipboardCheck data-icon="inline-start" size={15} className="text-green-950" />
+								</div>
+							</div>
+						</div>
 						<div className="flex flex-row items-center justify-between gap-2">
 							<Combobox items={frameworks}>
 								<ComboboxInput placeholder="Select a framework..." className="w-full" />
@@ -495,11 +538,12 @@ export default function PageTab({ testCases }: { testCases: TestCase[] }) {
 							</TabsList>
 							</Tabs>
 						</div>
-						<DataTable
-							columns={uatTicketColumns}
+						{/* <DataTable
+							columns={columns}
 							data={mockTestCases}
 							renderRowDetail={(testCase) => <TestCaseSheet testCase={testCase} />}
-						/>
+						/> */}
+						<Board testCases={TestCases} setTestCases={setTestCases} />
 					</div>
 				</TabsContent>
 			</Tabs>
