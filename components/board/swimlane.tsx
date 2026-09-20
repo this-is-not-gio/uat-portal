@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TestCaseCard } from "./test-case-card";
 import { LANES, type testCaseStatus, type TestCase } from "@/components/types";
-import { CheckCircle2, ClipboardIcon, ClipboardList, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardIcon, ClipboardList, HourglassIcon, XCircle } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { ScrollArea } from "../ui/scroll-area";
 
@@ -21,7 +21,7 @@ const LANE_STYLES: Record<
 		emptyDescription: string;
 	}
 > = {
-	backlog: {
+	Untested: {
 		card: "bg-muted/40",
 		badge: "",
 		iconBg: "bg-muted/90",
@@ -30,7 +30,16 @@ const LANE_STYLES: Record<
 		emptyTitle: "Backlog is Empty",
 		emptyDescription: "New test cases will show up here.",
 	},
-	pass: {
+	"In Progress": {
+		card: "bg-amber-100/20 dark:bg-amber-950/20",
+		badge: "border-amber-600/30 bg-amber-100/60 text-amber-700 dark:border-amber-400/30 dark:bg-amber-950/40 dark:text-amber-400",
+		iconBg: "bg-amber-100/70 dark:bg-amber-950/40",
+		icon: "text-amber-600 dark:text-amber-400",
+		EmptyIcon: HourglassIcon,
+		emptyTitle: "No Tests In Progress",
+		emptyDescription: "Test cases currently being worked on will show up here.",
+	},
+	Passed: {
 		card: "bg-green-100/20 dark:bg-green-950/20",
 		badge: "border-green-600/30 bg-green-100/60 text-green-700 dark:border-green-400/30 dark:bg-green-950/40 dark:text-green-400",
 		iconBg: "bg-green-100/70 dark:bg-green-950/40",
@@ -39,7 +48,7 @@ const LANE_STYLES: Record<
 		emptyTitle: "No Passed Tests Yet",
 		emptyDescription: "Test cases marked as passed will show up here.",
 	},
-	fail: {
+	Failed: {
 		card: "bg-red-100/20 dark:bg-red-950/20",
 		badge: "border-red-600/30 bg-red-100/60 text-red-700 dark:border-red-400/30 dark:bg-red-950/40 dark:text-red-400",
 		iconBg: "bg-red-100/70 dark:bg-red-950/40",

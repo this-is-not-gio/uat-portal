@@ -8,11 +8,11 @@ import {
 	Paperclip,
 } from "lucide-react";
 import { EpicWorkspace } from "@/components/epic-workspace";
-import { getEpicBySlug, getTestCasesByTestSuitesId } from "@/lib/supabase/test-cases";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getTestSuite } from "@/lib/supabase/testsuite";
+import { getTestSuite } from "@/lib/supabase/test-suite";
 import PageTab from "./page-tab";
+import TestCasesTab from "./test-cases-tab";
 
 // function EpicPageSkeleton() {
 // 	return (
@@ -111,12 +111,17 @@ import PageTab from "./page-tab";
 // }
 export default async function TestsuitePage({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ testingSuiteId: string }>;
+	searchParams: Promise<{ tab?: string; sectionId?: string }>;
 }) {
 	const { testingSuiteId } = await params;
+	const { tab, sectionId } = await searchParams;
 	const testSuite = await getTestSuite({ id: testingSuiteId });
-	const testCases = await getTestCasesByTestSuitesId(testingSuiteId);
+
+	const testCasesTabSlot =
+		tab === "test-cases" ? <TestCasesTab testSuiteId={testingSuiteId} sectionId={sectionId} /> : null;
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -127,8 +132,9 @@ export default async function TestsuitePage({
 				</div>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col">
-				<PageTab testCases={testCases} />
+				<PageTab testCasesTab={testCasesTabSlot} />
 			</div>
 		</div>
 	)
 }
+

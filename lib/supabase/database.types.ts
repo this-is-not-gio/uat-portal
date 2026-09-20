@@ -14,44 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      testing_suites: {
-        Row: {
-          code: string | null
-          created_at: string
-          created_by: string | null
-          description: string
-          id: string
-          name: string
-          slug: string
-        }
-        Insert: {
-          code?: string | null
-          created_at?: string
-          created_by?: string | null
-          description?: string
-          id?: string
-          name: string
-          slug: string
-        }
-        Update: {
-          code?: string | null
-          created_at?: string
-          created_by?: string | null
-          description?: string
-          id?: string
-          name?: string
-          slug?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "epics_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       expected_results: {
         Row: {
           created_at: string
@@ -140,29 +102,32 @@ export type Database = {
       sections: {
         Row: {
           created_at: string
-          epic_id: string
           id: string
           name: string
           order_index: number
+          test_suite_id: string
+          updated_at: string
         }
         Insert: {
           created_at?: string
-          epic_id: string
           id?: string
           name: string
           order_index?: number
+          test_suite_id: string
+          updated_at?: string
         }
         Update: {
           created_at?: string
-          epic_id?: string
           id?: string
           name?: string
           order_index?: number
+          test_suite_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "sections_epic_id_fkey"
-            columns: ["epic_id"]
+            columns: ["test_suite_id"]
             isOneToOne: false
             referencedRelation: "testing_suites"
             referencedColumns: ["id"]
@@ -176,7 +141,6 @@ export type Database = {
           created_by: string | null
           description: string
           id: string
-          lane: Database["public"]["Enums"]["test_case_lane"]
           lifecycle_status: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index: number
           priority: Database["public"]["Enums"]["priority_level"]
@@ -184,6 +148,7 @@ export type Database = {
             | Database["public"]["Enums"]["role_assignee_type"]
             | null
           section_id: string
+          status: Database["public"]["Enums"]["test_case_status"]
           title: string
           updated_at: string
         }
@@ -193,7 +158,6 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
-          lane?: Database["public"]["Enums"]["test_case_lane"]
           lifecycle_status?: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
@@ -201,6 +165,7 @@ export type Database = {
             | Database["public"]["Enums"]["role_assignee_type"]
             | null
           section_id: string
+          status?: Database["public"]["Enums"]["test_case_status"]
           title: string
           updated_at?: string
         }
@@ -210,7 +175,6 @@ export type Database = {
           created_by?: string | null
           description?: string
           id?: string
-          lane?: Database["public"]["Enums"]["test_case_lane"]
           lifecycle_status?: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
@@ -218,6 +182,7 @@ export type Database = {
             | Database["public"]["Enums"]["role_assignee_type"]
             | null
           section_id?: string
+          status?: Database["public"]["Enums"]["test_case_status"]
           title?: string
           updated_at?: string
         }
@@ -288,7 +253,6 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
-          order_index: number
           remark: string
           test_step_id: string
         }
@@ -296,7 +260,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          order_index?: number
           remark: string
           test_step_id: string
         }
@@ -304,7 +267,6 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
-          order_index?: number
           remark?: string
           test_step_id?: string
         }
@@ -363,6 +325,44 @@ export type Database = {
           },
         ]
       }
+      testing_suites: {
+        Row: {
+          code: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          code?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "epics_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -383,10 +383,10 @@ export type Database = {
         | "Deputy-Commissioner"
         | "Insurance Commissioner"
         | "Company Admin"
-      test_case_lane: "backlog" | "pass" | "fail"
       test_case_lifecycle: "new" | "updated"
-      test_step_status: "pass" | "fail" | "skipped" | "blocked"
-      user_role: "internal" | "client"
+      test_case_status: "Untested" | "In Progress" | "Passed" | "Failed"
+      test_step_status: "Untested" | "Passed" | "Failed" | "Skipped" | "Blocked"
+      user_role: "Internal" | "External"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -526,10 +526,10 @@ export const Constants = {
         "Insurance Commissioner",
         "Company Admin",
       ],
-      test_case_lane: ["backlog", "pass", "fail"],
       test_case_lifecycle: ["new", "updated"],
-      test_step_status: ["pass", "fail", "skipped", "blocked"],
-      user_role: ["internal", "client"],
+      test_case_status: ["Untested", "In Progress", "Passed", "Failed"],
+      test_step_status: ["Untested", "Passed", "Failed", "Skipped", "Blocked"],
+      user_role: ["Internal", "External"],
     },
   },
 } as const

@@ -40,7 +40,7 @@ export function Board({
       LANES.map((lane) => ({
         ...lane,
         testCases: testCases
-          .filter((testCase) => testCase.lane === lane.id)
+          .filter((testCase) => testCase.status === lane.id)
           .sort((a, b) => a.order - b.order),
       })),
     [testCases]
@@ -50,7 +50,7 @@ export function Board({
 
   function laneOf(id: string): testCaseStatus | undefined {
     if (isLaneId(id)) return id;
-    return testCases.find((testCase) => testCase.id === id)?.lane;
+    return testCases.find((testCase) => testCase.id === id)?.status;
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -67,14 +67,14 @@ export function Board({
 
     setTestCases((current) => {
       const overCasesInLane = current
-        .filter((testCase) => testCase.lane === overLane)
+        .filter((testCase) => testCase.status === overLane)
         .sort((a, b) => a.order - b.order);
       const overIndex = overCasesInLane.findIndex((testCase) => testCase.id === over.id);
       const insertAt = overIndex === -1 ? overCasesInLane.length : overIndex;
 
       return current.map((testCase) => {
         if (testCase.id !== active.id) return testCase;
-        return { ...testCase, lane: overLane, order: insertAt - 0.5 };
+        return { ...testCase, status: overLane, order: insertAt - 0.5 };
       });
     });
   }
@@ -89,9 +89,9 @@ export function Board({
 
     setTestCases((current) => {
       const laneCases = current
-        .filter((testCase) => testCase.lane === lane)
+        .filter((testCase) => testCase.status === lane)
         .sort((a, b) => a.order - b.order);
-      const otherCases = current.filter((testCase) => testCase.lane !== lane);
+      const otherCases = current.filter((testCase) => testCase.status !== lane);
 
       const fromIndex = laneCases.findIndex((testCase) => testCase.id === active.id);
       const overCardIndex = laneCases.findIndex((testCase) => testCase.id === over.id);

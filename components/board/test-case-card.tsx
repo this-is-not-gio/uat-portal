@@ -24,16 +24,18 @@ const priorityStyles: Record<Priority, string> = {
   high: "bg-destructive/15 text-destructive",
 };
 
-const laneBadgeStyles: Record<TestCase["lane"], string> = {
-  backlog: "",
-  pass: "border-green-600/30 bg-green-100/60 text-green-700 dark:border-green-400/30 dark:bg-green-950/40 dark:text-green-400",
-  fail: "border-red-600/30 bg-red-100/60 text-red-700 dark:border-red-400/30 dark:bg-red-950/40 dark:text-red-400",
+const laneBadgeStyles: Record<TestCase["status"], string> = {
+  Untested: "",
+  "In Progress": "border-amber-600/30 bg-amber-100/60 text-amber-700 dark:border-amber-400/30 dark:bg-amber-950/40 dark:text-amber-400",
+  Passed: "border-green-600/30 bg-green-100/60 text-green-700 dark:border-green-400/30 dark:bg-green-950/40 dark:text-green-400",
+  Failed: "border-red-600/30 bg-red-100/60 text-red-700 dark:border-red-400/30 dark:bg-red-950/40 dark:text-red-400",
 };
 
-const laneBadgeLabels: Record<TestCase["lane"], string> = {
-  backlog: "Not Tested",
-  pass: "Passed",
-  fail: "Failed",
+const laneBadgeLabels: Record<TestCase["status"], string> = {
+  Untested: "Not Tested",
+  "In Progress": "In Progress",
+  Passed: "Passed",
+  Failed: "Failed",
 };
 
 export function TestCaseCard({ testCase }: { testCase: TestCase }) {
@@ -82,8 +84,8 @@ export function TestCaseCard({ testCase }: { testCase: TestCase }) {
 								<Badge variant="secondary">{testCase.roleAssignee}</Badge>
 							)}
 						</div>
-						<Badge variant="outline" className={laneBadgeStyles[testCase.lane]}>
-							{laneBadgeLabels[testCase.lane]}
+						<Badge variant="outline" className={laneBadgeStyles[testCase.status]}>
+							{laneBadgeLabels[testCase.status]}
 						</Badge>
 					</div>
 				</CardContent>
