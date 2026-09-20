@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server";
-import { testStepStatus } from "./test-cases";
+import { testCaseStatus, testStepStatus } from "./test-cases";
 
 // export const PLACEHOLDER_PIC_ID = "efac1d13-b5e3-464a-a4e3-1c4702fc96ed";
 // Placeholder "PIC" profile used as the remark author until real login exists.
@@ -41,13 +41,30 @@ export async function setStepResult({ testCaseId, stepId, status }: { testCaseId
     return data;
 }
 
+export async function setTestCaseResult({ testCaseId, status }: { testCaseId: string; status: testCaseStatus }) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_cases")
+        .update({ status })
+        .eq("id", testCaseId)
+        .select("*")
+        .single();
+        
+    if (error) {
+        console.error("Error updating test case result:", error);
+        throw error;
+    }
+    console.log("Test case result updated:", data);
+    return data;
+}
+
 
 export async function addStepRemark({stepId, remark, createdBy }: { stepId: string; remark: string; createdBy: string }) {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("test_remarks")
         .insert({ test_step_id: stepId,remark: remark, created_by: createdBy })
-        .select("*, profile:profiles(full_name)")
+        .select("*, profile:profiles(id, full_name, role)")
         .single();
 
     if (error) {
@@ -57,3 +74,4 @@ export async function addStepRemark({stepId, remark, createdBy }: { stepId: stri
     console.log("Step remark added:", data);
     return data;
 }
+

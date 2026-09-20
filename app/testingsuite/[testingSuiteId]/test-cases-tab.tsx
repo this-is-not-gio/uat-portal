@@ -254,7 +254,6 @@ export default async function TestCasesTab({ testSuiteId, sectionId }: { testSui
 	if (sectionId){
 		section = await getSection(sectionId);
 	}
-
 	const data: TreeItem[] = [
 		[
 			{ name: suite.name, id: suite.id },

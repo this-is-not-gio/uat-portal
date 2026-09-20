@@ -29,8 +29,9 @@ import {
 	TestTube2,
 	UserCheck,
 	User,
+	CircleCheck,
+	CircleX,
 } from "lucide-react";
-import type { TestCase, TestRemark, TestStatus } from "@/components/types";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "cn";
@@ -43,10 +44,12 @@ import {
 } from "@/components/ui/accordion";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
 import { testCase, testCaseStatus, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
-import { addStepRemark, setStepResult } from "@/lib/supabase/action";
+import { setStepResult } from "@/lib/supabase/action";
 import { humanizeTimestamp } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import StepResultButton from "./step-result-buttons";
+import TestCaseResult from "./test-case-result";
 
 const step_status_options: {
 	value: testStepStatus;
@@ -101,14 +104,20 @@ const status_count_classnames: Record<testStepStatus, string> = {
 
 type testcase_status_option = "Passed" | "Failed"
 
-const selected_test_case_status_classnames: Record<testcase_status_option, string> = {
-	Passed: " border bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-400",
-	Failed: " border bg-red-100/60 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 border-red-700 dark:border-red-400",
+const selected_test_case_status_classnames: Record<testcase_status_option, { className: string; Icon: LucideIcon }> = {
+	Passed: {
+		className: "border bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-400",
+		Icon: CircleCheck
+	},
+	Failed: {
+		className: " border bg-red-100/60 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 border-red-700 dark:border-red-400",
+		Icon: CircleX
+	},
 };
 
 const author_role_badge_classnames: Record<string, { className: string, Icon: LucideIcon }> = {
 	Internal: { className: "bg-blue-100/60 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-400 border-blue-700 dark:border-blue-400", Icon: User },
-	External: { className: "bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-400", Icon: UserCheck },
+	External: { className: "bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-40０", Icon: UserCheck },
 }
 
 const sample_author = {
@@ -117,7 +126,7 @@ const sample_author = {
 	full_name: "Gio Talindan"
 }
 
-export function TestCaseSheet({ testCase }: { testCase: testCase }) {
+export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCase; onChangeTestCase: (updatedTestCase: testCase) => void }) {
 	//console.log("Rendering TestCaseSheet with testCase:", testCase); // Log the testCase prop to see what is passed
 	const PLACEHOLDER_PIC_ID = "efac1d13-b5e3-464a-a4e3-1c4702fc96ed"
 	const [stepStatuses, setStepStatuses] = useState<Record<string, { status: testStepStatus }>>(
@@ -125,21 +134,20 @@ export function TestCaseSheet({ testCase }: { testCase: testCase }) {
 			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: { status: step.status ?? "Untested" } }), {}) || {};
 		}
 	);
-	const [remarkDrafts, setRemarkDrafts] = useState<Record<string, string>>({});
 	const [stepRemarks, setStepRemarks] = useState<Record<string, testRemark[]>>(
 		() => {
-			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: step.remarks }), {}) || {};
+			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: step.remarks || [] }), {}) || {};
 		}
 	);
 	console.log("Initial stepRemarks state:", stepRemarks); // Log the initial state of stepRemarks
-	const [pendingRemark, setPendingRemark] = useState<Record<string, boolean>>({});
-	const [verdict, setVerdict] = useState<TestStatus | null>(null);
+	const [testCaseStatus, setTestCaseStatus] = useState<testCaseStatus>(testCase.status);
 	const totalSteps = testCase.stepsToExecute?.length ?? 0;
-	const testedSteps = Object.keys(stepStatuses).length;
+	const testedSteps = Object.keys(stepStatuses).filter((stepId) => stepStatuses[stepId]?.status !== "Untested").length;
 	const statusCounts = step_status_options.map((option) => ({
 		...option,
 		count: Object.values(stepStatuses).filter((step) => step.status === option.value).length,
 	}));
+	
 	return (
 		<SheetContent className="overflow-y-auto data-[side=right]:w-[50vw] data-[side=right]:sm:max-w-[50vw]">
 			<SheetHeader className="px-8 pt-10">
@@ -250,43 +258,19 @@ export function TestCaseSheet({ testCase }: { testCase: testCase }) {
 												<AccordionItem className="border-none">
 													<div className="flex flex-row items-center justify-between gap-2">
 														<div className="flex items-center gap-1.5">
-															{step_status_options.map((option) => {
-																const isSelected = stepStatuses[step.id]?.status === option.value;
-																return (
-																	<Tooltip key={option.value}>
-																		<TooltipTrigger
-																			render={
-																				<Button
-																					type="button"
-																					size="icon"
-																					variant="outline"
-																					className={cn(isSelected && selected_status_classnames[option.value])}
-																					onClick={async () => {
-																						const previousStatus = stepStatuses[step.id].status;
-																						setStepStatuses((current) => ({
-																							...current,
-																							[step.id]: { status: option.value },
-																						}));
-																						try {
-																							await setStepResult({ testCaseId: testCase.id, stepId: step.id, status: option.value });
-																						} catch (error) {
-																							console.error("Failed to update step status:", error);
-																							setStepStatuses((current) => ({
-																								...current,
-																								[step.id]: { status: previousStatus },
-																							}));
-																							return;
-																						}
-																					}
-																					}>
-																					<option.Icon className="h-4 w-4" />
-																				</Button>
-																			}
-																		/>
-																		<TooltipContent>{option.label}</TooltipContent>
-																	</Tooltip>
-																);
-															})}
+															<StepResultButton 
+																stepId={step.id}
+																testCaseId={testCase.id}
+																currentStatus={stepStatuses[step.id]?.status || null}
+																statusClassName={selected_status_classnames}
+																onStatusChange={(newStatus) => {
+																	setStepStatuses((current) => ({
+																		...current,
+																		[step.id]: { status: newStatus },
+																	}));
+																}}
+																options={step_status_options}
+															/>
 														</div>
 														<AccordionTrigger className="w-fit flex-row items-center justify-start gap-1.5 rounded-md border py-1.5 px-3 text-sm font-normal hover:no-underline hover:bg-accent">
 															<MessageSquare className="h-3.5 w-3.5" />
@@ -355,25 +339,14 @@ export function TestCaseSheet({ testCase }: { testCase: testCase }) {
 																				<p className="text-xs font-medium">Leave a Remark:</p>
 																			</div>
 																			<RemarkMarkdownField
-																				value={remarkDrafts[step.id] ?? ""}
-																				onChange={(text) =>
-																					setRemarkDrafts((current) => ({ ...current, [step.id]: text }))
-																				}
-																				onCancel={() =>
-																					setRemarkDrafts((current) => ({ ...current, [step.id]: "" }))
-																				}
-																				onSubmit={async () => {
-																					const text = remarkDrafts[step.id]?.trim();
-																					if (!text) return;
-																					// setLocalRemarks((current) => ({
-																					// 	...current,
-																					// 	[step.id]: [
-																					// 		...(current[step.id] ?? []),
-																					// 		{ id: `local-${Date.now()}`, remark: text, author: "You", timestamp: "Just now" },
-																					// 	],
-																					// }));
-																					setRemarkDrafts((current) => ({ ...current, [step.id]: "" }));
-																					await addStepRemark({ stepId: step.id, remark: text, createdBy: PLACEHOLDER_PIC_ID });
+																				PIC={PLACEHOLDER_PIC_ID} // Replace with actual user ID
+																				step={step}
+																				placeholder="Leave a remark for this step"
+																				onSubmitted = {async (insertedRemark) => {
+																					setStepRemarks((current) => ({
+																						...current,
+																						[step.id]: [...(current[step.id] || []), insertedRemark],
+																					}));
 																				}}
 																			/>
 																		</div>
@@ -410,38 +383,47 @@ export function TestCaseSheet({ testCase }: { testCase: testCase }) {
 					</div>
 					{
 						testedSteps === totalSteps ? (
-							<div className="flex flex-row items-center gap-2 justify-end w-fit">
-								<SheetClose
-									render={
-										<Button
-											size="lg"
-											variant="outline"
-											disabled={totalSteps > 0 && testedSteps < totalSteps}
-											className={cn(
-												"w-50", verdict === "Failed" ? selected_test_case_status_classnames.Failed : "border bg-muted text-foreground border-border"
-											)}
-											onClick={() => setVerdict("Failed")}
-										>
-											<XCircle className="h-4 w-4" /> Fail
-										</Button>
-									}
-								/>
-								<SheetClose
-									render={
-										<Button
-											size="lg"
-											variant="outline"
-											disabled={totalSteps > 0 && testedSteps < totalSteps}
-											className={cn(
-												"w-50", verdict === "Passed" ? selected_test_case_status_classnames.Passed : "border bg-muted text-foreground border-border"
-											)}
-											onClick={() => setVerdict("Passed")}
-										>
-											<CheckCircle2 className="h-4 w-4" /> Pass
-										</Button>
-									}
-								/>
-							</div>
+							// <div className="flex flex-row items-center gap-2 justify-end w-fit">
+							// 	<SheetClose
+							// 		render={
+							// 			<Button
+							// 				size="lg"
+							// 				variant="outline"
+							// 				disabled={totalSteps > 0 && testedSteps < totalSteps}
+							// 				className={cn(
+							// 					"w-50", verdict === "Failed" ? selected_test_case_status_classnames.Failed : "border bg-muted text-foreground border-border"
+							// 				)}
+							// 				onClick={() => setVerdict("Failed")}
+							// 			>
+							// 				<XCircle className="h-4 w-4" /> Fail
+							// 			</Button>
+							// 		}
+							// 	/>
+							// 	<SheetClose
+							// 		render={
+							// 			<Button
+							// 				size="lg"
+							// 				variant="outline"
+							// 				disabled={totalSteps > 0 && testedSteps < totalSteps}
+							// 				className={cn(
+							// 					"w-50", verdict === "Passed" ? selected_test_case_status_classnames.Passed : "border bg-muted text-foreground border-border"
+							// 				)}
+							// 				onClick={() => setVerdict("Passed")}
+							// 			>
+							// 				<CheckCircle2 className="h-4 w-4" /> Pass
+							// 			</Button>
+							// 		}
+							// 	/>
+							// </div>
+							<TestCaseResult
+								testCaseId={testCase.id}
+								current={testCaseStatus}
+								onChange={(newStatus) => {
+									setTestCaseStatus(newStatus);
+									onChangeTestCase({ ...testCase, status: newStatus });
+								}}
+								selected_test_case_status_classnames={selected_test_case_status_classnames}
+							/>
 						) : (
 							<div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
 								{testedSteps} / {totalSteps} Tested Steps

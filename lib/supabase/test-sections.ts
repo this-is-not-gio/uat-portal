@@ -41,6 +41,7 @@ export async function getSection(testSectionId: string): Promise<testSection> {
 
     if (error) throw error;
 
+    console.log("Fetched section data:", data.test_cases.length);
     return {
         id: data.id,
         name: data.name,

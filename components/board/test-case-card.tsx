@@ -5,17 +5,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "cn";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Priority, TestCase } from "@/components/types";
-import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
-import { TestCaseSheet } from "../testcasesheet/test-case-sheet";
 import { Badge } from "../ui/badge";
 
 const priorityStyles: Record<Priority, string> = {
@@ -43,58 +32,40 @@ export function TestCaseCard({ testCase }: { testCase: TestCase }) {
     useSortable({ id: testCase.id });
 
   return (
-	<Sheet>
-		<SheetTrigger nativeButton={false} render= {
-			<Card
-				ref={setNodeRef}
-				style={{ transform: CSS.Transform.toString(transform), transition }}
-				{...attributes}
-				{...listeners}
-				className={cn(
-					"cursor-grab touch-none select-none active:cursor-grabbing",
-					isDragging && "opacity-50"
-				)}
-				>
-				<CardContent className="flex flex-col gap-2">
-					<div className="">
-						<p className="text-xs text-muted-foreground">{testCase.id} - {testCase.section}</p>
-						<p className="text-sm font-medium leading-snug">{testCase.title}</p>
-					</div>
-					{testCase.description && (
-					<p className="text-xs text-muted-foreground">{testCase.description}</p>
+	<Card
+		ref={setNodeRef}
+		style={{ transform: CSS.Transform.toString(transform), transition }}
+		{...attributes}
+		{...listeners}
+		className={cn(
+			"cursor-grab touch-none select-none active:cursor-grabbing",
+			isDragging && "opacity-50"
+		)}
+		>
+		<CardContent className="flex flex-col gap-2">
+			<div className="">
+				<p className="text-xs text-muted-foreground">{testCase.id} - {testCase.section}</p>
+				<p className="text-sm font-medium leading-snug">{testCase.title}</p>
+			</div>
+			{testCase.description && (
+			<p className="text-xs text-muted-foreground">{testCase.description}</p>
+			)}
+			<div className="flex items-center justify-between pt-1">
+				<div className="flex items-center gap-2">
+					{
+						testCase.stepsToExecute ? (
+							<Badge variant="secondary">{testCase.stepsToExecute.length} Steps</Badge>
+						) : null
+					}
+					{testCase.roleAssignee && (
+						<Badge variant="secondary">{testCase.roleAssignee}</Badge>
 					)}
-					<div className="flex items-center justify-between pt-1">
-						<div className="flex items-center gap-2">
-							{/* {testCase.priority && (
-								<span
-									className={cn(
-									"rounded-full px-2 py-0.5 text-xs font-medium capitalize",
-									priorityStyles[testCase.priority]
-									)}
-								>
-									{testCase.priority}
-								</span>
-							)} */}
-							{
-								testCase.stepsToExecute ? (
-									<Badge variant="secondary">{testCase.stepsToExecute.length} Steps</Badge>
-								) : null
-							}
-							{testCase.roleAssignee && (
-								<Badge variant="secondary">{testCase.roleAssignee}</Badge>
-							)}
-						</div>
-						<Badge variant="outline" className={laneBadgeStyles[testCase.status]}>
-							{laneBadgeLabels[testCase.status]}
-						</Badge>
-					</div>
-				</CardContent>
-			</Card>
-		}>
-			
-		</SheetTrigger>
-		<TestCaseSheet testCase={testCase} />
-	</Sheet>
-    
+				</div>
+				<Badge variant="outline" className={laneBadgeStyles[testCase.status]}>
+					{laneBadgeLabels[testCase.status]}
+				</Badge>
+			</div>
+		</CardContent>
+	</Card>
   );
 }
