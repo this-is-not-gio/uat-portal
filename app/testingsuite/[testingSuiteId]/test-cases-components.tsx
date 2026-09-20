@@ -11,12 +11,12 @@ import { useState } from "react";
 import { TestCase } from "@/components/types";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
-import { TestSection } from "@/lib/supabase/test-sections";
+import { testSection } from "@/lib/supabase/test-sections";
 import { testCase } from "@/lib/supabase/test-cases";
 
 const frameworks = ["Next.js", "SvelteKit", "Nuxt.js", "Remix", "Astro"];
 
-export default function TestCasesComponents({ testCases, section }: { testCases: testCase[], section?: TestSection; }) {
+export default function TestCasesComponents({ testCases, section }: { testCases: testCase[], section?: testSection; }) {
 	const [viewMode, setViewMode] = useState<"table" | "board">("table");
 	const PassedTestCases = testCases.filter((testCase) => testCase.status === "Passed").length || 0;
 	const FailedTestCases = testCases.filter((testCase) => testCase.status === "Failed").length || 0;

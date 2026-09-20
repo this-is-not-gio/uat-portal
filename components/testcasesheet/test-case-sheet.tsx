@@ -308,7 +308,7 @@ export function TestCaseSheet({ testCase }: { testCase: testCase }) {
 																	{
 																		remarks.length > 0 ? (
 																			remarks.map((remark) => {
-																				const author_role_badge = author_role_badge_classnames[remark.author?.role]
+																				const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
 																				const Icon = author_role_badge?.Icon as LucideIcon
 																				return (<div className="flex flex-row gap-2 group/remark" key={remark.id}>
 																					<div className="flex flex-col items-center group-first/remark:pt-2">

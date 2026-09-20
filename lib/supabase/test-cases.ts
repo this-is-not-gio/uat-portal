@@ -35,7 +35,7 @@ export type testStepStatus =
 export type testRemark = {
     id: string;
     remark: string;
-    author: profile;
+    author?: profile;
     created_at?: string;
 };
 
@@ -59,7 +59,7 @@ export type expectedResult = {
 
 export type testCase = {
     id: string;
-    code: string | null;
+    code?: string | null;
     title: string;
     status: testCaseStatus;
     roleAssignee?: string;
