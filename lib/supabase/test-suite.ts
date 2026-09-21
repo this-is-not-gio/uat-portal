@@ -19,12 +19,12 @@ import { createClient } from "@/lib/supabase/server";
 //   return (data as unknown as TestCaseRow[]).map(toTestCase);
 // }
 
-export async function getTestSuite({ id }: { id: string }){
+export async function getTestSuite({ slug }: { slug: string }){
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("testing_suites")
       .select("id, name, description, slug, code")
-      .eq("id", id)
+      .eq("slug", slug)
       .maybeSingle();
 
     if (error) throw error;

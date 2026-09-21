@@ -65,9 +65,19 @@ export default function PageTab({ testCasesTab }: { testCasesTab: React.ReactNod
 	const searchParams = useSearchParams();
 	const tab = searchParams.get("tab") ?? "overview";
 
+	const [, testSuiteSlug, sectionSlug] = pathname.split("/").filter(Boolean);
+
+	function handleTabChange(value: string) {
+		if (value === "test-cases") {
+			router.replace(`/testingsuite/${testSuiteSlug}/${sectionSlug ?? "all"}?tab=${value}`);
+		} else {
+			router.replace(`/testingsuite/${testSuiteSlug}?tab=${value}`);
+		}
+	}
+
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<Tabs value={tab} onValueChange={(value) => router.replace(`${pathname}?tab=${value}`)} className="w-full px-4 flex flex-col border-b">
+			<Tabs value={tab} onValueChange={handleTabChange} className="w-full px-4 flex flex-col border-b">
 				<TabsList variant="line">
 					<TabsTrigger value="overview" className="w-full">
 						<LayoutDashboard data-icon="inline-start" />

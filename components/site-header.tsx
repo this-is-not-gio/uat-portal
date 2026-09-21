@@ -20,7 +20,7 @@ const SEGMENT_LABELS: Record<string, string> = {
 };
 
 function labelForSegment(segment: string, testingSuites: TestingSuites) {
-	const suite = testingSuites.find((testingSuite) => testingSuite.id === segment);
+	const suite = testingSuites.find((testingSuite) => testingSuite.slug === segment);
 	if (suite) return suite.title;
 	return SEGMENT_LABELS[segment] ?? decodeURIComponent(segment);
 }

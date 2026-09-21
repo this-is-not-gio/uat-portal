@@ -19,8 +19,8 @@ export function NavSecondary({ testingSuites }: { testingSuites: TestingSuites }
 							<SidebarMenuItem key={testingSuite.id}>
 								<SidebarMenuButton
 									tooltip={testingSuite.title}
-									isActive={testingSuite.slug !== "#" && pathname.startsWith(testingSuite.slug)}
-									render={<Link href={`testingsuite/${testingSuite.id}`} />}
+									isActive={pathname.startsWith(`/testingsuite/${testingSuite.slug}`)}
+									render={<Link href={`testingsuite/${testingSuite.slug}`} />}
 								>
 									<span className="ml-2">{testingSuite.title}</span>
 								</SidebarMenuButton>

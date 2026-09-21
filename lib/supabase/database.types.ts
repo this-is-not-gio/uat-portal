@@ -105,6 +105,7 @@ export type Database = {
           id: string
           name: string
           order_index: number
+          slug: string
           test_suite_id: string
           updated_at: string
         }
@@ -113,6 +114,7 @@ export type Database = {
           id?: string
           name: string
           order_index?: number
+          slug: string
           test_suite_id: string
           updated_at?: string
         }
@@ -121,6 +123,7 @@ export type Database = {
           id?: string
           name?: string
           order_index?: number
+          slug?: string
           test_suite_id?: string
           updated_at?: string
         }

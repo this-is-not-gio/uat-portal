@@ -1,5 +1,4 @@
 "use client"
-
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem } from "@/components/ui/combobox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Sheet, SquareKanban, ClipboardIcon, ClipboardXIcon, ClipboardCheck } from "lucide-react";
@@ -7,14 +6,14 @@ import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { columns } from "@/components/table/columns";
 import { Board } from "@/components/board/board";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { TestCase } from "@/components/types";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { testSection } from "@/lib/supabase/test-sections";
 import { testCase } from "@/lib/supabase/test-cases";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const frameworks = ["Next.js", "SvelteKit", "Nuxt.js", "Remix", "Astro"];
 
 export default function TestCasesComponents({ testCases, section }: { testCases: testCase[], section?: testSection; }) {
 	const [testCaseData, setTestCaseData] = useState<testCase[]>(testCases);
@@ -22,6 +21,15 @@ export default function TestCasesComponents({ testCases, section }: { testCases:
 	const PassedTestCases = testCaseData.filter((testCase) => testCase.status === "Passed").length || 0;
 	const FailedTestCases = testCaseData.filter((testCase) => testCase.status === "Failed").length || 0;
 	const InProgressTestCases = testCaseData.filter((testCase) => testCase.status === "In Progress").length || 0;
+
+	type filterField = "role" | "roleAssignee" | "search"
+	type filterToken = {id: string, field: filterField, value: string}
+
+	const [filters, setFilters] = useState<filterToken[]>([]);
+	const [activeField, setActiveField] = useState<filterField | null>(null);
+	const [inputValue, setInputValue] = useState<string>("");
+
+	const frameworks = ["Cypress", "Playwright", "Selenium", "TestCafe", "Puppeteer", "WebDriverIO", "Nightwatch", "Protractor", "CodeceptJS", "Robot Framework"]
 
 
 	return (
@@ -44,38 +52,40 @@ export default function TestCasesComponents({ testCases, section }: { testCases:
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<div className="bg-gray-50/30 px-4 py-3 border rounded-md flex flex-row items-center justify-between">
-					<div className="flex flex-row items-center gap-2">
-						<ClipboardIcon size={16} />
-						<p className="flex flex-row items-center gap-2 font-medium">{section?.name}</p>
-						{
-							section?.testCases.length === 0 ? null : (
-								<Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge>
-							)
-						}
+				<Suspense fallback={<Skeleton className="h-12 w-full" />}>
+					<div className="bg-gray-50/30 px-4 py-3 border rounded-md flex flex-row items-center justify-between">
+						<div className="flex flex-row items-center gap-2">
+							<ClipboardIcon size={16} />
+							<p className="flex flex-row items-center gap-2 font-medium">{section?.name}</p>
+							{
+								section?.testCases.length === 0 ? null : (
+									<Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge>
+								)
+							}
+						</div>
+						<div className="flex flex-row items-center gap-2">
+							{
+								PassedTestCases === 0 ? null : (
+									<div className="py-1 px-2 border border-green-700 bg-green-200  rounded-md flex flex-row items-center gap-1">
+										<p className="text-xs text-green-950 font-semibold">{PassedTestCases} Passed Test Case</p>
+										<ClipboardCheck data-icon="inline-start" size={15} className="text-green-950" />
+									</div>
+								)
+							}
+							{
+								FailedTestCases === 0 ? null : (
+									<div className="py-1 px-2 border border-red-700 bg-red-200 rounded-md flex flex-row items-center gap-1">
+										<p className="text-xs text-red-950 font-semibold">{FailedTestCases} Failed Test Case</p>
+										<ClipboardXIcon data-icon="inline-start" size={15} className="text-red-950" />
+									</div>
+								)
+							}
+						</div>
 					</div>
-					<div className="flex flex-row items-center gap-2">
-						{
-							PassedTestCases === 0 ? null : (
-							<div className="py-1 px-2 border border-green-700 bg-green-200  rounded-md flex flex-row items-center gap-1">
-								<p className="text-xs text-green-950 font-semibold">{PassedTestCases} Passed Test Case</p>
-								<ClipboardCheck data-icon="inline-start" size={15} className="text-green-950" />
-							</div>
-							)
-						}
-						{
-							FailedTestCases === 0 ? null : (
-							<div className="py-1 px-2 border border-red-700 bg-red-200 rounded-md flex flex-row items-center gap-1">
-								<p className="text-xs text-red-950 font-semibold">{FailedTestCases} Failed Test Case</p>
-								<ClipboardXIcon data-icon="inline-start" size={15} className="text-red-950" />
-							</div>
-							)
-						}
-					</div>
-				</div>
+				</Suspense>
 				<div className="flex flex-row items-center justify-between gap-2">
 					<Combobox items={frameworks}>
-						<ComboboxInput placeholder="Select a framework..." className="w-full" disabled	/>
+						<ComboboxInput placeholder="Select a framework..." className="w-full" disabled />
 						<ComboboxContent>
 							<ComboboxList>
 								{frameworks.map((framework) => (
@@ -97,23 +107,25 @@ export default function TestCasesComponents({ testCases, section }: { testCases:
 						</TabsList>
 					</Tabs>
 				</div>
-				<Tabs value={viewMode} className="min-h-0 flex-1">
-					<TabsContent value="table" className="min-h-0 flex-1">
-						<DataTable
-							columns={columns}
-							data={testCaseData}
-							renderRowDetail={(testCase) => 
-								<TestCaseSheet testCase={testCase} 
-								onChangeTestCase={(updatedTestCase) => {
-									setTestCaseData(testCaseData.map((t) => t.id === updatedTestCase.id ? updatedTestCase : t));
-								}}
-								/>}
-						/>
-					</TabsContent>
-					<TabsContent value="board" className="min-h-0 flex-1">
-						{/* <Board testCases={testCasesState} setTestCases={setTestCases} /> */}
-					</TabsContent>
-				</Tabs>
+				<Suspense fallback={<Skeleton className="h-70 w-full" />}>
+					<Tabs value={viewMode} className="min-h-0 flex-1">
+						<TabsContent value="table" className="min-h-0 flex-1">
+							<DataTable
+								columns={columns}
+								data={testCaseData}
+								renderRowDetail={(testCase) =>
+									<TestCaseSheet testCase={testCase}
+										onChangeTestCase={(updatedTestCase) => {
+											setTestCaseData(testCaseData.map((t) => t.id === updatedTestCase.id ? updatedTestCase : t));
+										}}
+									/>}
+							/>
+						</TabsContent>
+						<TabsContent value="board" className="min-h-0 flex-1">
+							{/* <Board testCases={testCasesState} setTestCases={setTestCases} /> */}
+						</TabsContent>
+					</Tabs>
+				</Suspense>
 			</div>
 		</>
 	)
