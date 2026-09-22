@@ -275,7 +275,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 														<AccordionTrigger className="w-fit flex-row items-center justify-start gap-1.5 rounded-md border py-1.5 px-3 text-sm font-normal hover:no-underline hover:bg-accent">
 															<MessageSquare className="h-3.5 w-3.5" />
 															Remarks {
-																remarks.length > 0 ? (
+																remarks?.length > 0 ? (
 																	<Badge className="w-fit">{remarks.length}</Badge>
 																) : null
 															}
@@ -290,7 +290,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 																</div>
 																<div className="group/with-remark">
 																	{
-																		remarks.length > 0 ? (
+																		remarks?.length > 0 ? (
 																			remarks.map((remark) => {
 																				const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
 																				const Icon = author_role_badge?.Icon as LucideIcon

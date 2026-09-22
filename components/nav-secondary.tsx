@@ -1,6 +1,6 @@
 "use client";
 
-import { BookMarked, ChevronRight, LucideIcon } from "lucide-react";
+import { BookMarked, ChevronRight, FolderIcon, LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from "./ui/sidebar";
@@ -20,8 +20,9 @@ export function NavSecondary({ testingSuites }: { testingSuites: TestingSuites }
 								<SidebarMenuButton
 									tooltip={testingSuite.title}
 									isActive={pathname.startsWith(`/testingsuite/${testingSuite.slug}`)}
-									render={<Link href={`testingsuite/${testingSuite.slug}`} />}
+									render={<Link href={`/testingsuite/${testingSuite.slug}`} />}
 								>
+									<FolderIcon/>
 									<span className="ml-2">{testingSuite.title}</span>
 								</SidebarMenuButton>
 							</SidebarMenuItem>

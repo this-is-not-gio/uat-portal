@@ -14,16 +14,6 @@ import { getTestSuite } from "@/lib/supabase/test-suite";
 import PageTab from "../page-tab";
 import TestCasesTab from "../test-cases-tab";
 
-function Loading() {
-	return (
-
-		<>
-			<div className="flex flex-col gap-4 p-4">
-				This is a loading state for the test suite page. It will be displayed while the data is being fetched.
-			</div>
-		</>
-	)
-}
 
 
 

@@ -16,6 +16,7 @@ import { features, type DataTableFeatures } from "./data-table-features"
 import { ClipboardCheck, ClipboardIcon, ClipboardXIcon, ChevronLeft, ChevronRight } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
+import { useState } from "react"
 
 interface DataTableProps<TData extends RowData> {
 	columns: ColumnDef<DataTableFeatures, TData>[]
@@ -35,11 +36,12 @@ export function DataTable<TData extends RowData>({
 		features,
 		initialState: {
 			pagination: {
-				pageSize: 10,
+				pageSize: 9999,
 				pageIndex: 0
 			},
 		}
 	})
+	const [openRowId, setOpenRowId] = useState<string | null>(null)
 
 	return (
 		<div className="flex flex-col gap-3 h-full min-h-0">
@@ -77,17 +79,29 @@ export function DataTable<TData extends RowData>({
 									}
 
 									return (
-										<Sheet key={row.id}>
+										// <Sheet key={row.id}>
+										// 	<SheetTrigger
+										// 		nativeButton={false}
+										// 		render={
+										// 			<TableRow className="cursor-pointer">
+										// 				{cells}
+										// 			</TableRow>
+										// 		}
+										// 	/>
+										// 	{renderRowDetail(row.original)}
+										// </Sheet>
+										<Sheet key={row.id} open={openRowId === row.id} onOpenChange={(open) => setOpenRowId(open ? row.id : null)}>
 											<SheetTrigger
-												nativeButton={false}
+											nativeButton={false}
 												render={
 													<TableRow className="cursor-pointer">
 														{cells}
 													</TableRow>
 												}
 											/>
-											{renderRowDetail(row.original)}
+											{openRowId === row.id ? renderRowDetail(row.original) : null}
 										</Sheet>
+
 									)
 								})
 							) : (
@@ -101,7 +115,7 @@ export function DataTable<TData extends RowData>({
 					</TableBody>
 				</Table>
 			</div>
-			<div className="flex items-center justify-between px-1">
+			{/* <div className="flex items-center justify-between px-1">
 				<p className="text-xs text-muted-foreground">
 					Page {table.state.pagination.pageIndex + 1} of {Math.max(table.getPageCount(), 1)}
 				</p>
@@ -127,7 +141,7 @@ export function DataTable<TData extends RowData>({
 						<ChevronRight className="h-4 w-4" />
 					</Button>
 				</div>
-			</div>
+			</div> */}
 		</div>
 	)
 

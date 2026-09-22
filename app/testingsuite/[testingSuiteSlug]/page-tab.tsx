@@ -52,6 +52,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from 
 import { Board } from "@/components/board/board";
 import OverviewTab from "./overview-tab";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import TestResultTab from "./test-result-tab";
 
 
 
@@ -108,8 +109,10 @@ export default function PageTab({ testCasesTab }: { testCasesTab: React.ReactNod
 				<TabsContent value="test-cases" className="w-full h-full min-h-0 flex flex-row">
 					{testCasesTab}
 				</TabsContent>
+				<TabsContent value="test-results" className="w-full h-full min-h-0 flex flex-row">
+					<TestResultTab />
+				</TabsContent>
 			</Tabs>
 		</div>
 	);
 }
-
