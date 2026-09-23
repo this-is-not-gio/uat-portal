@@ -14,3 +14,8 @@ export function humanizeTimestamp(isoString?: string): string {
 
   return format(date, "MMM d yyyy hh:mm a");
 }
+
+export function initials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[parts.length - 1]?.[0] ?? "")).toUpperCase();
+}

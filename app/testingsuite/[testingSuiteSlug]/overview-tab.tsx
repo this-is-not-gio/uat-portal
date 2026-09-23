@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, ClipboardCheck, ClipboardList, IdCard, Info, Notebook, RotateCwFadingClock, Signpost, TestTubeDiagonal, TriangleAlert, Users } from "lucide-react";
+import { Calendar, ClipboardCheck, ClipboardList, IdCard, Info, Link, Notebook, RotateCwFadingClock, Signpost, TestTubeDiagonal, TriangleAlert, Users } from "lucide-react";
 
 export default function OverviewTab() {
 	return (
@@ -248,6 +248,35 @@ export default function OverviewTab() {
 								<Badge>Division Manager</Badge>
 								<Badge>Deputy Commissioner</Badge>
 								<Badge>Insurance Commissioner</Badge>
+							</div>
+						</div>
+						<div className="flex flex-col gap-4 py-6 border-b">
+							<div className="flex flex-row gap-2 items-center">
+								<Link className="size-4 text-accent-foreground" />
+								<p className="font-semibold">Endpoints</p>
+							</div>
+							<div className="flex flex-wrap gap-1">
+								<div className="flex flex-col gap-1">
+									<div className="flex flex-row items-center gap-2">
+										<Link className="size-3 text-accent-foreground" />
+										<p className="font-semibold">Http: https://api.example.com</p>
+									</div>
+									<p className="text-xs">Testing Endpoint 1</p>
+								</div>
+								<div className="flex flex-col gap-1">
+									<div className="flex flex-row items-center gap-2">
+										<Link className="size-3 text-accent-foreground" />
+										<p className="font-semibold">Http: https://api.example.com</p>
+									</div>
+									<p className="text-xs">Testing Endpoint 1</p>
+								</div>
+								<div className="flex flex-col gap-1">
+									<div className="flex flex-row items-center gap-2">
+										<Link className="size-3 text-accent-foreground" />
+										<p className="font-semibold">Http: https://api.example.com</p>
+									</div>
+									<p className="text-xs">Testing Endpoint 1</p>
+								</div>
 							</div>
 						</div>
 					</div>

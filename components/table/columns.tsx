@@ -11,7 +11,7 @@ import { cn, humanizeTimestamp } from "@/lib/utils"
 
 
 // export type testCaseStatus = "Untested" | "In Progress" | "Passed" | "Failed";
-const TestStatusMapping = {
+export const TestStatusMapping = {
 	"Untested": {
 		icon: TestTubes,
 		variant: "outline",
