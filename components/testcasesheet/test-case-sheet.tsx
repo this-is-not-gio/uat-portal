@@ -293,7 +293,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 																		remarks?.length > 0 ? (
 																			remarks.map((remark) => {
 																				const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
-																				const Icon = author_role_badge?.Icon as LucideIcon
+																				const Icon = author_role_badge?.Icon
 																				return (<div className="flex flex-row gap-2 group/remark" key={remark.id}>
 																					<div className="flex flex-col items-center group-first/remark:pt-2">
 																						<div className="w-0.5 h-2 bg-accent rounded-full self-center group-first/remark:h-0"></div>
@@ -307,7 +307,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 																							<div className="flex-row flex gap-2 items-center">
 																								<p className="text-sm font-semibold">{remark.author?.full_name || 'Unknown Author'}</p>
 																								<Badge variant="outline" className={author_role_badge?.className || "bg-muted text-foreground border-border"}>
-																									<Icon className="h-3 w-3" />
+																									{Icon && <Icon className="h-3 w-3" />}
 																									{remark.author?.role || 'Unknown Role'}
 																								</Badge>
 																							</div>
