@@ -12,7 +12,18 @@ export function humanizeTimestamp(isoString?: string): string {
     return formatDistanceToNow(date, { addSuffix: true });
   }
 
-  return format(date, "MMM d yyyy hh:mm a");
+  return formatTimestamp(isoString);
+}
+
+export function formatTimestamp(isoString?: string | null): string {
+  if (!isoString) return "—";
+  return format(new Date(isoString), "MMM d yyyy hh:mm a");
+}
+
+export function formatIterationTimestamp(iteration: { status: string; startedAt: string; completedAt: string | null }): string {
+  return iteration.status === "completed"
+    ? `Completed on ${formatTimestamp(iteration.completedAt)}`
+    : `In progress · started ${formatTimestamp(iteration.startedAt)}`;
 }
 
 export function initials(fullName: string): string {

@@ -65,9 +65,9 @@ export function SiteHeader({ testingSuites }: { testingSuites: TestingSuites }) 
 						<Fragment key={crumb.href}>
 							<BreadcrumbItem className="">
 								{crumb.isLast ? (
-									<BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+									<BreadcrumbPage className="text-xs">{crumb.label}</BreadcrumbPage>
 								) : (
-									<BreadcrumbLink render={<Link href={crumb.href} />}>
+									<BreadcrumbLink render={<Link href={crumb.href} />} className="text-xs">
 										{crumb.label}
 									</BreadcrumbLink>
 								)}

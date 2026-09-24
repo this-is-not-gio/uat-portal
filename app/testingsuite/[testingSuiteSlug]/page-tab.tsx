@@ -50,9 +50,7 @@ import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { columns } from "@/components/table/columns";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Board } from "@/components/board/board";
-import OverviewTab from "./overview-tab";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
-import TestResultTab from "./test-result-tab";
 
 
 
@@ -60,7 +58,7 @@ import TestResultTab from "./test-result-tab";
 
 
 
-export default function PageTab({ testCasesTab }: { testCasesTab: React.ReactNode }) {
+export default function PageTab({ overviewTab, testCasesTab, testResultsTab }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -104,13 +102,13 @@ export default function PageTab({ testCasesTab }: { testCasesTab: React.ReactNod
 			</Tabs>
 			<Tabs value={tab} className="min-h-0 flex-1">
 				<TabsContent value="overview" className="w-full h-full min-h-0">
-					<OverviewTab />
+					{overviewTab}
 				</TabsContent>
 				<TabsContent value="test-cases" className="w-full h-full min-h-0 flex flex-row">
 					{testCasesTab}
 				</TabsContent>
 				<TabsContent value="test-results" className="w-full h-full min-h-0 flex flex-row">
-					<TestResultTab />
+					{testResultsTab}
 				</TabsContent>
 			</Tabs>
 		</div>

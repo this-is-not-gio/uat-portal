@@ -4,7 +4,7 @@ import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
 import { TestingSuites } from "@/lib/supabase/Init"
 import { TestCase } from "../types"
-import { CircleCheck, CircleX, Info, TestTube, TestTubeDiagonal, TestTubes } from "lucide-react"
+import { Ban, CircleCheck, CircleX, Info, TestTube, TestTubeDiagonal, TestTubes, TriangleAlert } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { testCase } from "@/lib/supabase/test-cases"
 import { cn, humanizeTimestamp } from "@/lib/utils"
@@ -31,10 +31,26 @@ export const TestStatusMapping = {
 		icon: CircleX,
 		variant: "destructive",
 		className: "bg-red-100 text-red-800",
+	},
+	"Blocked": {
+		icon: Ban,
+		variant: "secondary",
+		className: "bg-gray-200 text-gray-800",
 	}
 } as const
 
 
+
+const READINESS_LABELS: Record<string, string> = {
+	no_steps: "No steps",
+	step_without_expected_result: "Step missing expected result",
+};
+
+const SYNC_MARKERS = {
+	not_in_round: { label: "🆕 Not in round", className: "border-blue-600/40 bg-blue-50 text-blue-800" },
+	changed: { label: "✏️ Changed", className: "border-amber-600/40 bg-amber-50 text-amber-800" },
+	outdated: { label: "⚠️ Outdated · retest next round", className: "border-red-600/40 bg-red-50 text-red-800" },
+} as const;
 
 const columnHelper = createColumnHelper<DataTableFeatures, testCase>()
 
@@ -52,6 +68,23 @@ export const columns = columnHelper.columns([
 							<div className="flex flex-row items-center gap-2">
 								<p className="text-sm">{info.row.original.title}</p>
 								<Badge variant="secondary" className="text-xs">{info.row.original.stepsToExecute?.length ?? 0} steps</Badge>
+								{info.row.original.lifecycleStatus === "updated" && (
+									<Badge variant="outline" className="text-xs">Updated</Badge>
+								)}
+								{/* Set by the Test Cases tab while a round runs: where this live case stands vs the round. */}
+								{(() => {
+									const marker = (info.row.original as testCase & { syncMarker?: keyof typeof SYNC_MARKERS }).syncMarker;
+									return marker ? (
+										<Badge variant="outline" className={`text-xs ${SYNC_MARKERS[marker].className}`}>{SYNC_MARKERS[marker].label}</Badge>
+									) : null;
+								})()}
+								{/* Set by the Test Cases tab while the suite is Draft/Ready: what blocks Mark ready. */}
+								{((info.row.original as testCase & { readinessIssues?: string[] }).readinessIssues ?? []).map((issue) => (
+									<Badge key={issue} variant="outline" className="text-xs border-amber-600/50 bg-amber-50 text-amber-800">
+										<TriangleAlert data-icon="inline-start" size={12} />
+										{READINESS_LABELS[issue] ?? issue}
+									</Badge>
+								))}
 							</div>
 							<p className="text-xs text-muted-foreground">{info.row.original.code}</p>
 							{/* <p className="text-xs text-muted-foreground">{info.row.original.id}</p> */}

@@ -2,21 +2,38 @@
 
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { CircleCheck, CircleOffIcon, CircleX, Info, MessageSquare, SkipForward } from "lucide-react"
+import { CircleCheck, CircleOffIcon, CircleX, History, Info, MessageSquare, SkipForward } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { TestStatusMapping } from "./columns"
-import { testCase, type profile } from "@/lib/supabase/test-cases"
+// Type-only import: test-iterations.ts uses the server Supabase client.
+import type { testResultRow } from "@/lib/supabase/test-iterations"
 import { Avatar, AvatarFallback } from "../ui/avatar"
 import { initials } from "@/lib/utils"
 
-// Reuses the real testCase shape (status, roleAssignee, stepsToExecute with
-// each step's own remarks) instead of a flat ad-hoc shape, so a result row
-// carries real step/remark data. executor/completedAt are genuinely extra
-// for a "result" context. executor is a full `profile` (not just a name)
-// so its `role` can distinguish an Internal vs an External executor.
-export type testResultRow = testCase & {
-	executor?: profile;
-	completedAt: string;
+export type { testResultRow }
+
+// How vendor sync touched this row mid-round (syncKind) or what's pending for it (pendingChange).
+function SyncBadges({ row }: { row: testResultRow }) {
+	const resetReason = row.archives[0]?.reason;
+	return (
+		<>
+			{row.syncKind === "added" && <Badge variant="outline" className="text-xs border-blue-600/40 bg-blue-50 text-blue-800">Added mid-round</Badge>}
+			{row.syncKind === "updated" && <Badge variant="outline" className="text-xs border-amber-600/40 bg-amber-50 text-amber-800">Updated</Badge>}
+			{row.syncKind === "force_reset" && (
+				<Badge variant="outline" className="text-xs border-red-600/40 bg-red-50 text-red-800" title={resetReason ? `Reason: ${resetReason}` : undefined}>
+					Reset by vendor{resetReason ? `: ${resetReason}` : ""}
+				</Badge>
+			)}
+			{row.pendingChange === "changed" && (
+				<Badge variant="outline" className="text-xs border-red-600/40 bg-red-50 text-red-800" title="The test case was edited after it was tested; the new version comes in the next iteration.">
+					Outdated · retest next round
+				</Badge>
+			)}
+			{row.pendingChange === "removed" && (
+				<Badge variant="outline" className="text-xs" title="The test case was deleted from the suite; its results stay in this round.">Removed</Badge>
+			)}
+		</>
+	);
 }
 
 const columnHelper = createColumnHelper<DataTableFeatures, testResultRow>()
@@ -26,9 +43,10 @@ export const testResultColumns = columnHelper.columns([
 		header: "Test Case",
 		cell: (info) => (
 			<div>
-				<div className="flex flex-row gap-1">
+				<div className="flex flex-row flex-wrap items-center gap-1">
 					<p className="text-sm">{info.row.original.title}</p>
 					<Badge variant="secondary" className="text-xs">{info.row.original.stepsToExecute?.length ?? 0} steps</Badge>
+					<SyncBadges row={info.row.original} />
 				</div>
 				<p className="text-xs text-muted-foreground">{info.row.original.code}</p>
 			</div>
@@ -55,12 +73,16 @@ export const testResultColumns = columnHelper.columns([
 	}),
 	columnHelper.display({
 		header: "Remarks",
-		cell: (info) => (
-			<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-100/50 w-fit">
-				<MessageSquare size={15} className="text-gray-800" />
-				<p className="font-mono text-xs text-gray-800">2</p>
-			</div>
-		),
+		cell: (info) => {
+			const remarkCount = (info.row.original.stepsToExecute ?? [])
+				.reduce((count, step) => count + (step.remarks?.length ?? 0), 0);
+			return (
+				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-100/50 w-fit">
+					<MessageSquare size={15} className="text-gray-800" />
+					<p className="font-mono text-xs text-gray-800">{remarkCount}</p>
+				</div>
+			);
+		},
 	}),
 
 	columnHelper.display({
@@ -101,6 +123,22 @@ export const testResultColumns = columnHelper.columns([
 			);
 		}
 	}),
+	columnHelper.accessor("previousStatus", {
+		header: "Last Round",
+		cell: (info) => {
+			const previous = info.getValue();
+			if (!previous) return <p className="text-xs text-muted-foreground">—</p>;
+			const status = TestStatusMapping[previous];
+			const Icon = status?.icon || Info;
+			return (
+				<Badge variant="outline" className={`text-xs ${status?.className ?? ""}`}>
+					<History data-icon="inline-start" size={13} />
+					<Icon data-icon="inline-start" size={13} />
+					{previous}
+				</Badge>
+			);
+		},
+	}),
 	columnHelper.accessor("status", {
 		header: "Status",
 		cell: (info) => {
@@ -109,6 +147,9 @@ export const testResultColumns = columnHelper.columns([
 			const variant = status?.variant || "outline";
 			return (
 				<div className="flex items-end justify-end gap-2">
+					{info.row.original.statusOverridden && (
+						<Badge variant="outline" className="text-xs">Overridden</Badge>
+					)}
 					<Badge className={`text-xs ${info.getValue() === "Passed" ? "bg-green-100 text-green-800" : ""}`} variant={variant || "outline"}>
 						<Icon data-icon="inline-start" size={15} className={`text-${info.getValue() === "Passed" ? "green-800" : "gray-500"}`} />
 						{info.getValue()}

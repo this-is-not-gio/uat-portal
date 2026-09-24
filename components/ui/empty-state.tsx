@@ -30,7 +30,7 @@ function EmptyState({
 	description?: string
 } & VariantProps<typeof emptyStateVariants> & { className?: string }) {
 	return (
-		<div data-slot="empty-state" className={cn(emptyStateVariants({ size, className }))}>
+		<div data-slot="empty-state" className={cn(emptyStateVariants({ size }), className)}>
 			<div className="bg-muted/50 rounded-xl p-2 flex flex-col items-center gap-2">
 				<Icon size={25} className="text-muted-foreground" />
 			</div>

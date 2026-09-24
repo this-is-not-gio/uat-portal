@@ -15,8 +15,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { DropdownMenu, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { group } from "console";
-import { addStepRemark } from "@/lib/supabase/action";
+import { addResultRemark } from "@/lib/supabase/iteration-actions";
 import { testRemark, testStep } from "@/lib/supabase/test-cases";
 
 const TOOLBAR_ACTIONS: {
@@ -57,13 +56,13 @@ const TOOLBAR_ACTIONS: {
 		}
 	];
 
+// Remarks attach to a step of a running iteration (`step.id` is the
+// test_step_results id); the author is set server-side.
 export function RemarkMarkdownField({
-	PIC,
 	step,
 	placeholder = "Leave a remark the tested step",
 	onSubmitted
 }: {
-	PIC: string;
 	step: testStep
 	placeholder?: string;
 	onSubmitted: (remark: testRemark) => void;
@@ -96,28 +95,10 @@ export function RemarkMarkdownField({
 		if (!text) return;
 
 		startTransition(async () => {
-			try {
-				const insertedRemark = await addStepRemark({
-					stepId: step.id, // Replace with actual step ID
-					remark: text,
-					createdBy: PIC, // Replace with actual user ID
-				});
-
-				onSubmitted({
-					id: insertedRemark.id,
-					remark: insertedRemark.remark,
-					author: {
-						id: insertedRemark?.profile?.id || "unknown",
-						full_name: insertedRemark?.profile?.full_name || "Unknown",
-						role: insertedRemark?.profile?.role || "External",
-					},
-					created_at: insertedRemark.created_at,
-				})
-			} catch (error) {
-				console.error("Error adding remark:", error);
-			} finally {
-				setDraftText("");
-			}
+			const result = await addResultRemark({ stepResultId: step.id, remark: text });
+			if (!result.ok) return;
+			onSubmitted(result.data);
+			setDraftText("");
 		})
 
 	}

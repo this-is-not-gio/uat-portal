@@ -1,26 +1,27 @@
 "use client";
 
-import { setStepResult } from "@/lib/supabase/action";
+import { setStepResultStatus, type caseResultState } from "@/lib/supabase/iteration-actions";
 import { testStepStatus } from "@/lib/supabase/test-cases";
-import { useRef, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
 import { LucideIcon } from "lucide-react";
 
 export default function StepResultButton({
-	stepId,
-	testCaseId,
+	stepResultId,
+	caseResultId,
 	currentStatus,
 	onStatusChange,
 	statusClassName,
 
 	options
 }: {
-	stepId: string;
-	testCaseId: string;
+	stepResultId: string;
+	caseResultId: string;
 	currentStatus: testStepStatus;
-	onStatusChange: (newStatus: testStepStatus) => void;
+	// Also hands back the case result, which the DB re-derives from its steps.
+	onStatusChange: (newStatus: testStepStatus, caseState: caseResultState) => void;
 
 
 	statusClassName?: {
@@ -36,15 +37,9 @@ export default function StepResultButton({
 	const [isPending, startTransition] = useTransition();
 
 	const onSubmit = (newStatus: testStepStatus) => {
-		const previousStatus = currentStatus;
 		startTransition(async () => {
-			try {
-				await setStepResult({ testCaseId, stepId, status: newStatus });
-				onStatusChange(newStatus);
-			} catch (error) {
-				console.error("Error updating step result:", error);
-				onStatusChange(previousStatus); // Revert to previous status on error
-			}
+			const result = await setStepResultStatus({ caseResultId, stepResultId, status: newStatus });
+			if (result.ok) onStatusChange(newStatus, result.data);
 		});
 	};
 
@@ -80,4 +75,3 @@ export default function StepResultButton({
 	)
 
 }
-

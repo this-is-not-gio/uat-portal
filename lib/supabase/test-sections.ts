@@ -7,6 +7,10 @@ type TestCaseRow = {
     title: string;
     status: testCaseStatus;
     role_assignee: string | null;
+    description: string;
+    priority: "low" | "medium" | "high";
+    lifecycle_status: "new" | "updated";
+    sections: { id: string };
     created_at: string;
     preconditions: { id: string; condition: string }[] | null;
     test_steps:
@@ -56,6 +60,8 @@ export async function getTestSectionsByTestSuiteId(testSuiteId: string) {
             `,
         )
         .eq("id", testSuiteId)
+        .order("order_index", { referencedTable: "sections", ascending: true })
+        .order("order_index", { referencedTable: "sections.test_cases", ascending: true })
         .single();
 
     if (error) throw error;
@@ -86,6 +92,10 @@ function mapTestCaseRow(testCase: TestCaseRow) {
         title: testCase.title,
         status: testCase.status,
         roleAssignee: testCase.role_assignee ?? undefined,
+        sectionId: testCase.sections.id,
+        description: testCase.description,
+        priority: testCase.priority,
+        lifecycleStatus: testCase.lifecycle_status,
         preconditions:
             testCase.preconditions?.map((preCondition) => ({
                 id: preCondition.id,
@@ -166,6 +176,7 @@ export async function getAllTestCasesBySuiteId(testSuiteId: string): Promise<tes
         .from("sections")
         .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
         .eq("test_suite_id", testSuiteId)
+        .order("order_index", { ascending: true })
         .order("order_index", {
             referencedTable: "test_cases",
             ascending: true,

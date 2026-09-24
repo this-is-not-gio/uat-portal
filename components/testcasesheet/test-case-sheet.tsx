@@ -31,6 +31,9 @@ import {
 	User,
 	CircleCheck,
 	CircleX,
+	Bug,
+	Computer,
+	History,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -43,8 +46,9 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
-import { testCase, testCaseStatus, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
-import { setStepResult } from "@/lib/supabase/action";
+import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
+import type { caseResultState } from "@/lib/supabase/iteration-actions";
+import type { resultArchive } from "@/lib/supabase/test-iterations";
 import { humanizeTimestamp } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -102,7 +106,7 @@ const status_count_classnames: Record<testStepStatus, string> = {
 	Blocked: "border bg-muted text-foreground border-border",
 };
 
-type testcase_status_option = "Passed" | "Failed"
+type testcase_status_option = "Passed" | "Failed" | "Blocked"
 
 const selected_test_case_status_classnames: Record<testcase_status_option, { className: string; Icon: LucideIcon }> = {
 	Passed: {
@@ -112,6 +116,10 @@ const selected_test_case_status_classnames: Record<testcase_status_option, { cla
 	Failed: {
 		className: " border bg-red-100/60 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-400 border-red-700 dark:border-red-400",
 		Icon: CircleX
+	},
+	Blocked: {
+		className: "border bg-muted text-foreground border-foreground",
+		Icon: BanIcon
 	},
 };
 
@@ -126,9 +134,15 @@ const sample_author = {
 	full_name: "Gio Talindan"
 }
 
-export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCase; onChangeTestCase: (updatedTestCase: testCase) => void }) {
-	//console.log("Rendering TestCaseSheet with testCase:", testCase); // Log the testCase prop to see what is passed
-	const PLACEHOLDER_PIC_ID = "efac1d13-b5e3-464a-a4e3-1c4702fc96ed"
+// definition: the live test case (Test Cases tab), no results.
+// execute:    a row of a running iteration; steps, remarks and the case result are editable.
+// review:     a row of a completed iteration; results are read-only.
+export type testCaseSheetMode = "definition" | "execute" | "review";
+
+type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[] };
+
+export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", headerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; headerActions?: React.ReactNode }) {
+	const showResults = mode !== "definition";
 	const [stepStatuses, setStepStatuses] = useState<Record<string, { status: testStepStatus }>>(
 		() => {
 			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: { status: step.status ?? "Untested" } }), {}) || {};
@@ -139,15 +153,35 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: step.remarks || [] }), {}) || {};
 		}
 	);
-	console.log("Initial stepRemarks state:", stepRemarks); // Log the initial state of stepRemarks
-	const [testCaseStatus, setTestCaseStatus] = useState<testCaseStatus>(testCase.status);
+	const [caseState, setCaseState] = useState<caseResultState>({
+		status: testCase.status,
+		statusOverridden: testCase.statusOverridden ?? false,
+		completedAt: testCase.completedAt ?? null,
+		executor: testCase.executor,
+	});
 	const totalSteps = testCase.stepsToExecute?.length ?? 0;
 	const testedSteps = Object.keys(stepStatuses).filter((stepId) => stepStatuses[stepId]?.status !== "Untested").length;
 	const statusCounts = step_status_options.map((option) => ({
 		...option,
 		count: Object.values(stepStatuses).filter((step) => step.status === option.value).length,
 	}));
-	
+
+	// Push the sheet's local state back into the table row so counts and badges follow.
+	function emitChange(nextStatuses: typeof stepStatuses, nextRemarks: typeof stepRemarks, nextCaseState: caseResultState) {
+		onChangeTestCase({
+			...testCase,
+			status: nextCaseState.status,
+			statusOverridden: nextCaseState.statusOverridden,
+			completedAt: nextCaseState.completedAt,
+			executor: nextCaseState.executor,
+			stepsToExecute: testCase.stepsToExecute?.map((step) => ({
+				...step,
+				status: nextStatuses[step.id]?.status ?? step.status,
+				remarks: nextRemarks[step.id] ?? step.remarks,
+			})),
+		});
+	}
+
 	return (
 		<SheetContent className="overflow-y-auto data-[side=right]:w-[50vw] data-[side=right]:sm:max-w-[50vw]">
 			<SheetHeader className="px-8 pt-10">
@@ -157,9 +191,12 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 				<SheetTitle className="text-xl font-bold">
 					{testCase.title}
 				</SheetTitle>
-				<div className="flex gap-2">
-					<Badge variant="secondary">{testCase.roleAssignee}</Badge>
-					<Badge variant="secondary">{testCase.stepsToExecute?.length || 0} Steps</Badge>
+				<div className="flex flex-row items-center justify-between gap-2">
+					<div className="flex gap-2">
+						{testCase.roleAssignee && <Badge variant="secondary">{testCase.roleAssignee}</Badge>}
+						<Badge variant="secondary">{testCase.stepsToExecute?.length || 0} Steps</Badge>
+					</div>
+					{headerActions && <div className="flex flex-row items-center gap-1">{headerActions}</div>}
 				</div>
 			</SheetHeader>
 			<div className="px-8">
@@ -191,14 +228,37 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 				}
 			</div>
 			<div className="flex flex-col justify-between px-8">
-				<div className="flex flex-row items-center gap-2 pb-3 ">
-					<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
-						<ListChecksIcon />
+				<div className="flex flex-row items-center justify-between gap-2 pb-3 w-full">
+					<div className="flex flex-row items-center gap-2 pb-3">
+						<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
+							<ListChecksIcon />
+						</div>
+						<div className="flex flex-col gap-0">
+							<h3 className="text-lg font-semibold"> Steps to Execute</h3>
+							<p className="text-xs text-muted-foreground">Steps to perform when running this test case.</p>
+						</div>
 					</div>
-					<div className="flex flex-col gap-0">
-						<h3 className="text-lg font-semibold"> Steps to Execute</h3>
-						<p className="text-xs text-muted-foreground">Steps to perform when running this test case.</p>
-					</div>
+					{
+						showResults &&
+						<div className="flex flex-col items-end gap-1">
+							<p className="text-xs text-muted-foreground">Test Result</p>
+							{statusCounts.some((status) => status.count > 0) && (
+								<div className="flex flex-row items-center gap-1 flex-wrap pb-3">
+									{statusCounts
+										.filter((status) => status.count > 0)
+										.map((status) => (
+											<div className={cn(
+												"flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold",
+												status_count_classnames[status.value]
+											)} key={status.value}>
+												{status.count} {status.label}
+												<status.Icon className="h-3 w-3" />
+											</div>
+										))}
+								</div>
+							)}
+						</div>
+					}
 				</div>
 				<div className="flex flex-col p-4">
 					{
@@ -223,7 +283,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 											<div className="flex flex-col gap-2">
 												<div className="flex flex-row justify-between items-center gap-2">
 													<p className="font-semibold text-lg">{step.step}</p>
-													<Badge
+													{showResults && <Badge
 														variant={variant}
 														className={cn(
 															"gap-1",
@@ -232,7 +292,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 													>
 														<Icon className="h-4 w-4" />
 														{stepStatuses[step.id]?.status || "Untested"}
-													</Badge>
+													</Badge>}
 												</div>
 												<div className="flex flex-col gap-2">
 													<div className="flex items-center gap-1">
@@ -258,19 +318,27 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 												<AccordionItem className="border-none">
 													<div className="flex flex-row items-center justify-between gap-2">
 														<div className="flex items-center gap-1.5">
-															<StepResultButton 
-																stepId={step.id}
-																testCaseId={testCase.id}
-																currentStatus={stepStatuses[step.id]?.status || null}
-																statusClassName={selected_status_classnames}
-																onStatusChange={(newStatus) => {
-																	setStepStatuses((current) => ({
-																		...current,
-																		[step.id]: { status: newStatus },
-																	}));
-																}}
-																options={step_status_options}
-															/>
+															{mode === "execute" ? (
+																<StepResultButton
+																	stepResultId={step.id}
+																	caseResultId={testCase.id}
+																	currentStatus={stepStatuses[step.id]?.status || "Untested"}
+																	statusClassName={selected_status_classnames}
+																	onStatusChange={(newStatus, nextCaseState) => {
+																		const nextStatuses = { ...stepStatuses, [step.id]: { status: newStatus } };
+																		setStepStatuses(nextStatuses);
+																		setCaseState(nextCaseState);
+																		emitChange(nextStatuses, stepRemarks, nextCaseState);
+																	}}
+																	options={step_status_options}
+																/>)
+																: mode === "review" && stepStatuses[step.id]?.status === "Failed" ? (
+																	<Button>
+																		<Bug className="size-3.5" />
+																		<p className="text-xs font-medium">Report Bug</p>
+																	</Button>
+																) : null
+															}
 														</div>
 														<AccordionTrigger className="w-fit flex-row items-center justify-start gap-1.5 rounded-md border py-1.5 px-3 text-sm font-normal hover:no-underline hover:bg-accent">
 															<MessageSquare className="h-3.5 w-3.5" />
@@ -325,7 +393,7 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 
 																		) : null
 																	}
-																	<div className="flex flex-row gap-2 group/remark">
+																	{mode === "execute" && <div className="flex flex-row gap-2 group/remark">
 																		<div className="flex flex-col items-center group-first/remark:pt-2">
 																			<div className={`w-0.5 bg-accent rounded-full self-center ${remarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div>
 																			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
@@ -339,18 +407,16 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 																				<p className="text-xs font-medium">Leave a Remark:</p>
 																			</div>
 																			<RemarkMarkdownField
-																				PIC={PLACEHOLDER_PIC_ID} // Replace with actual user ID
 																				step={step}
 																				placeholder="Leave a remark for this step"
-																				onSubmitted = {async (insertedRemark) => {
-																					setStepRemarks((current) => ({
-																						...current,
-																						[step.id]: [...(current[step.id] || []), insertedRemark],
-																					}));
+																				onSubmitted={(insertedRemark) => {
+																					const nextRemarks = { ...stepRemarks, [step.id]: [...(stepRemarks[step.id] || []), insertedRemark] };
+																					setStepRemarks(nextRemarks);
+																					emitChange(stepStatuses, nextRemarks, caseState);
 																				}}
 																			/>
 																		</div>
-																	</div>
+																	</div>}
 																</div>
 															</div>
 
@@ -366,78 +432,165 @@ export function TestCaseSheet({ testCase, onChangeTestCase }: { testCase: testCa
 					}
 				</div>
 			</div>
-			<SheetFooter className="flex flex-row justify-between sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
-				<div className="flex flex-row items-center gap-2 justify-between w-full">
-					<div className="flex flex-row items-center gap-2 justify-start w-fit">
-						{statusCounts
-							.filter((status) => status.count > 0)
-							.map((status) => (
-								<div className={cn(
-									"flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold",
-									status_count_classnames[status.value]
-								)} key={status.value}>
-									{status.count} {status.label}
-									<status.Icon className="h-3 w-3" />
-								</div>
-							))}
+			{/* Results the vendor archived with a force refresh, newest first. */}
+			{showResults && (testCase.archives?.length ?? 0) > 0 && (
+				<div className="flex flex-col px-8 pb-6 gap-3">
+					<div className="flex flex-row items-center gap-2">
+						<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
+							<History />
+						</div>
+						<div className="flex flex-col gap-0">
+							<h3 className="text-lg font-semibold">Previous results</h3>
+							<p className="text-xs text-muted-foreground">Reset by the vendor after the test case was corrected.</p>
+						</div>
 					</div>
-					{
-						testedSteps === totalSteps ? (
-							// <div className="flex flex-row items-center gap-2 justify-end w-fit">
-							// 	<SheetClose
-							// 		render={
-							// 			<Button
-							// 				size="lg"
-							// 				variant="outline"
-							// 				disabled={totalSteps > 0 && testedSteps < totalSteps}
-							// 				className={cn(
-							// 					"w-50", verdict === "Failed" ? selected_test_case_status_classnames.Failed : "border bg-muted text-foreground border-border"
-							// 				)}
-							// 				onClick={() => setVerdict("Failed")}
-							// 			>
-							// 				<XCircle className="h-4 w-4" /> Fail
-							// 			</Button>
-							// 		}
-							// 	/>
-							// 	<SheetClose
-							// 		render={
-							// 			<Button
-							// 				size="lg"
-							// 				variant="outline"
-							// 				disabled={totalSteps > 0 && testedSteps < totalSteps}
-							// 				className={cn(
-							// 					"w-50", verdict === "Passed" ? selected_test_case_status_classnames.Passed : "border bg-muted text-foreground border-border"
-							// 				)}
-							// 				onClick={() => setVerdict("Passed")}
-							// 			>
-							// 				<CheckCircle2 className="h-4 w-4" /> Pass
-							// 			</Button>
-							// 		}
-							// 	/>
-							// </div>
-							<TestCaseResult
-								testCaseId={testCase.id}
-								current={testCaseStatus}
-								onChange={(newStatus) => {
-									setTestCaseStatus(newStatus);
-									onChangeTestCase({ ...testCase, status: newStatus });
-								}}
-								selected_test_case_status_classnames={selected_test_case_status_classnames}
-							/>
-						) : (
+					{testCase.archives!.map((archive) => (
+						<div key={archive.id} className="border rounded-md">
+							<div className="p-3 bg-accent/60 border-b flex flex-row items-center justify-between gap-2">
+								<p className="text-sm font-semibold">Result: {archive.snapshot.status}</p>
+								<p className="text-xs text-muted-foreground">
+									Reset {humanizeTimestamp(archive.archivedAt)}{archive.archivedBy ? ` by ${archive.archivedBy}` : ""}
+								</p>
+							</div>
+							<div className="p-3 flex flex-col gap-2">
+								<p className="text-xs"><span className="font-medium">Reason:</span> {archive.reason}</p>
+								<ol className="list-decimal list-outside pl-5 space-y-1">
+									{archive.snapshot.steps.map((step, index) => (
+										<li key={index} className="text-sm">
+											<span>{step.step}</span>{" "}
+											<Badge variant="outline" className="text-xs">{step.status}</Badge>
+											{step.remarks.length > 0 && (
+												<span className="text-xs text-muted-foreground"> · {step.remarks.length} remark{step.remarks.length === 1 ? "" : "s"}</span>
+											)}
+										</li>
+									))}
+								</ol>
+							</div>
+						</div>
+					))}
+				</div>
+			)}
+			{/* Static placeholder until bug reports are real; only meaningful next to results. */}
+			{showResults && <div className="flex flex-col justify-between px-8 pb-10">
+				<div className="flex flex-row items-center gap-2 pb-3 ">
+					<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
+						<Bug />
+					</div>
+					<div className="flex flex-col gap-0">
+						<h3 className="text-lg font-semibold"> Bug Reports</h3>
+						<p className="text-xs text-muted-foreground">Report the failed step and create a comprehensive diagnostic</p>
+					</div>
+				</div>
+				<div className="flex flex-col gap-4">
+					<div className="border rounded-md">
+						<div className="p-4 bg-accent/90 border-b">
+							<p className="font-bold">[Bug Report] Bug report content goes here.</p>
+						</div>
+						<div className="p-4 flex flex-col gap-4">
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Environment</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Failed Step</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Actual Result</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+						</div>
+					</div>
+					<div className="border rounded-md">
+						<div className="p-4 bg-accent/90 border-b">
+							<p className="font-bold">[Bug Report] Bug report content goes here.</p>
+						</div>
+						<div className="p-4 flex flex-col gap-4">
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Environment</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Failed Step</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Actual Result</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+						</div>
+					</div>
+					<div className="border rounded-md">
+						<div className="p-4 bg-accent/90 border-b">
+							<p className="font-bold">[Bug Report] Bug report content goes here.</p>
+						</div>
+						<div className="p-4 flex flex-col gap-4">
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Environment</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Failed Step</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+							<div className="flex flex-col gap-2">
+								<div className="flex flex-row items-center gap-1">
+									<Computer className="size-3.5" />
+									<p className="font-medium text-xs">Actual Result</p>
+								</div>
+								<p className="text-sm text-muted-foreground">Additional details about the bug report.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>}
+			{mode === "execute" && (
+				<SheetFooter className="flex flex-row justify-between sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
+					<div className="flex flex-row items-center gap-2 justify-between w-full">
+						<div className="flex flex-row items-center gap-2">
 							<div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
 								{testedSteps} / {totalSteps} Tested Steps
 								<ListChecksIcon className="h-4 w-4" />
 							</div>
-
-						)
-					}
-				</div>
-
-
-
-
-			</SheetFooter>
+							<Badge variant="outline" className="text-xs">Result: {caseState.status}</Badge>
+						</div>
+						<TestCaseResult
+							caseResultId={testCase.id}
+							current={caseState.status}
+							overridden={caseState.statusOverridden}
+							onChange={(nextCaseState) => {
+								setCaseState(nextCaseState);
+								emitChange(stepStatuses, stepRemarks, nextCaseState);
+							}}
+							selected_test_case_status_classnames={selected_test_case_status_classnames}
+						/>
+					</div>
+				</SheetFooter>
+			)}
 		</SheetContent>
 	)
 }

@@ -8,6 +8,7 @@ export const TEST_CASE_SELECT = `
   priority,
   role_assignee,
   status,
+  lifecycle_status,
   order_index,
   sections!inner ( id, name, order_index, test_suite_id ),
   preconditions ( id, condition, order_index ),
@@ -23,7 +24,7 @@ export const TEST_CASE_SELECT = `
 ` as const;
 
 
-export type testCaseStatus = "Untested" | "In Progress" | "Passed" | "Failed";
+export type testCaseStatus = "Untested" | "In Progress" | "Passed" | "Failed" | "Blocked";
 
 export type testStepStatus =
     | "Untested"
@@ -63,6 +64,11 @@ export type testCase = {
     title: string;
     status: testCaseStatus;
     roleAssignee?: string;
+    // Authoring fields; only set on live test cases (not iteration snapshots).
+    sectionId?: string;
+    description?: string;
+    priority?: "low" | "medium" | "high";
+    lifecycleStatus?: "new" | "updated";
     preconditions?: preCondition[];
     stepsToExecute?: testStep[];
     created_at?: string;
