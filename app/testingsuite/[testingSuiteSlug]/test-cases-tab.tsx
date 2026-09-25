@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { FolderOpen, Plus, Upload } from "lucide-react";
 import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
-import { columns } from "@/components/table/columns";
 import { Board } from "@/components/board/board";
 import { TestCase } from "@/components/types";
 import TestCasesComponents, { type authoringContext } from "./test-cases-components";
@@ -39,7 +38,7 @@ type TreeNode = {
 };
 type TreeItem = TreeNode | [TreeNode, ...TreeItem[]];
 
-async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring }: { testSuiteId: string; sectionSlug?: string; hasSections: boolean; authoring: authoringContext }) {
+async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring, suiteStatus }: { testSuiteId: string; sectionSlug?: string; hasSections: boolean; authoring: authoringContext; suiteStatus: suiteStatus }) {
 	let section;
 	if (sectionSlug === "all") {
 		section = await getAllTestCasesBySuiteId(testSuiteId);
@@ -51,7 +50,7 @@ async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring
 			if ((error as { code?: string })?.code !== "PGRST116") throw error;
 		}
 	}
-	return <TestCasesComponents testCases={section?.testCases || []} section={section} hasSections={hasSections} authoring={authoring} />;
+	return <TestCasesComponents testCases={section?.testCases || []} section={section} hasSections={hasSections} authoring={authoring} suiteStatus={suiteStatus} />;
 }
 
 export default async function TestCasesTab({
@@ -169,7 +168,7 @@ export default async function TestCasesTab({
 					}
 				</Suspense>
 			</div>
-			<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} />
+			<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} suiteStatus={suiteStatus} />
 		</>
 	)
 }

@@ -19,7 +19,7 @@ import { createClient } from "@/lib/supabase/server";
 //   return (data as unknown as TestCaseRow[]).map(toTestCase);
 // }
 
-export type readinessIssue = { testCaseId: string | null; code: string | null; issue: "no_test_cases" | "no_steps" | "step_without_expected_result" };
+export type readinessIssue = { testCaseId: string | null; code: string | null; issue: "no_test_cases" | "no_steps" | "step_without_expected_result" | "no_role_assignee" };
 
 // What blocks Mark ready (same rule the DB enforces on draft -> ready and on saves while Ready).
 export async function getSuiteReadinessIssues(suiteId: string): Promise<readinessIssue[]> {

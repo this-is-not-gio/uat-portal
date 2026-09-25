@@ -18,6 +18,7 @@ export const READINESS_ISSUES: Record<string, string> = {
 	no_test_cases: "The suite has no test cases yet",
 	no_steps: "Has no steps",
 	step_without_expected_result: "A step has no expected result",
+	no_role_assignee: "No role assignee set",
 };
 
 // "Suite is not ready: LCI-001: no_steps, (suite): no_test_cases" -> readable rows.

@@ -47,7 +47,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Combobox, ComboboxContent, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
-import { columns } from "@/components/table/columns";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Board } from "@/components/board/board";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
