@@ -855,6 +855,7 @@ export type Database = {
           p_label?: string
           p_planned_end_date?: string
           p_suite_id: string
+          p_test_case_ids?: string[]
         }
         Returns: {
           completed_at: string | null
@@ -888,6 +889,15 @@ export type Database = {
           title: string
         }[]
       }
+      suite_test_case_issues: {
+        Args: { p_suite_id: string }
+        Returns: {
+          code: string
+          issue: string
+          test_case_id: string
+          title: string
+        }[]
+      }
       sync_iteration: {
         Args: { p_iteration_id: string; p_test_case_ids?: string[] }
         Returns: undefined
@@ -896,6 +906,7 @@ export type Database = {
         Args: { p_test_case_id: string }
         Returns: string
       }
+      test_case_issues: { Args: { p_test_case_id: string }; Returns: string[] }
       upsert_section: {
         Args: {
           p_id?: string

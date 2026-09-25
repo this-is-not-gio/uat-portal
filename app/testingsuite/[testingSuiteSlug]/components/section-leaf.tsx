@@ -3,9 +3,8 @@
 import * as React from "react";
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
-import { File, Folder, ChevronRight, ClipboardList, GripVertical } from "lucide-react";
+import { File, Folder, ClipboardList, GripVertical } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
 
 export default function SectionLeaf({
 	name,
@@ -36,15 +35,12 @@ export default function SectionLeaf({
 
 	const targetPath = `/testingsuite/${testSuiteSlug}/${slug}`;
 
-	// When used as a Collapsible's trigger, `onClick` here is the toggle
-	// handler Base UI merges in — fire it, then also navigate.
 	function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
 		onClick?.(event);
 		router.push(`${targetPath}?tab=test-cases`);
 	}
 
 	const isActive = pathname === targetPath;
-	const isFolder = itemtype === "test-suite";
 
 	const IconMapping = {
 		"section": ClipboardList,
@@ -60,11 +56,8 @@ export default function SectionLeaf({
 			{...rest}
 			onClick={handleClick}
 			data-active={isActive}
-			className={cn(isFolder && "group/collapsible", className)}
+			className={className}
 		>
-			{isFolder && (
-				<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
-			)}
 			{draggable ? (
 				// The section's own icon doubles as the drag handle: once the row
 				// is highlighted it swaps to a grip icon and grabs the pointer for

@@ -119,10 +119,10 @@ export function AppSidebar({testingSuites, ...props }: React.ComponentProps<type
 				<SidebarMenu className="flex flex-col gap-2">
 					<SidebarMenuButton
 						size="lg"
-						className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+						className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground [&_svg]:size-4"
 						>
 						<div className="flex aspect-square size-10 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-2xl">
-							<ClipboardEditIcon size={100} />
+							<ClipboardEditIcon />
 						</div>
 						<div className="grid flex-1 text-left text-sm leading-tight">
 							<h6 className="truncate font-semibold">User Acceptance Test</h6>

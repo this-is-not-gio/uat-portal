@@ -16,10 +16,11 @@ export function NavSecondary({ testingSuites }: { testingSuites: TestingSuites }
 	const pathname = usePathname();
 	const router = useRouter();
 
-	// Drafts get their own group (hidden from testers once roles exist); archived
+	// Draft and Ready suites are vendor-only until the first iteration hands them over
+	// (hidden from testers once roles exist); archived
 	// suites are tucked into a collapsed group.
-	const activeSuites = testingSuites.filter((suite) => suite.status !== "draft" && suite.status !== "archived");
-	const draftSuites = testingSuites.filter((suite) => suite.status === "draft");
+	const activeSuites = testingSuites.filter((suite) => suite.status !== "draft" && suite.status !== "ready" && suite.status !== "archived");
+	const draftSuites = testingSuites.filter((suite) => suite.status === "draft" || suite.status === "ready");
 	const archivedSuites = testingSuites.filter((suite) => suite.status === "archived");
 
 	const renderSuite = (testingSuite: TestingSuites[number]) => {
@@ -94,7 +95,7 @@ export function NavSecondary({ testingSuites }: { testingSuites: TestingSuites }
 			</SidebarMenu>
 			{draftSuites.length > 0 && (
 				<>
-					<SidebarGroupLabel className="mt-2">Drafts</SidebarGroupLabel>
+					<SidebarGroupLabel className="mt-2">Not yet in testing</SidebarGroupLabel>
 					<SidebarMenu>{draftSuites.map(renderSuite)}</SidebarMenu>
 				</>
 			)}

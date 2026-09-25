@@ -114,39 +114,37 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 					<div className="flex flex-row items-center gap-2">
 						<p className="text-xs text-muted-foreground">No Preconditions</p>
 						<HoverCard>
-						<HoverCardTrigger render={
-							<div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-blue-600/5 w-fit">
-								<Info size={15} className="text-blue-800" />
-							</div>
-						} />
-						<HoverCardContent className="w-fit p-4 flex flex-col gap-3">
-							<div className="flex flex-row items-start gap-2">
-								<div className="bg-blue-600/5 rounded-md p-2 w-fit">
-									<Info className="text-blue-800 size-5" />
+							<HoverCardTrigger render={
+								<div className="flex flex-row items-center gap-1 rounded-md p-1 bg-blue-600/5 w-fit">
+									<Info size={15} className="text-blue-800" />
+								</div>
+							} />
+							<HoverCardContent className="w-fit p-4 flex flex-col gap-3">
+								<div className="flex flex-row items-start gap-2">
+									<div className="bg-blue-600/5 rounded-md p-2 w-fit">
+										<Info className="text-blue-800 size-5" />
+									</div>
+									<div className="">
+										<p className="font-semibold text-sm">Notice</p>
+										<p className="text-xs">This problem may affect the test execution.</p>
+									</div>
 								</div>
 								<div className="">
-									<p className="font-semibold text-sm">Notice</p>
-									<p className="text-xs">This problem may affect the test execution.</p>
+									<p className="text-xs">Problems:</p>
+									<ul className="text-xs list-disc list-inside mt-1 space-y-0.5">
+										<li>No preconditions defined for this test case</li>
+									</ul>
 								</div>
-							</div>
-							<div className="">
-								<p className="text-xs">Problems:</p>
-								<ul className="text-xs list-disc list-inside mt-1 space-y-0.5">
-									<li>No preconditions defined for this test case</li>
-								</ul>
-							</div>
-						</HoverCardContent>
-					</HoverCard>
+							</HoverCardContent>
+						</HoverCard>
 					</div>
-					
-					
-					
-					
-					
 				) : (
 					<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
 						<ClipboardCheck size={15} className="text-gray-800" />
-						<p className="font-mono text-xs text-gray-800">{info.getValue()?.length}</p>
+						<div className="flex flex-row items-center gap-0.5">
+							<p className="font-mono text-xs text-gray-800">{info.getValue()?.length}</p>
+							<p className="text-xs text-gray-800 font-semibold">Preconditions</p>
+						</div>
 					</div>
 				)
 			)
@@ -284,7 +282,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 			}
 		}),
 		...(showExecutionStatus ? [columnHelper.accessor("status", {
-			header: "Status",
+			header: "Current Testing Status",
 			cell: (info) => {
 				const status = TestStatusMapping[info.getValue() as keyof typeof TestStatusMapping];
 				const Icon = status?.icon || Info;

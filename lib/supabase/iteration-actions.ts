@@ -63,13 +63,15 @@ export async function signOffSuite({ suiteId, note }: { suiteId: string; note: s
 
 // Iterations -----------------------------------------------------------------
 
-export async function startIteration({ suiteId, label, plannedEndDate }: { suiteId: string; label?: string; plannedEndDate?: string }): Promise<actionResult<{ iterationNumber: number }>> {
+// The round's scope: only the picked (complete) test cases are copied in.
+export async function startIteration({ suiteId, label, plannedEndDate, testCaseIds }: { suiteId: string; label?: string; plannedEndDate?: string; testCaseIds: string[] }): Promise<actionResult<{ iterationNumber: number }>> {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("start_iteration", {
         p_suite_id: suiteId,
         p_created_by: PLACEHOLDER_PIC_ID,
         p_label: label || undefined,
         p_planned_end_date: plannedEndDate || undefined,
+        p_test_case_ids: testCaseIds,
     });
     if (error) return fail(error);
     refresh();
@@ -147,4 +149,39 @@ export async function addResultRemark({ stepResultId, remark }: { stepResultId: 
         .single();
     if (error) return fail(error);
     return { ok: true, data: { id: data.id, remark: data.remark, created_at: data.created_at, author: data.profile ?? undefined } };
+}
+
+export type scopeOption = { id: string; code: string | null; title: string; issues: string[] };
+
+// What the Start Iteration picker lists: every section and its test cases,
+// each marked with whatever completeness issues it has (empty = pickable).
+export async function getIterationScopeOptions({ suiteId }: { suiteId: string }): Promise<actionResult<{ sections: { id: string; name: string; testCases: scopeOption[] }[] }>> {
+    const supabase = await createClient();
+    const [sectionsResult, issuesResult] = await Promise.all([
+        supabase
+            .from("sections")
+            .select("id, name, order_index, test_cases ( id, code, title, order_index )")
+            .eq("test_suite_id", suiteId)
+            .order("order_index", { ascending: true })
+            .order("order_index", { referencedTable: "test_cases", ascending: true }),
+        supabase.rpc("suite_test_case_issues", { p_suite_id: suiteId }),
+    ]);
+    if (sectionsResult.error) return fail(sectionsResult.error);
+    if (issuesResult.error) return fail(issuesResult.error);
+
+    return {
+        ok: true,
+        data: {
+            sections: sectionsResult.data.map((section) => ({
+                id: section.id,
+                name: section.name,
+                testCases: section.test_cases.map((tc) => ({
+                    id: tc.id,
+                    code: tc.code,
+                    title: tc.title,
+                    issues: issuesResult.data.filter((issue) => issue.test_case_id === tc.id).map((issue) => issue.issue),
+                })),
+            })),
+        },
+    };
 }

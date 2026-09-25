@@ -1,19 +1,23 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
-import { getIterationChanges, getIterationResults, getIterationsBySuiteId, type testResultRow } from "@/lib/supabase/test-iterations";
-import IterationSelect from "./components/iteration-select";
+import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./components/result-leaf";
 import TestResultComponents from "./test-result-components";
 import StartIterationDialog from "./components/start-iteration-dialog";
 import type { suiteStatus } from "@/lib/supabase/Init";
-import { ClipboardList, Play } from "lucide-react";
+import { ChevronRight, ClipboardList, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type TreeNode = {
 	name: string;
 	id: string;
 	slug: string;
-	itemtype?: "section" | "test-case" | "test-suite";
+	itemtype?: "section" | "test-case" | "test-suite" | "iteration";
+	// The iteration this node belongs to (its own number for an "iteration"
+	// node, its parent's for a "section" node) and whether it's the
+	// currently-selected one — both computed server-side, see buildTree.
+	iterationNumber?: number;
+	active?: boolean;
 };
 type TreeItem = TreeNode | [TreeNode, ...TreeItem[]];
 
@@ -56,7 +60,6 @@ export default async function TestResultTab({
 				</div>
 				<StartIterationDialog
 					suiteId={testSuiteId}
-					testSuiteSlug={testSuiteSlug}
 					trigger={
 						<Button className="flex flex-row items-center gap-2 w-fit">
 							<Play className="h-4 w-4" />
@@ -68,7 +71,10 @@ export default async function TestResultTab({
 		);
 	}
 
-	const iterations = await getIterationsBySuiteId(testSuiteId);
+	const [iterations, sectionsByIteration] = await Promise.all([
+		getIterationsBySuiteId(testSuiteId),
+		getSectionsByIteration(testSuiteId),
+	]);
 	const activeIteration = iterations.find((iteration) => iteration.status === "in_progress") ?? null;
 
 	// Explicit ?iteration=N wins; otherwise the running round (that's where
@@ -113,24 +119,13 @@ export default async function TestResultTab({
 		<>
 			<div className="w-100 shrink-0 border-r flex flex-col">
 				<SidebarContent>
-					<SidebarGroup className="border-b pb-4">
-						<SidebarGroupLabel>Test Results</SidebarGroupLabel>
-						<SidebarGroupContent>
-							<div className="px-2 flex flex-col gap-2">
-								<IterationSelect iterations={iterations} selectedIteration={selectedIteration} />
-								{canStartIteration && iterations.length > 0 && (
-									<StartIterationDialog suiteId={testSuiteId} testSuiteSlug={testSuiteSlug} />
-								)}
-							</div>
-						</SidebarGroupContent>
-					</SidebarGroup>
-					{selectedIteration && (
+					{iterations.length > 0 && (
 						<SidebarGroup>
-							<SidebarGroupLabel>Testing Suite</SidebarGroupLabel>
+							<SidebarGroupLabel>Test Iterations</SidebarGroupLabel>
 							<SidebarGroupContent>
 								<SidebarMenu>
 									{
-										buildTree(suiteName, results).map((item, index) => (
+										buildTree(iterations, sectionsByIteration, selectedIteration, sectionSlug).map((item, index) => (
 											<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} />
 										))
 									}
@@ -156,7 +151,7 @@ export default async function TestResultTab({
 					<p className="text-xs text-muted-foreground">Results appear here once a test iteration is started for this suite.</p>
 					{canStartIteration && (
 						<div className="pt-3">
-							<StartIterationDialog suiteId={testSuiteId} testSuiteSlug={testSuiteSlug} />
+							<StartIterationDialog suiteId={testSuiteId} />
 						</div>
 					)}
 				</div>
@@ -165,31 +160,47 @@ export default async function TestResultTab({
 	);
 }
 
-// Suite → sections, built from the iteration's snapshot so the tree shows
-// what was actually tested, not the live suite. Kept flat at 2 levels for
-// now — sections don't list their individual test cases yet.
-function buildTree(suiteName: string, rows: testResultRow[]): TreeItem[] {
-	// Rows arrive sorted by section order, so first-seen order is the section order.
-	const sections = new Map<string, string>();
-	for (const row of rows) {
-		if (row.sectionSlug && !sections.has(row.sectionSlug)) {
-			sections.set(row.sectionSlug, row.sectionName ?? row.sectionSlug);
-		}
-	}
-	return [
-		[
-			{ name: suiteName, id: "suite", slug: "all", itemtype: "test-suite" },
-			...Array.from(sections, ([slug, name]): TreeNode => ({ name, id: slug, slug, itemtype: "section" })),
-		],
-	];
+// Iteration → Section: each iteration is a folder, its sections are leaves
+// nested under it — mirrors the Test Cases tab's Suite → Section tree, just
+// with "iteration" standing in for "suite" as the folder level. Newest
+// iteration first.
+function buildTree(
+	iterations: testIteration[],
+	sectionsByIteration: Map<string, iterationSection[]>,
+	selectedIteration: testIteration | null,
+	sectionSlug: string | undefined,
+): TreeItem[] {
+	const isAllSections = !sectionSlug || sectionSlug === "all";
+	return [...iterations]
+		.sort((a, b) => b.iterationNumber - a.iterationNumber)
+		.map((iteration): TreeItem => {
+			const isSelected = selectedIteration?.id === iteration.id;
+			const iterationNode: TreeNode = {
+				name: iteration.name,
+				id: iteration.id,
+				slug: "all",
+				itemtype: "iteration",
+				iterationNumber: iteration.iterationNumber,
+				active: isSelected && isAllSections,
+			};
+			const sectionNodes: TreeNode[] = (sectionsByIteration.get(iteration.id) ?? []).map((section) => ({
+				name: section.name,
+				id: `${iteration.id}:${section.slug}`,
+				slug: section.slug,
+				itemtype: "section",
+				iterationNumber: iteration.iterationNumber,
+				active: isSelected && sectionSlug === section.slug,
+			}));
+			return sectionNodes.length ? [iterationNode, ...sectionNodes] : iterationNode;
+		});
 }
 
 function Tree({ item, testSuiteSlug }: { item: TreeItem; testSuiteSlug: string }) {
-	const [{ name, id, slug, itemtype }, ...items] = Array.isArray(item) ? item : [item]
+	const [{ name, id, slug, itemtype, iterationNumber, active }, ...items] = Array.isArray(item) ? item : [item]
 
 	if (!items.length) {
 		return (
-			<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} />
+			<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} />
 		)
 	}
 
@@ -197,11 +208,16 @@ function Tree({ item, testSuiteSlug }: { item: TreeItem; testSuiteSlug: string }
 		<SidebarMenuItem>
 			<Collapsible
 				className="w-full"
-				defaultOpen={itemtype === "test-suite"}
+				defaultOpen={itemtype === "iteration" && active}
 			>
-				<CollapsibleTrigger render={
-					<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} />
-				} />
+				<div className="flex flex-row items-center">
+					<CollapsibleTrigger render={
+						<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible">
+							<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
+						</Button>
+					} />
+					<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} />
+				</div>
 				<CollapsibleContent>
 					<SidebarMenuSub	>
 						{

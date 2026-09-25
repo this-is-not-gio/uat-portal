@@ -2,14 +2,13 @@
 import { CollapsibleContent, CollapsibleTrigger, Collapsible } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
 import { getAllTestCasesBySuiteId, getSectionBySlug, getTestSectionsByTestSuiteId } from "@/lib/supabase/test-sections";
-import { getActiveIteration, getIterationChanges } from "@/lib/supabase/test-iterations";
-import { formatIterationTimestamp } from "@/lib/utils";
+import { getActiveIteration, getIterationChanges, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration } from "@/lib/supabase/test-iterations";
 import SectionLeaf from "./components/section-leaf";
+import ResultLeaf from "./components/result-leaf";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem } from "@/components/ui/combobox";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Badge } from "@/components/ui/badge";
-import { FolderOpen, Plus, Upload } from "lucide-react";
+import { ChevronRight, FolderOpen, IterationCw, Plus, Upload } from "lucide-react";
 import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { Board } from "@/components/board/board";
@@ -18,11 +17,12 @@ import TestCasesComponents, { type authoringContext } from "./test-cases-compone
 import SectionDialog from "./components/section-dialog";
 import SectionRow from "./components/section-row";
 import SectionList from "./components/section-list";
-import { getSuiteReadinessIssues } from "@/lib/supabase/test-suite";
+import StartIterationDialog from "./components/start-iteration-dialog";
+import { TestIterationComponent } from "@/components/test-iteration-component";
+import { getSuiteTestCaseIssues } from "@/lib/supabase/test-suite";
 import type { suiteStatus } from "@/lib/supabase/Init";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Suspense } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -37,6 +37,78 @@ type TreeNode = {
 	itemtype?: "section" | "test-case" | "test-suite";
 };
 type TreeItem = TreeNode | [TreeNode, ...TreeItem[]];
+
+type IterationTreeNode = {
+	name: string;
+	id: string;
+	slug: string;
+	itemtype: "iteration" | "section";
+	iterationNumber: number;
+};
+type IterationTreeItem = IterationTreeNode | [IterationTreeNode, ...IterationTreeNode[]];
+
+// Iteration → Section: each iteration is a folder, its sections (as they were
+// snapshotted into that round) are leaves nested under it. Results live on
+// the Test Results tab — clicking any node here takes you there.
+function buildIterationTree(iterations: testIteration[], sectionsByIteration: Map<string, iterationSection[]>): IterationTreeItem[] {
+	return [...iterations]
+		.sort((a, b) => b.iterationNumber - a.iterationNumber)
+		.map((iteration): IterationTreeItem => {
+			const iterationNode: IterationTreeNode = {
+				name: iteration.name,
+				id: iteration.id,
+				slug: "all",
+				itemtype: "iteration",
+				iterationNumber: iteration.iterationNumber,
+			};
+			const sectionNodes: IterationTreeNode[] = (sectionsByIteration.get(iteration.id) ?? []).map((section) => ({
+				name: section.name,
+				id: `${iteration.id}:${section.slug}`,
+				slug: section.slug,
+				itemtype: "section",
+				iterationNumber: iteration.iterationNumber,
+			}));
+			return sectionNodes.length ? [iterationNode, ...sectionNodes] : iterationNode;
+		});
+}
+
+function IterationTree({ item, testSuiteSlug }: { item: IterationTreeItem; testSuiteSlug: string }) {
+	const [{ name, id, slug, itemtype, iterationNumber }, ...items] = Array.isArray(item) ? item : [item]
+	// Path-based, nested under this same tab (sibling to the normal
+	// Testing Suite section view below) rather than the Test Results tab's
+	// `?tab=` scheme — see TestCasesTab's sectionPath handling.
+	const href = `/testingsuite/${testSuiteSlug}/testing-itration/${iterationNumber}${itemtype === "section" ? `/${slug}` : ""}?tab=test-cases`;
+
+	if (!items.length) {
+		return (
+			<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} testSuiteSlug={testSuiteSlug} href={href} />
+		)
+	}
+
+	return (
+		<SidebarMenuItem>
+			<Collapsible className="w-full" defaultOpen>
+				<div className="flex flex-row items-center">
+					<CollapsibleTrigger render={
+						<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible p-4">
+							<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
+						</Button>
+					} />
+					<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} testSuiteSlug={testSuiteSlug} href={href} />
+				</div>
+				<CollapsibleContent>
+					<SidebarMenuSub>
+						{
+							items.map((child, index) => (
+								<IterationTree key={index} item={child} testSuiteSlug={testSuiteSlug} />
+							))
+						}
+					</SidebarMenuSub>
+				</CollapsibleContent>
+			</Collapsible>
+		</SidebarMenuItem>
+	)
+}
 
 async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring, suiteStatus }: { testSuiteId: string; sectionSlug?: string; hasSections: boolean; authoring: authoringContext; suiteStatus: suiteStatus }) {
 	let section;
@@ -56,32 +128,45 @@ async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring
 export default async function TestCasesTab({
 	testSuiteId,
 	testSuiteSlug,
+	suiteName,
 	suiteStatus,
-	sectionSlug,
+	sectionPath,
 }: {
 	testSuiteId: string;
 	testSuiteSlug: string;
+	suiteName: string;
 	suiteStatus: suiteStatus;
-	sectionSlug?: string;
+	sectionPath?: string[];
 }) {
+	// A "testing-itration/{iterationNumber}/{section?}" path renders the
+	// iteration browser as a sibling of the normal section view below,
+	// instead of a plain section slug — both live under this same tab/sidebar.
+	const isIterationView = sectionPath?.[0] === "testing-itration";
+	const sectionSlug = isIterationView ? sectionPath?.[2] : sectionPath?.[0];
+
 	// Authoring is locked once a suite is signed off or archived (the DB enforces it too).
 	const editable = suiteStatus !== "signed_off" && suiteStatus !== "archived";
-	// Readiness markers only matter before testing starts.
-	const showReadiness = suiteStatus === "draft" || suiteStatus === "ready";
+	// Per-case completeness: drives the Ready/Not ready markers and which cases can be picked for an iteration.
+	const showReadiness = editable;
 
-	const [suite, activeIteration, readinessIssues] = await Promise.all([
+	const [suite, activeIteration, readinessIssues, iterations, sectionsByIteration] = await Promise.all([
 		getTestSectionsByTestSuiteId(testSuiteId),
 		getActiveIteration(testSuiteId),
-		showReadiness ? getSuiteReadinessIssues(testSuiteId) : Promise.resolve([]),
+		showReadiness ? getSuiteTestCaseIssues(testSuiteId) : Promise.resolve([]),
+		getIterationsBySuiteId(testSuiteId),
+		getSectionsByIteration(testSuiteId),
 	]);
 	// While a round runs, edits only reach testers through the vendor's Sync.
 	const iterationChanges = activeIteration && editable ? await getIterationChanges(activeIteration.id) : [];
+	// Mirrors start_iteration's guard: only one round can run at a time, and
+	// Draft/Ready suites start theirs from the Test Results tab's own CTA.
+	const canStartIteration = !activeIteration && (suiteStatus === "in_testing" || suiteStatus === "signed_off");
 	const authoring: authoringContext = {
 		sync: activeIteration ? { iteration: { id: activeIteration.id, name: activeIteration.name }, changes: iterationChanges } : null,
 		suiteId: testSuiteId,
 		editable,
 		sections: suite.sections.map((section) => ({ id: section.id, name: section.name })),
-		readinessIssues,
+		readinessIssues: readinessIssues.map((issue) => ({ testCaseId: issue.testCaseId, code: null, issue: issue.issue })),
 	};
 	const testCaseCounts = new Map(suite.sections.map((section) => [section.id, section.testCases.length]));
 	const addSectionTrigger = (
@@ -120,27 +205,40 @@ export default async function TestCasesTab({
 							</div>
 						) :
 							<SidebarContent>
-								{/* <SidebarGroup className="border-b pb-4">
-							<SidebarGroupLabel>Current Testing Iteration</SidebarGroupLabel>
-								<SidebarMenuItem>
-									{activeIteration ? (
-										// Results are recorded on the iteration, in the Test Results tab.
-										<Link
-											href={`/testingsuite/${testSuiteSlug}/all?tab=test-results&iteration=${activeIteration.iterationNumber}`}
-											className="flex flex-col px-2 rounded-md hover:bg-accent py-1"
-										>
-											<p className="font-bold">{activeIteration.name}</p>
-											<p className="font-mono text-xs text-muted-foreground">{formatIterationTimestamp(activeIteration)}</p>
-											<p className="text-xs text-primary underline underline-offset-2 pt-1">Record results in Test Results →</p>
-										</Link>
-									) : (
-										<div className="flex flex-col px-2">
-											<p className="font-bold">No active iteration</p>
-											<p className="font-mono text-xs text-muted-foreground">Start one from the Test Results tab</p>
-										</div>
-									)}
-								</SidebarMenuItem>
-						</SidebarGroup> */}
+								<SidebarGroup className="border-b pb-4">
+									<div className="flex flex-row items-center justify-between">
+										<SidebarGroupLabel>Test Iterations</SidebarGroupLabel>
+										{canStartIteration && (
+											<StartIterationDialog
+												suiteId={testSuiteId}
+												trigger={
+													<Button variant="ghost" size="icon" className="size-6" aria-label="Add a test iteration" title="Add a test iteration">
+														<Plus className="h-3.5 w-3.5" />
+													</Button>
+												}
+											/>
+										)}
+									</div>
+									<SidebarMenu>
+										{
+											iterations.length === 0 ? (
+												<div className="flex flex-col items-center justify-center text-center gap-3 px-2 py-6">
+													<div className="justify-center bg-muted/50 rounded-xl size-12 flex flex-col items-center gap-2">
+														<IterationCw size={22} className="text-muted-foreground" />
+													</div>
+													<div className="flex flex-col items-center justify-center gap-1">
+														<p className="font-semibold text-muted-foreground text-sm">No test iterations yet</p>
+														<p className="text-xs text-muted-foreground">You may create a test iteration and plan each test cases to be added.</p>
+													</div>
+												</div>
+											) : (
+												buildIterationTree(iterations, sectionsByIteration).map((item, index) => (
+													<IterationTree key={index} item={item} testSuiteSlug={testSuiteSlug} />
+												))
+											)
+										}
+									</SidebarMenu>
+								</SidebarGroup>
 								<SidebarGroup>
 									<div className="flex flex-row items-center justify-between px-2">
 										<SidebarGroupLabel className="px-0">Testing Suite</SidebarGroupLabel>
@@ -156,19 +254,23 @@ export default async function TestCasesTab({
 									</div>
 									<SidebarGroupContent className="">
 										<SidebarMenu>
-												{
-													data.map((item, index) => (
-														<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} menu={editable ? { suiteId: testSuiteId, testCaseCounts } : undefined} />
-													))
-												}
-											</SidebarMenu>
+											{
+												data.map((item, index) => (
+													<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} menu={editable ? { suiteId: testSuiteId, testCaseCounts } : undefined} />
+												))
+											}
+										</SidebarMenu>
 									</SidebarGroupContent>
 								</SidebarGroup>
 							</SidebarContent>
 					}
 				</Suspense>
 			</div>
-			<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} suiteStatus={suiteStatus} />
+			{isIterationView ? (
+				<TestIterationComponent testSuiteId={testSuiteId} suiteName={suiteName} />
+			) : (
+				<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} suiteStatus={suiteStatus} />
+			)}
 		</>
 	)
 }
@@ -205,9 +307,14 @@ function Tree({ item, testSuiteSlug, menu }: { item: TreeItem; testSuiteSlug: st
 				className="w-full"
 				defaultOpen={itemtype === "test-suite"}
 			>
-				<CollapsibleTrigger render={
+				<div className="flex flex-row items-center">
+					<CollapsibleTrigger render={
+						<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible p-4">
+							<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
+						</Button>
+					} />
 					<SectionLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} />
-				} />
+				</div>
 				<CollapsibleContent>
 					<SidebarMenuSub	>
 						{

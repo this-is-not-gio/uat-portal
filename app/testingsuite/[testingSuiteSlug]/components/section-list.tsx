@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
 	DndContext,
 	closestCenter,
@@ -43,6 +43,10 @@ export default function SectionList({
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
 	);
+	// DndContext's internal aria-describedby id isn't guaranteed stable between
+	// server and client render passes — pin it via React's SSR-safe useId(),
+	// same fix as DataTable's DndContext.
+	const dndContextId = useId();
 
 	async function handleDragEnd(event: DragEndEvent) {
 		const { active, over } = event;
@@ -61,7 +65,7 @@ export default function SectionList({
 	}
 
 	return (
-		<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+		<DndContext id={dndContextId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
 			<SortableContext items={order.map((section) => section.id)} strategy={verticalListSortingStrategy}>
 				{order.map((section) => (
 					<SortableSectionRow

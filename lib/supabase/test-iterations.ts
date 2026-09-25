@@ -172,6 +172,66 @@ export async function getActiveIteration(testSuiteId: string): Promise<testItera
     return data ? toIteration(data) : null;
 }
 
+export type iterationSection = { slug: string; name: string };
+
+// Lightweight per-iteration section list — just enough to build the sidebar's
+// Iteration → Section tree without loading every iteration's full result set
+// (getIterationResults) up front.
+export async function getSectionsByIteration(testSuiteId: string): Promise<Map<string, iterationSection[]>> {
+    const supabase = await createClient();
+    const { data: iterations, error: iterationsError } = await supabase
+        .from("test_iterations")
+        .select("id")
+        .eq("testing_suite_id", testSuiteId);
+    if (iterationsError) throw iterationsError;
+    if (!iterations.length) return new Map();
+
+    const { data, error } = await supabase
+        .from("test_case_results")
+        .select("iteration_id, section_slug, section_name, section_order")
+        .in("iteration_id", iterations.map((i) => i.id))
+        .order("section_order", { ascending: true });
+    if (error) throw error;
+
+    const map = new Map<string, iterationSection[]>();
+    for (const row of data) {
+        if (!row.section_slug) continue;
+        const sections = map.get(row.iteration_id) ?? [];
+        if (!sections.some((s) => s.slug === row.section_slug)) {
+            sections.push({ slug: row.section_slug, name: row.section_name ?? row.section_slug });
+        }
+        map.set(row.iteration_id, sections);
+    }
+    return map;
+}
+
+// Per-case outcome from the most recent iteration (whichever has the highest
+// iteration_number, in_progress or completed) — this is what the Test Cases
+// tab's status column shows, computed at read time rather than a physical
+// column so test_case_results stays the single source of truth. Cases not
+// snapshotted into that round (e.g. added after it started) are absent from
+// the map, so callers should fall back to the case's own default status.
+export async function getLatestIterationCaseStatuses(testSuiteId: string): Promise<Map<string, testCaseStatus>> {
+    const supabase = await createClient();
+    const { data: latest, error: latestError } = await supabase
+        .from("test_iterations")
+        .select("id")
+        .eq("testing_suite_id", testSuiteId)
+        .order("iteration_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (latestError) throw latestError;
+    if (!latest) return new Map();
+
+    const { data, error } = await supabase
+        .from("test_case_results")
+        .select("test_case_id, status")
+        .eq("iteration_id", latest.id);
+    if (error) throw error;
+
+    return new Map(data.filter((row) => row.test_case_id).map((row) => [row.test_case_id as string, row.status]));
+}
+
 export async function getIterationResults(iterationId: string): Promise<testResultRow[]> {
     const supabase = await createClient();
     const [{ data, error }, previousStatuses] = await Promise.all([

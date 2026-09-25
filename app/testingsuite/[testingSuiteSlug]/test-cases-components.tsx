@@ -33,7 +33,7 @@ export type authoringContext = {
 	// false once the suite is signed off or archived.
 	editable: boolean;
 	sections: { id: string; name: string }[];
-	// Empty unless the suite is Draft/Ready.
+	// Per-case completeness while editable: incomplete cases show "Not ready" and can't be picked for an iteration.
 	readinessIssues: readinessIssue[];
 	// Set while an iteration is running: live edits not yet synced into it.
 	sync: { iteration: { id: string; name: string }; changes: iterationChange[] } | null;

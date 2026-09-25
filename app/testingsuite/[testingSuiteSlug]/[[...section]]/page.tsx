@@ -9,12 +9,13 @@ import {
 	LucideIcon,
 	CircleCheckBig,
 	CircleDashed,
-	Circle,
-} from "lucide-react";
+		Circle,
+		CircleCheck,
+	} from "lucide-react";
 import { EpicWorkspace } from "@/components/epic-workspace";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getTestSuite } from "@/lib/supabase/test-suite";
+import { getSuiteReadinessIssues, getTestSuite } from "@/lib/supabase/test-suite";
 import PageTab from "../page-tab";
 import TestCasesTab from "../test-cases-tab";
 import TestResultTab from "../test-result-tab";
@@ -47,10 +48,8 @@ const statusMapping: Record<testingsuiteLifeCycle, { Icon: LucideIcon, label: st
 // enforces (READINESS_ISSUES) — every draft suite needs these before it can
 // go Ready.
 const READINESS_REQUIREMENTS: { key: keyof typeof READINESS_ISSUES; title: string; description: string }[] = [
-	{ key: "no_test_cases", title: "Has test cases", description: "The suite needs at least one test case." },
-	{ key: "no_steps", title: "Steps defined", description: "Every test case needs at least one step to execute." },
-	{ key: "step_without_expected_result", title: "Expected results", description: "Every step needs at least one expected result, so testers know what a pass looks like." },
-];
+		{ key: "no_complete_test_cases", title: "At least one complete test case", description: "Complete = has steps, every step has an expected result, and a role assignee is set. Only complete test cases can be picked when starting an iteration." },
+	];
 
 
 
@@ -67,11 +66,17 @@ export default async function TestsuitePage({
 }) {
 	const { testingSuiteSlug, section } = await params;
 	const { tab, iteration } = await searchParams;
+	// Test Cases gets the raw path (it also handles the nested
+	// testing-itration/{iterationNumber}/{section} shape); other tabs only
+	// ever see a plain section slug.
 	const sectionSlug = section?.[0];
 	const testSuite = await getTestSuite({ slug: testingSuiteSlug });
 	if (!testSuite) notFound();
 	// Only needed for the Sign Off button.
 	const signOffContext = testSuite.status === "in_testing" ? await getSignOffContext(testSuite.id) : null;
+	// Draft checklist: what still blocks Mark as Ready (the DB runs the same check on the move).
+	const draftIssues = testSuite.status === "draft" ? await getSuiteReadinessIssues(testSuite.id) : [];
+	const canMarkReady = draftIssues.length === 0;
 	const Icon = statusMapping[testSuite.status].Icon;
 	const NextIcon = statusMapping[testSuite.status].nextStatusIcon
 
@@ -84,7 +89,7 @@ export default async function TestsuitePage({
 
 	const testCasesTabSlot =
 		tab === "test-cases" ?
-			<TestCasesTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteStatus={testSuite.status} sectionSlug={sectionSlug} />
+			<TestCasesTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionPath={section} />
 			: null
 
 	const testResultsTabSlot =
@@ -109,10 +114,7 @@ export default async function TestsuitePage({
 					{
 						testSuite.status === "draft" ? (
 							<div className=" ">
-								{/* <SuiteStatusButton suiteId={testSuite.id} targetStatus="ready">
-									{NextIcon && <NextIcon className="h-4 w-4" />}
-									<p className="text-xs">Mark as Ready</p>
-								</SuiteStatusButton> */}
+								{/* Mark as Ready is rendered after the checklist hover card below. */}
 								<div className="flex flex-row items-end gap-2">
 
 
@@ -120,9 +122,9 @@ export default async function TestsuitePage({
 										<HoverCardTrigger render={
 											<div className="flex flex-row items-center gap-2">
 												<div className="flex flex-col items-end">
-													<p className="font-semibold text-sm">Test suite is not Ready</p>
+													<p className="font-semibold text-sm">{canMarkReady ? "Ready to hand over" : "Test suite is not Ready"}</p>
 													<p className="text-xs text-muted-foreground">
-														This suite is still a draft and cannot be mark as ready
+														{canMarkReady ? "At least one test case is complete" : "This suite is still a draft and cannot be mark as ready"}
 													</p>
 												</div>
 												<div className="flex flex-row items-center justify-center size-10 bg-gray-500/10 border border-gray-800/50 rounded-md">
@@ -141,7 +143,9 @@ export default async function TestsuitePage({
 												<div className="flex flex-col gap-1">
 													{READINESS_REQUIREMENTS.map((requirement) => (
 														<div key={requirement.key} className="flex flex-row items-start gap-2 p-2">
-															<Circle className="size-4 shrink-0 text-gray-500 mt-0.5" />
+															{draftIssues.some((issue) => issue.issue === requirement.key)
+																? <Circle className="size-4 shrink-0 text-gray-500 mt-0.5" />
+																: <CircleCheck className="size-4 shrink-0 text-green-700 mt-0.5" />}
 															<div className="">
 																<p className="font-medium text-sm">{requirement.title}</p>
 																<p className="text-xs text-muted-foreground">{requirement.description}</p>
@@ -156,8 +160,14 @@ export default async function TestsuitePage({
 												</div>
 											</div>
 										</HoverCardContent>
-									</HoverCard>
-								</div>
+										</HoverCard>
+										{canMarkReady && (
+											<SuiteStatusButton suiteId={testSuite.id} targetStatus="ready">
+												{NextIcon && <NextIcon className="h-4 w-4" />}
+												<p className="text-xs">Mark as Ready</p>
+											</SuiteStatusButton>
+										)}
+									</div>
 							</div>
 						) : testSuite.status === "ready" ? (
 							<div className="flex flex-row items-center gap-2">
@@ -166,7 +176,6 @@ export default async function TestsuitePage({
 								</SuiteStatusButton>
 								<StartIterationDialog
 									suiteId={testSuite.id}
-									testSuiteSlug={testingSuiteSlug}
 									trigger={
 										<Button className="flex flex-row items-center gap-2">
 											{NextIcon && <NextIcon className="h-4 w-4" />}

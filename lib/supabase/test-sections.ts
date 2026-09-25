@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { TEST_CASE_SELECT, testCase, testCaseStatus, testStepStatus } from "./test-cases";
+import { getLatestIterationCaseStatuses } from "./test-iterations";
 
 type TestCaseRow = {
     id: string;
@@ -150,43 +151,55 @@ export async function getSection(testSectionId: string): Promise<testSection> {
 
 export async function getSectionBySlug(testSuiteId: string, slug: string): Promise<testSection> {
     const supabase = await createClient();
-    const { data, error } = await supabase
-        .from("sections")
-        .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
-        .eq("test_suite_id", testSuiteId)
-        .eq("slug", slug)
-        .order("order_index", {
-            referencedTable: "test_cases",
-            ascending: true,
-        })
-        .single();
+    const [{ data, error }, latestStatuses] = await Promise.all([
+        supabase
+            .from("sections")
+            .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
+            .eq("test_suite_id", testSuiteId)
+            .eq("slug", slug)
+            .order("order_index", {
+                referencedTable: "test_cases",
+                ascending: true,
+            })
+            .single(),
+        getLatestIterationCaseStatuses(testSuiteId),
+    ]);
 
     if (error) throw error;
 
     return {
         id: data.id,
         name: data.name,
-        testCases: data.test_cases?.map(mapTestCaseRow) || [],
+        testCases: data.test_cases?.map((row) => applyLatestStatus(mapTestCaseRow(row), latestStatuses)) || [],
     };
 }
 
 export async function getAllTestCasesBySuiteId(testSuiteId: string): Promise<testSection> {
     const supabase = await createClient();
-    const { data, error } = await supabase
-        .from("sections")
-        .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
-        .eq("test_suite_id", testSuiteId)
-        .order("order_index", { ascending: true })
-        .order("order_index", {
-            referencedTable: "test_cases",
-            ascending: true,
-        });
+    const [{ data, error }, latestStatuses] = await Promise.all([
+        supabase
+            .from("sections")
+            .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
+            .eq("test_suite_id", testSuiteId)
+            .order("order_index", { ascending: true })
+            .order("order_index", {
+                referencedTable: "test_cases",
+                ascending: true,
+            }),
+        getLatestIterationCaseStatuses(testSuiteId),
+    ]);
 
     if (error) throw error;
 
     return {
         id: testSuiteId,
         name: "All Sections",
-        testCases: data.flatMap((section) => section.test_cases?.map(mapTestCaseRow) || []),
+        testCases: data.flatMap((section) => section.test_cases?.map((row) => applyLatestStatus(mapTestCaseRow(row), latestStatuses)) || []),
     };
+}
+
+// Overrides the case's default/master status with its outcome in the most
+// recent iteration, if it was part of one — see getLatestIterationCaseStatuses.
+function applyLatestStatus(tc: ReturnType<typeof mapTestCaseRow>, latestStatuses: Map<string, testCaseStatus>) {
+    return { ...tc, status: latestStatuses.get(tc.id) ?? tc.status };
 }
