@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import { File, Folder, FolderClock, ClipboardList } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useIterationSelection } from "./iteration-selection-context";
 
 // Test Results counterpart of SectionLeaf. Two node kinds:
 // - "iteration" (folder): clicking it selects that round (its section
@@ -14,6 +16,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 //   the parent iteration's number, not whatever's currently in the URL).
 export default function ResultLeaf({
 	name,
+	id,
 	slug,
 	testSuiteSlug,
 	itemtype,
@@ -22,13 +25,14 @@ export default function ResultLeaf({
 	href,
 	className,
 	onClick,
+	testCaseCount,
 	...rest
 }: {
 	name: string;
 	id: string;
 	slug: string;
 	testSuiteSlug: string;
-	itemtype?: "section" | "test-case" | "test-suite" | "iteration";
+	itemtype?: "section" | "test-case" | "test-suite" | "iteration" | "iteration-section";
 	// The iteration this node belongs to (its own number, for an "iteration"
 	// node; its parent iteration's number, for a "section" node).
 	iterationNumber?: number;
@@ -41,6 +45,7 @@ export default function ResultLeaf({
 	// preview, which links into the path-based testing-itration screen
 	// instead of `?tab=test-results`).
 	href?: string;
+	testCaseCount?: number;
 } & React.ComponentProps<typeof SidebarMenuButton>) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -67,19 +72,38 @@ export default function ResultLeaf({
 		"test-case": File,
 		"test-suite": Folder,
 		"iteration": FolderClock,
+		"iteration-section": ClipboardList,
 	};
 
 	const IconComponent = itemtype ? IconMapping[itemtype] : Folder;
+
+	// Only "iteration-section" nodes are keyed "<iterationId>:<sectionSlug>" by
+	// buildIterationTree/IterationTestCaseList — other node types just won't
+	// have a matching entry, so this stays undefined for them.
+	const { counts } = useIterationSelection();
+	const selectedCount = itemtype === "iteration-section" ? (counts[id] ?? testCaseCount) : undefined;
 
 	return (
 		<SidebarMenuButton
 			{...rest}
 			onClick={handleClick}
-			data-active={isActive}
+			data-active={isActive || undefined}
 			className={className}
 		>
 			<IconComponent />
+			<div className="flex flex-row items-center gap-2 truncate">
 			{name}
+			{
+				itemtype === "iteration-section" && (
+					selectedCount !== undefined && selectedCount !== 0 ? (
+						<Badge variant="secondary" className="text-xs ml-auto"><span className="font-mono">{selectedCount}</span> Test Cases</Badge>
+					) : (
+						<Badge variant="secondary" className="text-xs ml-auto">No Test Cases Included</Badge>
+					)
+				)
+			}
+
+			</div>
 		</SidebarMenuButton>
 	)
 }

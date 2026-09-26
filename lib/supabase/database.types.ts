@@ -260,6 +260,7 @@ export type Database = {
           completed_at: string | null
           executed_by: string | null
           id: string
+          included_in_run: boolean
           iteration_id: string
           order_index: number
           preconditions: Json
@@ -284,6 +285,7 @@ export type Database = {
           completed_at?: string | null
           executed_by?: string | null
           id?: string
+          included_in_run?: boolean
           iteration_id: string
           order_index?: number
           preconditions?: Json
@@ -308,6 +310,7 @@ export type Database = {
           completed_at?: string | null
           executed_by?: string | null
           id?: string
+          included_in_run?: boolean
           iteration_id?: string
           order_index?: number
           preconditions?: Json
@@ -481,6 +484,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
           testing_suite_id: string
@@ -493,6 +497,7 @@ export type Database = {
           label?: string | null
           name: string
           planned_end_date?: string | null
+          slug: string
           started_at?: string
           status?: Database["public"]["Enums"]["iteration_status"]
           testing_suite_id: string
@@ -505,6 +510,7 @@ export type Database = {
           label?: string | null
           name?: string
           planned_end_date?: string | null
+          slug?: string
           started_at?: string
           status?: Database["public"]["Enums"]["iteration_status"]
           testing_suite_id?: string
@@ -746,6 +752,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
           testing_suite_id: string
@@ -865,6 +872,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
           testing_suite_id: string
@@ -907,6 +915,32 @@ export type Database = {
         Returns: string
       }
       test_case_issues: { Args: { p_test_case_id: string }; Returns: string[] }
+      update_iteration_details: {
+        Args: {
+          p_iteration_id: string
+          p_label?: string
+          p_planned_end_date?: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_by: string | null
+          id: string
+          iteration_number: number
+          label: string | null
+          name: string
+          planned_end_date: string | null
+          slug: string
+          started_at: string
+          status: Database["public"]["Enums"]["iteration_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "test_iterations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       upsert_section: {
         Args: {
           p_id?: string

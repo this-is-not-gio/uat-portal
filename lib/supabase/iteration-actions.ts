@@ -94,6 +94,20 @@ export async function cancelIteration({ iterationId }: { iterationId: string }):
     return { ok: true, data: undefined };
 }
 
+// Edits an iteration's label/planned end date — its name and slug (what the
+// URL and numbering depend on) are never touched by this.
+export async function updateIterationDetails({ iterationId, label, plannedEndDate }: { iterationId: string; label?: string; plannedEndDate?: string }): Promise<actionResult> {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("update_iteration_details", {
+        p_iteration_id: iterationId,
+        p_label: label || undefined,
+        p_planned_end_date: plannedEndDate || undefined,
+    });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
 // Recording results on the iteration snapshot ------------------------------
 
 // The case status is re-derived from its steps by a DB trigger (unless overridden),
@@ -131,6 +145,17 @@ export async function setCaseResultStatus({ caseResultId, status }: { caseResult
         .eq("id", caseResultId);
     if (error) return fail(error);
     return readCaseResultState(caseResultId);
+}
+
+//Saving or including the testcase for the given iterations 
+export async function setCaseResultInclusion({caseResultId, included }: { caseResultId: string; included: boolean }): Promise<actionResult> {
+    const supabase = await createClient();
+    const { error } = await supabase
+        .from("test_case_results")
+        .update({ included_in_run: included })
+        .eq("id", caseResultId);
+    if (error) return fail(error);
+    return { ok: true, data: undefined };
 }
 
 export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: string }): Promise<actionResult<caseResultState>> {

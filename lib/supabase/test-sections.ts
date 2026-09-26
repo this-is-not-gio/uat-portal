@@ -200,6 +200,8 @@ export async function getAllTestCasesBySuiteId(testSuiteId: string): Promise<tes
 
 // Overrides the case's default/master status with its outcome in the most
 // recent iteration, if it was part of one — see getLatestIterationCaseStatuses.
+// `inIteration` is exposed separately so the UI can distinguish "not part of
+// any round yet" from a genuine, recorded "Untested" outcome within one.
 function applyLatestStatus(tc: ReturnType<typeof mapTestCaseRow>, latestStatuses: Map<string, testCaseStatus>) {
-    return { ...tc, status: latestStatuses.get(tc.id) ?? tc.status };
+    return { ...tc, status: latestStatuses.get(tc.id) ?? tc.status, inIteration: latestStatuses.has(tc.id) };
 }

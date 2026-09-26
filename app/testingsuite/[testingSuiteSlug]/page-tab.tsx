@@ -62,12 +62,12 @@ export default function PageTab({ overviewTab, testCasesTab, testResultsTab }: {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const tab = searchParams.get("tab") ?? "overview";
-
-	const [, testSuiteSlug, sectionSlug] = pathname.split("/").filter(Boolean);
+	
+	const [,testSuiteSlug, sectionPath] = pathname.split("/").filter(Boolean);
 
 	function handleTabChange(value: string) {
 		if (value === "test-cases") {
-			router.replace(`/testingsuite/${testSuiteSlug}/${sectionSlug ?? "all"}?tab=${value}`);
+			router.replace(`/testingsuite/${testSuiteSlug}/all?tab=${value}`);
 		} else {
 			router.replace(`/testingsuite/${testSuiteSlug}?tab=${value}`);
 		}

@@ -97,11 +97,12 @@ function TestCaseTitleCell({ row, suiteStatus }: { row: testCase; suiteStatus: s
 	)
 }
 
-// Before testing starts, every case would just show "Untested" — the
-// execution-Status column only carries real information once a round runs.
+// Before the suite leaves Draft there's no way for any case to be part of a
+// round yet — the execution-status columns only carry real information from
+// Ready onward (a Ready suite can already have a planned/running iteration).
 export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?: (row: testCase) => React.ReactNode }) {
 	const renderActions = options?.renderActions;
-	const showExecutionStatus = suiteStatus !== "draft" && suiteStatus !== "ready";
+	const showExecutionStatus = suiteStatus !== "draft";
 	return columnHelper.columns([
 		columnHelper.display({
 			cell: (info) => <TestCaseTitleCell row={info.row.original} suiteStatus={suiteStatus} />,

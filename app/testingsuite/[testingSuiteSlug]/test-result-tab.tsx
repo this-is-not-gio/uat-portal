@@ -48,7 +48,17 @@ export default async function TestResultTab({
 				</div>
 			</div>
 		);
-	} else if (suiteStatus === "ready") {
+	}
+
+	const [iterations, sectionsByIteration] = await Promise.all([
+		getIterationsBySuiteId(testSuiteId),
+		getSectionsByIteration(testSuiteId),
+	]);
+
+	// Creating an iteration is planning, not execution — a ready suite can
+	// already have one (or more) planned rounds without its status having
+	// moved. Only show the "start testing" CTA when nothing's been planned yet.
+	if (suiteStatus === "ready" && iterations.length === 0) {
 		return (
 			<div className="flex-1 flex flex-col items-center justify-center text-center gap-5 py-12">
 				<div className="justify-center bg-muted/50 rounded-xl size-20 flex flex-col items-center gap-2">
@@ -71,10 +81,6 @@ export default async function TestResultTab({
 		);
 	}
 
-	const [iterations, sectionsByIteration] = await Promise.all([
-		getIterationsBySuiteId(testSuiteId),
-		getSectionsByIteration(testSuiteId),
-	]);
 	const activeIteration = iterations.find((iteration) => iteration.status === "in_progress") ?? null;
 
 	// Explicit ?iteration=N wins; otherwise the running round (that's where
@@ -86,8 +92,10 @@ export default async function TestResultTab({
 		null;
 
 	// Mirrors start_iteration's guard: Draft and Archived suites can't start a round.
-	// (Ready suites are handled by the early return above, with their own Start Testing CTA.)
-	const canStartIteration = !activeIteration && (suiteStatus === "in_testing" || suiteStatus === "signed_off");
+	// A brand-new Ready suite (no iterations yet) is handled by the early
+	// return above, with its own Start Testing CTA — this covers a Ready suite
+	// that already has one planned/completed round and can plan another.
+	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "signed_off");
 
 	const [rawResults, changes] = selectedIteration
 		? await Promise.all([

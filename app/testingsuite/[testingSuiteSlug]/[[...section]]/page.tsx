@@ -89,7 +89,7 @@ export default async function TestsuitePage({
 
 	const testCasesTabSlot =
 		tab === "test-cases" ?
-			<TestCasesTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionPath={section} />
+			<TestCasesTab  testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionPath={section} />
 			: null
 
 	const testResultsTabSlot =

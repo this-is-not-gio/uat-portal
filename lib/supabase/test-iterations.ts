@@ -6,6 +6,7 @@ export type iterationStatus = "in_progress" | "completed";
 export type testIteration = {
     id: string;
     name: string;
+    slug: string;
     label: string | null;
     iterationNumber: number;
     status: iterationStatus;
@@ -53,6 +54,8 @@ export type testResultRow = testCase & {
     completedAt: string | null;
     // true when a tester set the case result by hand instead of it being derived from steps.
     statusOverridden: boolean;
+    // Whether this case is currently checked to be tested in this round.
+    includedInRun: boolean;
     syncKind: syncKind | null;
     // Result of the same live test case in the previous iteration, if it was in it.
     previousStatus: testCaseStatus | null;
@@ -62,7 +65,7 @@ export type testResultRow = testCase & {
     pendingChange?: iterationChange["change"];
 };
 
-const ITERATION_SELECT = "id, name, label, iteration_number, status, started_at, completed_at, planned_end_date" as const;
+const ITERATION_SELECT = "id, name, slug, label, iteration_number, status, started_at, completed_at, planned_end_date" as const;
 
 const RESULT_SELECT = `
   id,
@@ -77,6 +80,7 @@ const RESULT_SELECT = `
   preconditions,
   status,
   status_overridden,
+  included_in_run,
   sync_kind,
   completed_at,
   executor:profiles!test_case_results_executed_by_fkey ( id, full_name, role ),
@@ -94,6 +98,7 @@ const RESULT_SELECT = `
 type IterationRow = {
     id: string;
     name: string;
+    slug: string;
     label: string | null;
     iteration_number: number;
     status: iterationStatus;
@@ -106,6 +111,7 @@ function toIteration(row: IterationRow): testIteration {
     return {
         id: row.id,
         name: row.name,
+        slug: row.slug,
         label: row.label,
         iterationNumber: row.iteration_number,
         status: row.status,
@@ -172,7 +178,10 @@ export async function getActiveIteration(testSuiteId: string): Promise<testItera
     return data ? toIteration(data) : null;
 }
 
-export type iterationSection = { slug: string; name: string };
+// resultIds: every test_case_results row in this section for this
+// iteration — the ids apply_iteration_sync's `remove` argument needs to pull
+// the whole section back out of the round (it rejects rows with results).
+export type iterationSection = { slug: string; name: string; includedCount: number; resultIds: string[] };
 
 // Lightweight per-iteration section list — just enough to build the sidebar's
 // Iteration → Section tree without loading every iteration's full result set
@@ -188,7 +197,7 @@ export async function getSectionsByIteration(testSuiteId: string): Promise<Map<s
 
     const { data, error } = await supabase
         .from("test_case_results")
-        .select("iteration_id, section_slug, section_name, section_order")
+        .select("id, iteration_id, section_slug, section_name, section_order, included_in_run")
         .in("iteration_id", iterations.map((i) => i.id))
         .order("section_order", { ascending: true });
     if (error) throw error;
@@ -197,12 +206,50 @@ export async function getSectionsByIteration(testSuiteId: string): Promise<Map<s
     for (const row of data) {
         if (!row.section_slug) continue;
         const sections = map.get(row.iteration_id) ?? [];
-        if (!sections.some((s) => s.slug === row.section_slug)) {
-            sections.push({ slug: row.section_slug, name: row.section_name ?? row.section_slug });
+        let section = sections.find((s) => s.slug === row.section_slug);
+        if (!section) {
+            section = { slug: row.section_slug, name: row.section_name ?? row.section_slug, includedCount: 0, resultIds: [] };
+            sections.push(section);
         }
+        if (row.included_in_run) section.includedCount += 1;
+        section.resultIds.push(row.id);
         map.set(row.iteration_id, sections);
     }
     return map;
+}
+
+export type iterationTestSection = { slug: string; name: string; testCases: testResultRow[] };
+
+// Section -> its test cases, as they were snapshotted into this one
+// iteration (test_case_results) — same grouping shape as
+// getTestSectionsByTestSuiteId's testSection, but for one round instead of
+// the live suite. Callers that only need status/results should reach for
+// getIterationResults directly; this is for screens that just need what's
+// included (Test Cases tab's iteration browser).
+export async function getIterationTestSections(iterationId: string): Promise<iterationTestSection[]> {
+    const results = await getIterationResults(iterationId);
+    const bySlug = new Map<string, iterationTestSection>();
+    for (const row of results) {
+        if (!row.sectionSlug) continue;
+        const section = bySlug.get(row.sectionSlug) ?? { slug: row.sectionSlug, name: row.sectionName ?? row.sectionSlug, testCases: [] };
+        section.testCases.push(row);
+        bySlug.set(row.sectionSlug, section);
+    }
+    return [...bySlug.values()];
+}
+
+// Which live test cases this iteration already has a snapshot for — used to
+// exclude them from "add more test cases" pickers so the same case can't be
+// added twice (apply_iteration_sync already no-ops on that, this just keeps
+// the picker's counts honest).
+export async function getIterationTestCaseIds(iterationId: string): Promise<Set<string>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_case_results")
+        .select("test_case_id")
+        .eq("iteration_id", iterationId);
+    if (error) throw error;
+    return new Set(data.map((row) => row.test_case_id).filter((id): id is string => !!id));
 }
 
 // Per-case outcome from the most recent iteration (whichever has the highest
@@ -215,7 +262,7 @@ export async function getLatestIterationCaseStatuses(testSuiteId: string): Promi
     const supabase = await createClient();
     const { data: latest, error: latestError } = await supabase
         .from("test_iterations")
-        .select("id")
+        .select("id, status")
         .eq("testing_suite_id", testSuiteId)
         .order("iteration_number", { ascending: false })
         .limit(1)
@@ -229,7 +276,19 @@ export async function getLatestIterationCaseStatuses(testSuiteId: string): Promi
         .eq("iteration_id", latest.id);
     if (error) throw error;
 
-    return new Map(data.filter((row) => row.test_case_id).map((row) => [row.test_case_id as string, row.status]));
+    // Being snapshotted into a currently-running round is itself a status:
+    // a case reads as "In Progress" as soon as it's included, even before
+    // any of its steps have been recorded, rather than sitting at "Untested"
+    // until someone touches it. A finished round's cases keep their real,
+    // final outcome (including a genuinely untested one).
+    return new Map(
+        data
+            .filter((row) => row.test_case_id)
+            .map((row) => [
+                row.test_case_id as string,
+                latest.status === "in_progress" && row.status === "Untested" ? "In Progress" : row.status,
+            ])
+    );
 }
 
 export async function getIterationResults(iterationId: string): Promise<testResultRow[]> {
@@ -260,6 +319,7 @@ export async function getIterationResults(iterationId: string): Promise<testResu
         completedAt: row.completed_at,
         executor: row.executor ?? undefined,
         statusOverridden: row.status_overridden,
+        includedInRun: row.included_in_run,
         syncKind: row.sync_kind as syncKind | null,
         previousStatus: row.test_case_id ? previousStatuses.get(row.test_case_id) ?? null : null,
         archives: row.test_case_result_archives

@@ -2,6 +2,7 @@
 
 import { TestCase } from "@/components/types";
 import { createClient } from "@/lib/supabase/server";
+import { getIterationsBySuiteId, type testIteration } from "@/lib/supabase/test-iterations";
 
 
 //CRUD for Test suite
@@ -38,7 +39,7 @@ export async function getSuiteReadinessIssues(suiteId: string): Promise<readines
     return data.map((row) => ({ testCaseId: row.test_case_id, code: row.code, issue: row.issue as readinessIssue["issue"] }));
 }
 
-export async function getTestSuite({ slug }: { slug: string }){
+export async function getTestSuite({ slug }: { slug: string }) {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("testing_suites")
@@ -47,5 +48,8 @@ export async function getTestSuite({ slug }: { slug: string }){
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    if (!data) return null;
+
+    const iterations: testIteration[] = await getIterationsBySuiteId(data.id);
+    return { ...data, iterations };
 }

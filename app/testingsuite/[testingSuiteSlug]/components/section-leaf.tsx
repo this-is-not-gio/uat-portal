@@ -55,7 +55,7 @@ export default function SectionLeaf({
 		<SidebarMenuButton
 			{...rest}
 			onClick={handleClick}
-			data-active={isActive}
+			data-active={isActive || undefined}
 			className={className}
 		>
 			{draggable ? (
