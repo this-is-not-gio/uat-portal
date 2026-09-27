@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { PLACEHOLDER_PIC_ID } from "./placeholder-actor";
+import { requireUser } from "./auth";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database } from "./database.types";
 
@@ -54,8 +54,9 @@ export async function setSuiteStatus({ suiteId, status }: { suiteId: string; sta
 
 // Signs off on the latest completed iteration; a note is required unless every case passed.
 export async function signOffSuite({ suiteId, note }: { suiteId: string; note: string }): Promise<actionResult> {
+    const user = await requireUser();
     const supabase = await createClient();
-    const { error } = await supabase.rpc("sign_off_suite", { p_suite_id: suiteId, p_by: PLACEHOLDER_PIC_ID, p_note: note || undefined });
+    const { error } = await supabase.rpc("sign_off_suite", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
@@ -65,10 +66,11 @@ export async function signOffSuite({ suiteId, note }: { suiteId: string; note: s
 
 // The round's scope: only the picked (complete) test cases are copied in.
 export async function startIteration({ suiteId, label, plannedEndDate, testCaseIds }: { suiteId: string; label?: string; plannedEndDate?: string; testCaseIds: string[] }): Promise<actionResult<{ iterationNumber: number }>> {
+    const user = await requireUser();
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("start_iteration", {
         p_suite_id: suiteId,
-        p_created_by: PLACEHOLDER_PIC_ID,
+        p_created_by: user.id,
         p_label: label || undefined,
         p_planned_end_date: plannedEndDate || undefined,
         p_test_case_ids: testCaseIds,
@@ -113,6 +115,7 @@ export async function updateIterationDetails({ iterationId, label, plannedEndDat
 // The case status is re-derived from its steps by a DB trigger (unless overridden),
 // so the caller gets the resulting case state back.
 export async function setStepResultStatus({ caseResultId, stepResultId, status }: { caseResultId: string; stepResultId: string; status: testStepStatus }): Promise<actionResult<caseResultState>> {
+    const user = await requireUser();
     const supabase = await createClient();
     const { error } = await supabase
         .from("test_step_results")
@@ -124,7 +127,7 @@ export async function setStepResultStatus({ caseResultId, stepResultId, status }
     // Last write wins: whoever touched a step is the case's executor.
     const { error: executorError } = await supabase
         .from("test_case_results")
-        .update({ executed_by: PLACEHOLDER_PIC_ID })
+        .update({ executed_by: user.id })
         .eq("id", caseResultId);
     if (executorError) return fail(executorError);
 
@@ -133,13 +136,14 @@ export async function setStepResultStatus({ caseResultId, stepResultId, status }
 
 // Manual override of the derived case status.
 export async function setCaseResultStatus({ caseResultId, status }: { caseResultId: string; status: testCaseStatus }): Promise<actionResult<caseResultState>> {
+    const user = await requireUser();
     const supabase = await createClient();
     const { error } = await supabase
         .from("test_case_results")
         .update({
             status,
             status_overridden: true,
-            executed_by: PLACEHOLDER_PIC_ID,
+            executed_by: user.id,
             completed_at: new Date().toISOString(),
         })
         .eq("id", caseResultId);
@@ -166,10 +170,11 @@ export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: st
 }
 
 export async function addResultRemark({ stepResultId, remark }: { stepResultId: string; remark: string }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile }>> {
+    const user = await requireUser();
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("test_remarks")
-        .insert({ test_step_result_id: stepResultId, remark, created_by: PLACEHOLDER_PIC_ID })
+        .insert({ test_step_result_id: stepResultId, remark, created_by: user.id })
         .select("id, remark, created_at, profile:profiles ( id, full_name, role )")
         .single();
     if (error) return fail(error);

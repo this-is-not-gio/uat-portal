@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { PLACEHOLDER_PIC_ID } from "./placeholder-actor";
+import { requireUser } from "./auth";
 import type { actionResult } from "./iteration-actions";
 import type { Database } from "./database.types";
 
@@ -21,6 +21,7 @@ type roleAssignee = Database["public"]["Enums"]["role_assignee_type"];
 // Suites -----------------------------------------------------------------------
 
 export async function upsertSuite({ id, name, code, slug, description }: { id?: string; name: string; code?: string; slug?: string; description?: string }): Promise<actionResult<{ id: string; slug: string }>> {
+    const user = await requireUser();
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("upsert_suite", {
         p_id: id,
@@ -28,7 +29,7 @@ export async function upsertSuite({ id, name, code, slug, description }: { id?: 
         p_code: code,
         p_slug: slug,
         p_description: description,
-        p_by: PLACEHOLDER_PIC_ID,
+        p_by: user.id,
     });
     if (error) return fail(error);
     refresh();
@@ -84,6 +85,7 @@ export type testCaseDraft = {
 };
 
 export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{ id: string }>> {
+    const user = await requireUser();
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("save_test_case", {
         p_payload: {
@@ -93,7 +95,7 @@ export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{
             description: draft.description,
             priority: draft.priority,
             role_assignee: draft.roleAssignee,
-            created_by: PLACEHOLDER_PIC_ID,
+            created_by: user.id,
             preconditions: draft.preconditions.map((precondition) => ({ id: precondition.id ?? null, condition: precondition.condition })),
             steps: draft.steps.map((step) => ({
                 id: step.id ?? null,

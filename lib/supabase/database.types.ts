@@ -46,6 +46,27 @@ export type Database = {
           },
         ]
       }
+      organizations: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          type: Database["public"]["Enums"]["org_type"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          type: Database["public"]["Enums"]["org_type"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          type?: Database["public"]["Enums"]["org_type"]
+        }
+        Relationships: []
+      }
       preconditions: {
         Row: {
           condition: string
@@ -83,21 +104,32 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          organization_id: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
         Insert: {
           created_at?: string
           full_name?: string
           id: string
+          organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Update: {
           created_at?: string
           full_name?: string
           id?: string
+          organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sections: {
         Row: {
@@ -994,6 +1026,7 @@ export type Database = {
     Enums: {
       execution_status: "not_run" | "passed" | "skipped" | "failed"
       iteration_status: "in_progress" | "completed"
+      org_type: "vendor" | "client" | "external"
       priority_level: "low" | "medium" | "high"
       role_assignee_type:
         | "Kora-Admin"
@@ -1013,7 +1046,7 @@ export type Database = {
         | "Failed"
         | "Blocked"
       test_step_status: "Untested" | "Passed" | "Failed" | "Skipped" | "Blocked"
-      user_role: "Internal" | "External"
+      user_role: "Internal" | "External" | "Admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1143,6 +1176,7 @@ export const Constants = {
     Enums: {
       execution_status: ["not_run", "passed", "skipped", "failed"],
       iteration_status: ["in_progress", "completed"],
+      org_type: ["vendor", "client", "external"],
       priority_level: ["low", "medium", "high"],
       role_assignee_type: [
         "Kora-Admin",
@@ -1164,7 +1198,7 @@ export const Constants = {
         "Blocked",
       ],
       test_step_status: ["Untested", "Passed", "Failed", "Skipped", "Blocked"],
-      user_role: ["Internal", "External"],
+      user_role: ["Internal", "External", "Admin"],
     },
   },
 } as const

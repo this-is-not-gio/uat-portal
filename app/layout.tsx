@@ -7,6 +7,8 @@ import { SiteHeader } from "@/components/site-header";
 import { AppSidebar } from "@/components/app-sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getTestingSuites } from "@/lib/supabase/Init";
+import { getCurrentUser } from "@/lib/supabase/auth";
+import { CurrentUserProvider } from "@/components/current-user-provider";
 
 
 const montserratHeading = Montserrat({ subsets: ['latin'], variable: '--font-heading' });
@@ -35,13 +37,28 @@ export const metadata: Metadata = {
 
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
+	const user = await getCurrentUser();
+	const htmlClassName = cn("h-full", "antialiased", geistSans.variable, geistMono.variable, montserratHeading.variable, raleway.variable);
+
+	// Logged out: only /login is reachable (see proxy.ts), and it renders without the app shell.
+	if (!user) {
+		return (
+			<html lang="en" className={htmlClassName}>
+				<body className="h-full flex flex-col overflow-hidden">
+					<TooltipProvider>{children}</TooltipProvider>
+				</body>
+			</html>
+		);
+	}
+
 	const testSuites = await getTestingSuites();
 	return (
 		<html
 			lang="en"
-			className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, montserratHeading.variable, raleway.variable)}
+			className={htmlClassName}
 		>
 			<body className="h-full flex flex-col overflow-hidden">
+				<CurrentUserProvider user={user}>
 				<TooltipProvider>
 					<SidebarProvider
 						style={
@@ -50,7 +67,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 								"--header-height": "calc(var(--spacing) * 12)",
 							} as React.CSSProperties
 						}>
-						<AppSidebar testingSuites={testSuites} />
+						<AppSidebar testingSuites={testSuites} user={user} />
 						<SidebarInset>
 							<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-hidden">
 								<SiteHeader testingSuites={testSuites} />
@@ -59,7 +76,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
 						</SidebarInset>
 					</SidebarProvider>
 				</TooltipProvider>
-
+				</CurrentUserProvider>
 			</body>
 		</html>
 	);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCurrentUser } from "@/components/current-user-provider";
 import {
 	Sheet,
 	SheetClose,
@@ -128,12 +129,6 @@ const author_role_badge_classnames: Record<string, { className: string, Icon: Lu
 	External: { className: "bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-40０", Icon: UserCheck },
 }
 
-const sample_author = {
-	id: "sample-author-1",
-	role: "Internal",
-	full_name: "Gio Talindan"
-}
-
 // definition: the live test case (Test Cases tab), no results.
 // execute:    a row of a running iteration; steps, remarks and the case result are editable.
 // review:     a row of a completed iteration; results are read-only.
@@ -143,6 +138,8 @@ type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile
 
 export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", headerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; headerActions?: React.ReactNode }) {
 	const showResults = mode !== "definition";
+	const currentUser = useCurrentUser();
+	const author = currentUser ? { id: currentUser.id, role: currentUser.role, full_name: currentUser.fullName } : undefined;
 	const [stepStatuses, setStepStatuses] = useState<Record<string, { status: testStepStatus }>>(
 		() => {
 			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: { status: step.status ?? "Untested" } }), {}) || {};
@@ -397,7 +394,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		<div className="flex flex-col items-center group-first/remark:pt-2">
 																			<div className={`w-0.5 bg-accent rounded-full self-center ${remarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div>
 																			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
-																				<p className="text-xs font-bold">{sample_author?.full_name?.charAt(0) || 'U'}{sample_author?.full_name?.charAt(1).toUpperCase() || 'U'}</p>
+																				<p className="text-xs font-bold">{author?.full_name?.charAt(0) || 'U'}{author?.full_name?.charAt(1).toUpperCase() || 'U'}</p>
 																			</div>
 																			<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
 																		</div>
