@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
+import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
 
 // Vendor sync of mid-round test case edits into the running iteration.
@@ -16,6 +17,7 @@ function fail(error: { message: string }): { ok: false; error: string } {
 
 export async function applyIterationSync({ iterationId, add, refreshIds, remove }: { iterationId: string; add: string[]; refreshIds: string[]; remove: string[] }): Promise<actionResult> {
     const user = await requireUser();
+    if (!can(user, "sync")) return denied("sync");
     const supabase = await createClient();
     const { error } = await supabase.rpc("apply_iteration_sync", {
         p_iteration_id: iterationId,
@@ -31,6 +33,7 @@ export async function applyIterationSync({ iterationId, add, refreshIds, remove 
 
 export async function forceRefreshCaseResult({ caseResultId, reason }: { caseResultId: string; reason: string }): Promise<actionResult> {
     const user = await requireUser();
+    if (!can(user, "sync")) return denied("sync");
     const supabase = await createClient();
     const { error } = await supabase.rpc("force_refresh_case_result", {
         p_case_result_id: caseResultId,

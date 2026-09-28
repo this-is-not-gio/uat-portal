@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
+import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
 import type { Database } from "./database.types";
 
@@ -23,6 +24,7 @@ type audience = Database["public"]["Enums"]["audience"];
 
 export async function upsertSuite({ id, name, code, slug, description }: { id?: string; name: string; code?: string; slug?: string; description?: string }): Promise<actionResult<{ id: string; slug: string }>> {
     const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("upsert_suite", {
         p_id: id,
@@ -38,6 +40,8 @@ export async function upsertSuite({ id, name, code, slug, description }: { id?: 
 }
 
 export async function deleteSuite({ suiteId }: { suiteId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { error } = await supabase.rpc("delete_suite", { p_suite_id: suiteId });
     if (error) return fail(error);
@@ -48,6 +52,8 @@ export async function deleteSuite({ suiteId }: { suiteId: string }): Promise<act
 // Sections ---------------------------------------------------------------------
 
 export async function upsertSection({ suiteId, id, name }: { suiteId: string; id?: string; name: string }): Promise<actionResult<{ id: string; slug: string }>> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("upsert_section", { p_suite_id: suiteId, p_id: id, p_name: name });
     if (error) return fail(error);
@@ -56,6 +62,8 @@ export async function upsertSection({ suiteId, id, name }: { suiteId: string; id
 }
 
 export async function deleteSection({ sectionId }: { sectionId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { error } = await supabase.rpc("delete_section", { p_section_id: sectionId });
     if (error) return fail(error);
@@ -64,6 +72,8 @@ export async function deleteSection({ sectionId }: { sectionId: string }): Promi
 }
 
 export async function reorderSections({ suiteId, sectionIds }: { suiteId: string; sectionIds: string[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { error } = await supabase.rpc("reorder_sections", { p_suite_id: suiteId, p_section_ids: sectionIds });
     if (error) return fail(error);
@@ -89,6 +99,7 @@ export type testCaseDraft = {
 
 export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{ id: string }>> {
     const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("save_test_case", {
         p_payload: {
@@ -114,6 +125,8 @@ export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{
 }
 
 export async function deleteTestCase({ testCaseId }: { testCaseId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { error } = await supabase.rpc("delete_test_case", { p_test_case_id: testCaseId });
     if (error) return fail(error);
@@ -122,6 +135,8 @@ export async function deleteTestCase({ testCaseId }: { testCaseId: string }): Pr
 }
 
 export async function reorderTestCases({ sectionId, testCaseIds }: { sectionId: string; testCaseIds: string[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
     const { error } = await supabase.rpc("reorder_test_cases", { p_section_id: sectionId, p_test_case_ids: testCaseIds });
     if (error) return fail(error);

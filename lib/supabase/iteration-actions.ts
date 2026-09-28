@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
+import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database } from "./database.types";
 import { getOrganizations, type organization } from "./organizations";
@@ -47,6 +48,9 @@ async function readCaseResultState(caseResultId: string): Promise<actionResult<c
 // Suite lifecycle ------------------------------------------------------------
 
 export async function setSuiteStatus({ suiteId, status }: { suiteId: string; status: Database["public"]["Enums"]["suite_status"] }): Promise<actionResult> {
+    const user = await requireUser();
+    const permission = status === "archived" ? "archive" : "author";
+    if (!can(user, permission)) return denied(permission);
     const supabase = await createClient();
     const { error } = await supabase.rpc("set_suite_status", { p_suite_id: suiteId, p_status: status });
     if (error) return fail(error);
@@ -57,6 +61,7 @@ export async function setSuiteStatus({ suiteId, status }: { suiteId: string; sta
 // Signs off on the latest completed iteration; a note is required unless every case passed.
 export async function signOffSuite({ suiteId, note }: { suiteId: string; note: string }): Promise<actionResult> {
     const user = await requireUser();
+    if (!can(user, "sign_off")) return denied("sign_off");
     const supabase = await createClient();
     const { error } = await supabase.rpc("sign_off_suite", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined });
     if (error) return fail(error);
@@ -70,6 +75,7 @@ export async function signOffSuite({ suiteId, note }: { suiteId: string; note: s
 // participating org and filtered by each case's audience. orgIds omitted = the client org(s).
 export async function startIteration({ suiteId, label, plannedEndDate, testCaseIds, orgIds }: { suiteId: string; label?: string; plannedEndDate?: string; testCaseIds: string[]; orgIds?: string[] }): Promise<actionResult<{ iterationNumber: number }>> {
     const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("start_iteration", {
         p_suite_id: suiteId,
@@ -86,6 +92,8 @@ export async function startIteration({ suiteId, label, plannedEndDate, testCaseI
 
 // Brings another org into the running round with the same scope as everyone else.
 export async function addParticipant({ iterationId, organizationId }: { iterationId: string; organizationId: string }): Promise<actionResult<{ addedCount: number }>> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("add_iteration_participant", { p_iteration_id: iterationId, p_org_id: organizationId });
     if (error) return fail(error);
@@ -108,6 +116,8 @@ export async function getParticipantOptions({ iterationId }: { iterationId?: str
 
 // not_started -> in_progress: testing (recording results) can begin.
 export async function beginIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("begin_iteration", { p_iteration_id: iterationId });
     if (error) return fail(error);
@@ -117,6 +127,8 @@ export async function beginIteration({ iterationId }: { iterationId: string }): 
 
 // in_progress -> stopped: ends the round early. Results freeze but don't count toward sign-off.
 export async function stopIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("stop_iteration", { p_iteration_id: iterationId });
     if (error) return fail(error);
@@ -125,6 +137,8 @@ export async function stopIteration({ iterationId }: { iterationId: string }): P
 }
 
 export async function completeIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("complete_iteration", { p_iteration_id: iterationId });
     if (error) return fail(error);
@@ -133,6 +147,8 @@ export async function completeIteration({ iterationId }: { iterationId: string }
 }
 
 export async function cancelIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("cancel_iteration", { p_iteration_id: iterationId });
     if (error) return fail(error);
@@ -143,6 +159,8 @@ export async function cancelIteration({ iterationId }: { iterationId: string }):
 // Edits an iteration's label/planned end date — its name and slug (what the
 // URL and numbering depend on) are never touched by this.
 export async function updateIterationDetails({ iterationId, label, plannedEndDate }: { iterationId: string; label?: string; plannedEndDate?: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("update_iteration_details", {
         p_iteration_id: iterationId,
