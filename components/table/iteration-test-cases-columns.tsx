@@ -10,6 +10,7 @@ import { TestStatusMapping } from "./columns"
 // Type-only import: test-iterations.ts uses the server Supabase client.
 import type { testResultRow } from "@/lib/supabase/test-iterations"
 import { testCase } from "@/lib/supabase/test-cases"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 
 const columnHelper = createColumnHelper<DataTableFeatures, testCase>()
 
@@ -46,19 +47,71 @@ function TestCaseTitleCell({
 								/>
 							)
 						}
-						<div className="">
-							<p className="text-sm">{row.title}</p>
-							{row.lifecycleStatus === "updated" && (
-								<Badge variant="outline" className="text-xs">Updated</Badge>
-							)}
-							<p className="text-xs text-muted-foreground">{row.code}</p>
+						<div className="flex flex-row items-center gap-3">
+							<div className="">
+								<p className="text-sm">{row.title}</p>
+								{row.lifecycleStatus === "updated" && (
+									<Badge variant="outline" className="text-xs">Updated</Badge>
+								)}
+								<p className="text-xs text-muted-foreground">{row.code}</p>
+							</div>
+							<div className="flex flex-row items-center gap-2">
+								<Tooltip>
+									<TooltipTrigger render={
+										<div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
+											<Waypoints size={15} className="text-gray-800" />
+											{row.stepsToExecute?.length}
+										</div>
+									} />
+									<TooltipContent className="w-fit flex flex-col gap-3" side="bottom">
+										Steps to execute
+									</TooltipContent>
+								</Tooltip>
+								{
+									row.preconditions?.length === 0 ?
+										<div className="flex flex-row items-center gap-2">
+											<HoverCard>
+												<HoverCardTrigger render={
+													<div className="flex flex-row items-center gap-1 rounded-md p-1.5 bg-blue-600/5 w-fit">
+														<Info size={15} className="text-blue-800" />
+													</div>
+												} />
+												<HoverCardContent className="w-fit p-4 flex flex-col gap-3">
+													<div className="flex flex-row items-start gap-2">
+														<div className="bg-blue-600/5 rounded-md p-2 w-fit">
+															<Info className="text-blue-800 size-5" />
+														</div>
+														<div className="">
+															<p className="font-semibold text-sm">Notice</p>
+															<p className="text-xs">This problem may affect the test execution.</p>
+														</div>
+													</div>
+													<div className="">
+														<p className="text-xs">Problems:</p>
+														<ul className="text-xs list-disc list-inside mt-1 space-y-0.5">
+															<li>No preconditions defined for this test case</li>
+														</ul>
+													</div>
+												</HoverCardContent>
+											</HoverCard>
+										</div>
+										:
+										<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
+											<ClipboardCheck size={15} className="text-gray-800" />
+											<p className="font-mono text-xs text-gray-800">{row.preconditions?.length}</p>
+										</div>
+								}
+							</div>
+							{/* <Badge variant="outline" className={`text-xs ${status?.className || ""}`}>
+								{row.stepsToExecute?.length} Steps
+							</Badge> */}
 						</div>
 
 						{/* Set by the Test Cases tab while a round runs: where this live case stands vs the round. */}
 					</div>
 				</div>
 			</div>
-		</div>
+		</div >
 	)
 }
 
@@ -102,63 +155,31 @@ export function createIterationTestCaseColumns({
 				/>
 			),
 		}),
-		columnHelper.accessor("preconditions", {
-			header: "Preconditions",
-			cell: (info) => (
-				info.getValue()?.length === 0 ? (
-					<div className="flex flex-row items-center gap-2">
-						<p className="text-xs text-muted-foreground">No Preconditions</p>
-						<HoverCard>
-							<HoverCardTrigger render={
-								<div className="flex flex-row items-center gap-1 rounded-md p-1 bg-blue-600/5 w-fit">
-									<Info size={15} className="text-blue-800" />
-								</div>
-							} />
-							<HoverCardContent className="w-fit p-4 flex flex-col gap-3">
-								<div className="flex flex-row items-start gap-2">
-									<div className="bg-blue-600/5 rounded-md p-2 w-fit">
-										<Info className="text-blue-800 size-5" />
-									</div>
-									<div className="">
-										<p className="font-semibold text-sm">Notice</p>
-										<p className="text-xs">This problem may affect the test execution.</p>
-									</div>
-								</div>
-								<div className="">
-									<p className="text-xs">Problems:</p>
-									<ul className="text-xs list-disc list-inside mt-1 space-y-0.5">
-										<li>No preconditions defined for this test case</li>
-									</ul>
-								</div>
-							</HoverCardContent>
-						</HoverCard>
-					</div>
-				) : (
-					<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
-						<ClipboardCheck size={15} className="text-gray-800" />
-						<div className="flex flex-row items-center gap-0.5">
-							<p className="font-mono text-xs text-gray-800">{info.getValue()?.length}</p>
-							<p className="text-xs text-gray-800 font-semibold">Preconditions</p>
-						</div>
-					</div>
-				)
-			)
-		}),
-		columnHelper.accessor("stepsToExecute", {
-			header: "Steps to Execute",
-			cell: (info) => {
-				const steps = info.getValue() ?? [];
-				return (
-					<div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
-						<Waypoints size={15} className="text-gray-800" />
-						<div className="flex flex-row items-center gap-0.5">
-							<p className="font-mono text-xs text-gray-800">{steps.length}</p>
-							<p className="text-xs text-gray-800 font-semibold">Steps</p>
-						</div>
-					</div>
-				)
-			}
-		}),
+		// 		columnHelper.accessor("preconditions", {
+		// 			header: "Preconditions",
+		// 			cell: (info) => (
+		// 				info.getValue()?.length === 0 ? (
+
+		// 				): (
+
+		// 				)
+		// 			)
+		// }),
+		// columnHelper.accessor("stepsToExecute", {
+		// 	header: "Steps to Execute",
+		// 	cell: (info) => {
+		// 		const steps = info.getValue() ?? [];
+		// 		return (
+		// 			<div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
+		// 				<Waypoints size={15} className="text-gray-800" />
+		// 				<div className="flex flex-row items-center gap-0.5">
+		// 					<p className="font-mono text-xs text-gray-800">{steps.length}</p>
+		// 					<p className="text-xs text-gray-800 font-semibold">Steps</p>
+		// 				</div>
+		// 			</div>
+		// 		)
+		// 	}
+		// }),
 		columnHelper.accessor("roleAssignee", {
 			header: "Role Assignee",
 			cell: (info) => (

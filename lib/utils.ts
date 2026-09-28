@@ -21,9 +21,13 @@ export function formatTimestamp(isoString?: string | null): string {
 }
 
 export function formatIterationTimestamp(iteration: { status: string; startedAt: string; completedAt: string | null }): string {
-  return iteration.status === "completed"
-    ? `Completed on ${formatTimestamp(iteration.completedAt)}`
-    : `In progress · started ${formatTimestamp(iteration.startedAt)}`;
+  switch (iteration.status) {
+    case "completed": return `Completed on ${formatTimestamp(iteration.completedAt)}`;
+    case "stopped": return `Stopped on ${formatTimestamp(iteration.completedAt)}`;
+    // started_at is the creation time until the round is started.
+    case "not_started": return `Not started · planned ${formatTimestamp(iteration.startedAt)}`;
+    default: return `In progress · started ${formatTimestamp(iteration.startedAt)}`;
+  }
 }
 
 export function initials(fullName: string): string {

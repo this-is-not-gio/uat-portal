@@ -4,11 +4,13 @@ import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
 import type { testIteration } from "@/lib/supabase/test-iterations"
 import { Badge } from "../ui/badge"
-import { CircleCheck, RotateCwFadingClock } from "lucide-react"
+import { CircleCheck, CircleDashed, CircleStop, RotateCwFadingClock } from "lucide-react"
 
 const ITERATION_STATUS_MAPPING = {
+	not_started: { label: "Not Started", icon: CircleDashed, className: "bg-stone-50 text-stone-700 border-stone-400/60" },
 	in_progress: { label: "In Progress", icon: RotateCwFadingClock, className: "bg-blue-50 text-blue-800 border-blue-600/40" },
 	completed: { label: "Completed", icon: CircleCheck, className: "bg-green-50 text-green-800 border-green-600/40" },
+	stopped: { label: "Stopped", icon: CircleStop, className: "bg-red-50 text-red-800 border-red-600/40" },
 } as const
 
 const columnHelper = createColumnHelper<DataTableFeatures, testIteration>()
@@ -40,10 +42,14 @@ export function getIterationColumns() {
 		}),
 		columnHelper.accessor("startedAt", {
 			header: "Started",
-			cell: (info) => <p className="text-xs text-muted-foreground">{new Date(info.getValue()).toLocaleDateString()}</p>,
+			cell: (info) => (
+				<p className="text-xs text-muted-foreground">
+					{info.row.original.status === "not_started" ? "—" : new Date(info.getValue()).toLocaleDateString()}
+				</p>
+			),
 		}),
 		columnHelper.accessor("completedAt", {
-			header: "Completed",
+			header: "Ended",
 			cell: (info) => (
 				<p className="text-xs text-muted-foreground">
 					{info.getValue() ? new Date(info.getValue() as string).toLocaleDateString() : "—"}

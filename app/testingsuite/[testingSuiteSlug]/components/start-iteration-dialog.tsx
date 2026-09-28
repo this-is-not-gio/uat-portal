@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { startIteration } from "@/lib/supabase/iteration-actions";
 import IterationScopePicker from "./iteration-scope-picker";
+import ParticipantPicker from "./participant-picker";
 
 // Starts the next test round with the vendor-picked test cases (the round's
 // scope). Stays put afterward — test cases get added to the running round
@@ -39,6 +40,8 @@ export default function StartIterationDialog({
 	const [error, setError] = useState<string | null>(null);
 	// Picked test cases; null until the picker has loaded its defaults.
 	const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
+	// Participating orgs; seeded by ParticipantPicker once it loads.
+	const [orgIds, setOrgIds] = useState<string[]>([]);
 	const [isPending, startTransition] = useTransition();
 	// Parsed as local time (not UTC) so the picker shows the same day that was typed/selected.
 	const plannedEndDateValue = plannedEndDate ? new Date(`${plannedEndDate}T00:00:00`) : undefined;
@@ -46,7 +49,7 @@ export default function StartIterationDialog({
 	function onStart() {
 		setError(null);
 		startTransition(async () => {
-			const result = await startIteration({ suiteId, label: label.trim(), plannedEndDate, testCaseIds: Array.from(selectedIds ?? []) });
+			const result = await startIteration({ suiteId, label: label.trim(), plannedEndDate, testCaseIds: Array.from(selectedIds ?? []), orgIds });
 			if (!result.ok) {
 				setError(result.error);
 				return;
@@ -58,7 +61,7 @@ export default function StartIterationDialog({
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setError(null); setSelectedIds(null); } }}>
+		<Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) { setError(null); setSelectedIds(null); setOrgIds([]); } }}>
 			<DialogTrigger
 				render={trigger ?? (
 					<Button className="flex flex-row items-center gap-2 w-full">
@@ -74,7 +77,7 @@ export default function StartIterationDialog({
 						Start a new test iteration
 					</DialogTitle>
 					<DialogDescription className="text-xs text-muted-foreground">
-						Pick the test cases for this round; they&apos;re copied in as Untested. Only complete test cases can be picked, and only one round can run at a time.
+						Pick the test cases and organizations for this round; each organization gets its own Untested copy of the cases meant for it. Only complete test cases can be picked, and only one round can run at a time.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-4 px-2">
@@ -126,6 +129,7 @@ export default function StartIterationDialog({
 					{open && (
 						<IterationScopePicker suiteId={suiteId} onChange={setSelectedIds} disabled={isPending} />
 					)}
+					{open && <ParticipantPicker onChange={setOrgIds} disabled={isPending} />}
 					{error && <p className="text-xs text-destructive">{error}</p>}
 					</div>
 					<DialogFooter>
@@ -133,7 +137,7 @@ export default function StartIterationDialog({
 						<X className="size-4" />
 						Cancel
 					</DialogClose>
-					<Button onClick={onStart} disabled={isPending || !selectedIds || selectedIds.size === 0}>
+					<Button onClick={onStart} disabled={isPending || !selectedIds || selectedIds.size === 0 || orgIds.length === 0}>
 						<Play className="size-4" />
 						{isPending ? "Starting…" : "Start iteration"}
 					</Button>

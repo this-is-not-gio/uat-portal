@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database } from "./database.types";
+import { getOrganizations, type organization } from "./organizations";
+import { getIterationParticipants } from "./test-iterations";
 
 // Lifecycle rules live in Postgres (see the suite lifecycle RPCs), so their
 // messages are what the user needs to see. Server Action errors are masked in
@@ -64,8 +66,9 @@ export async function signOffSuite({ suiteId, note }: { suiteId: string; note: s
 
 // Iterations -----------------------------------------------------------------
 
-// The round's scope: only the picked (complete) test cases are copied in.
-export async function startIteration({ suiteId, label, plannedEndDate, testCaseIds }: { suiteId: string; label?: string; plannedEndDate?: string; testCaseIds: string[] }): Promise<actionResult<{ iterationNumber: number }>> {
+// The round's scope: only the picked (complete) test cases are copied in, once per
+// participating org and filtered by each case's audience. orgIds omitted = the client org(s).
+export async function startIteration({ suiteId, label, plannedEndDate, testCaseIds, orgIds }: { suiteId: string; label?: string; plannedEndDate?: string; testCaseIds: string[]; orgIds?: string[] }): Promise<actionResult<{ iterationNumber: number }>> {
     const user = await requireUser();
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("start_iteration", {
@@ -74,10 +77,51 @@ export async function startIteration({ suiteId, label, plannedEndDate, testCaseI
         p_label: label || undefined,
         p_planned_end_date: plannedEndDate || undefined,
         p_test_case_ids: testCaseIds,
+        p_org_ids: orgIds,
     });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: { iterationNumber: data.iteration_number } };
+}
+
+// Brings another org into the running round with the same scope as everyone else.
+export async function addParticipant({ iterationId, organizationId }: { iterationId: string; organizationId: string }): Promise<actionResult<{ addedCount: number }>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("add_iteration_participant", { p_iteration_id: iterationId, p_org_id: organizationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: { addedCount: data } };
+}
+
+// What the org pickers list: every org, plus (for a running round) which already take part.
+export async function getParticipantOptions({ iterationId }: { iterationId?: string } = {}): Promise<actionResult<{ organizations: organization[]; participantIds: string[] }>> {
+    try {
+        const [organizations, participants] = await Promise.all([
+            getOrganizations(),
+            iterationId ? getIterationParticipants(iterationId) : Promise.resolve([]),
+        ]);
+        return { ok: true, data: { organizations, participantIds: participants.map((p) => p.organization.id) } };
+    } catch (error) {
+        return fail(error as { message: string });
+    }
+}
+
+// not_started -> in_progress: testing (recording results) can begin.
+export async function beginIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("begin_iteration", { p_iteration_id: iterationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// in_progress -> stopped: ends the round early. Results freeze but don't count toward sign-off.
+export async function stopIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("stop_iteration", { p_iteration_id: iterationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
 }
 
 export async function completeIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {

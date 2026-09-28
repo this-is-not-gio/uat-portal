@@ -46,6 +46,39 @@ export type Database = {
           },
         ]
       }
+      iteration_participants: {
+        Row: {
+          iteration_id: string
+          organization_id: string
+          submitted_at: string | null
+        }
+        Insert: {
+          iteration_id: string
+          organization_id: string
+          submitted_at?: string | null
+        }
+        Update: {
+          iteration_id?: string
+          organization_id?: string
+          submitted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iteration_participants_iteration_id_fkey"
+            columns: ["iteration_id"]
+            isOneToOne: false
+            referencedRelation: "test_iterations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iteration_participants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -295,6 +328,7 @@ export type Database = {
           included_in_run: boolean
           iteration_id: string
           order_index: number
+          organization_id: string
           preconditions: Json
           priority: Database["public"]["Enums"]["priority_level"] | null
           role_assignee:
@@ -320,6 +354,7 @@ export type Database = {
           included_in_run?: boolean
           iteration_id: string
           order_index?: number
+          organization_id: string
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
           role_assignee?:
@@ -345,6 +380,7 @@ export type Database = {
           included_in_run?: boolean
           iteration_id?: string
           order_index?: number
+          organization_id?: string
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
           role_assignee?:
@@ -378,6 +414,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "test_case_results_participant_fkey"
+            columns: ["iteration_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "iteration_participants"
+            referencedColumns: ["iteration_id", "organization_id"]
+          },
+          {
             foreignKeyName: "test_case_results_synced_by_fkey"
             columns: ["synced_by"]
             isOneToOne: false
@@ -395,6 +438,7 @@ export type Database = {
       }
       test_cases: {
         Row: {
+          audience: Database["public"]["Enums"]["audience"]
           code: string | null
           created_at: string
           created_by: string | null
@@ -412,6 +456,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          audience?: Database["public"]["Enums"]["audience"]
           code?: string | null
           created_at?: string
           created_by?: string | null
@@ -429,6 +474,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          audience?: Database["public"]["Enums"]["audience"]
           code?: string | null
           created_at?: string
           created_by?: string | null
@@ -516,6 +562,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          scope_test_case_ids: string[] | null
           slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
@@ -529,6 +576,7 @@ export type Database = {
           label?: string | null
           name: string
           planned_end_date?: string | null
+          scope_test_case_ids?: string[] | null
           slug: string
           started_at?: string
           status?: Database["public"]["Enums"]["iteration_status"]
@@ -542,6 +590,7 @@ export type Database = {
           label?: string | null
           name?: string
           planned_end_date?: string | null
+          scope_test_case_ids?: string[] | null
           slug?: string
           started_at?: string
           status?: Database["public"]["Enums"]["iteration_status"]
@@ -742,6 +791,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_iteration_participant: {
+        Args: { p_iteration_id: string; p_org_id: string }
+        Returns: number
+      }
       apply_derived_case_status: {
         Args: { p_case_result_id: string }
         Returns: undefined
@@ -765,6 +818,30 @@ export type Database = {
         Args: { p_suite_id: string }
         Returns: undefined
       }
+      begin_iteration: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          completed_at: string | null
+          created_by: string | null
+          id: string
+          iteration_number: number
+          label: string | null
+          name: string
+          planned_end_date: string | null
+          scope_test_case_ids: string[] | null
+          slug: string
+          started_at: string
+          status: Database["public"]["Enums"]["iteration_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "test_iterations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      can_see_all_results: { Args: never; Returns: boolean }
       cancel_iteration: { Args: { p_iteration_id: string }; Returns: undefined }
       case_preconditions_json: {
         Args: { p_test_case_id: string }
@@ -784,6 +861,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          scope_test_case_ids: string[] | null
           slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
@@ -795,6 +873,11 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      current_org_id: { Args: never; Returns: string }
+      current_role_: {
+        Args: never
+        Returns: Database["public"]["Enums"]["user_role"]
       }
       delete_section: { Args: { p_section_id: string }; Returns: undefined }
       delete_suite: { Args: { p_suite_id: string }; Returns: undefined }
@@ -814,12 +897,22 @@ export type Database = {
           change: string
           code: string
           has_results: boolean
+          organization_id: string
+          organization_name: string
           test_case_id: string
           test_case_result_id: string
           title: string
         }[]
       }
+      is_admin: { Args: never; Returns: boolean }
       is_internal: { Args: never; Returns: boolean }
+      org_sees_audience: {
+        Args: {
+          p_audience: Database["public"]["Enums"]["audience"]
+          p_org_type: Database["public"]["Enums"]["org_type"]
+        }
+        Returns: boolean
+      }
       recompute_case_result_status: {
         Args: { p_case_result_id: string }
         Returns: undefined
@@ -892,6 +985,7 @@ export type Database = {
         Args: {
           p_created_by?: string
           p_label?: string
+          p_org_ids?: string[]
           p_planned_end_date?: string
           p_suite_id: string
           p_test_case_ids?: string[]
@@ -904,6 +998,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          scope_test_case_ids: string[] | null
           slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
@@ -919,6 +1014,29 @@ export type Database = {
       step_expected_results_json: {
         Args: { p_test_step_id: string }
         Returns: Json
+      }
+      stop_iteration: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          completed_at: string | null
+          created_by: string | null
+          id: string
+          iteration_number: number
+          label: string | null
+          name: string
+          planned_end_date: string | null
+          scope_test_case_ids: string[] | null
+          slug: string
+          started_at: string
+          status: Database["public"]["Enums"]["iteration_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "test_iterations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       suite_readiness_issues: {
         Args: { p_suite_id: string }
@@ -939,8 +1057,12 @@ export type Database = {
         }[]
       }
       sync_iteration: {
-        Args: { p_iteration_id: string; p_test_case_ids?: string[] }
-        Returns: undefined
+        Args: {
+          p_iteration_id: string
+          p_org_ids?: string[]
+          p_test_case_ids?: string[]
+        }
+        Returns: string[]
       }
       test_case_content_hash: {
         Args: { p_test_case_id: string }
@@ -961,6 +1083,7 @@ export type Database = {
           label: string | null
           name: string
           planned_end_date: string | null
+          scope_test_case_ids: string[] | null
           slug: string
           started_at: string
           status: Database["public"]["Enums"]["iteration_status"]
@@ -1024,8 +1147,9 @@ export type Database = {
       }
     }
     Enums: {
+      audience: "internal" | "external" | "both"
       execution_status: "not_run" | "passed" | "skipped" | "failed"
-      iteration_status: "in_progress" | "completed"
+      iteration_status: "not_started" | "in_progress" | "completed" | "stopped"
       org_type: "vendor" | "client" | "external"
       priority_level: "low" | "medium" | "high"
       role_assignee_type:
@@ -1174,8 +1298,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      audience: ["internal", "external", "both"],
       execution_status: ["not_run", "passed", "skipped", "failed"],
-      iteration_status: ["in_progress", "completed"],
+      iteration_status: ["not_started", "in_progress", "completed", "stopped"],
       org_type: ["vendor", "client", "external"],
       priority_level: ["low", "medium", "high"],
       role_assignee_type: [

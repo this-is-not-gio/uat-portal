@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import type { expectedResult, preCondition, profile, testCase, testCaseStatus } from "./test-cases";
+import { compareOrganizations, type organization } from "./organizations";
 
-export type iterationStatus = "in_progress" | "completed";
+// not_started (planned) -> in_progress -> completed | stopped (ended early; never used for sign-off).
+export type iterationStatus = "not_started" | "in_progress" | "completed" | "stopped";
+
+// Planned or running: the one round per suite that can still be synced/scoped.
+export const OPEN_ITERATION_STATUSES = ["not_started", "in_progress"] as const satisfies iterationStatus[];
 
 export type testIteration = {
     id: string;
@@ -18,6 +23,11 @@ export type testIteration = {
 // How a row got into (or was changed within) a running iteration by vendor sync.
 export type syncKind = "added" | "updated" | "force_reset";
 
+// An org taking part in a round. Each participant gets its own result rows, filtered by the
+// cases' audience. Every query below takes an optional `orgId`: omit it to get all
+// participants' rows (one per case per org), pass it for a single org's view.
+export type iterationParticipant = { organization: organization; submittedAt: string | null };
+
 // Results wiped by a vendor force refresh, kept as a frozen copy.
 export type resultArchive = {
     id: string;
@@ -32,7 +42,8 @@ export type resultArchive = {
 
 // A difference between the running iteration and the live suite.
 // added: live case not in the round; changed: edited since it was copied;
-// removed: copied case no longer exists live. hasResults rows are never
+// removed: copied case no longer exists live, or its audience no longer
+// includes that org. One row per case per org. hasResults rows are never
 // refreshed/removed by sync (only a vendor force refresh resets them).
 export type iterationChange = {
     change: "added" | "changed" | "removed";
@@ -41,6 +52,8 @@ export type iterationChange = {
     code: string | null;
     title: string;
     hasResults: boolean;
+    organizationId: string;
+    organizationName: string;
 };
 
 // A test case as it was frozen into one iteration. `id` is the
@@ -48,6 +61,8 @@ export type iterationChange = {
 // the live test case and is null once that case has been deleted.
 export type testResultRow = testCase & {
     testCaseId: string | null;
+    // The participating org this row's results belong to.
+    organizationId: string;
     sectionName: string | null;
     sectionSlug: string | null;
     executor?: profile;
@@ -70,6 +85,7 @@ const ITERATION_SELECT = "id, name, slug, label, iteration_number, status, start
 const RESULT_SELECT = `
   id,
   test_case_id,
+  organization_id,
   code,
   title,
   section_name,
@@ -122,7 +138,7 @@ function toIteration(row: IterationRow): testIteration {
 }
 
 // test_case_id -> status in the iteration just before this one, for the "Last round" badge.
-async function getPreviousRoundStatuses(iterationId: string): Promise<Map<string, testCaseStatus>> {
+async function getPreviousRoundStatuses(iterationId: string, orgId?: string): Promise<Map<string, testCaseStatus>> {
     const supabase = await createClient();
     const { data: current, error: currentError } = await supabase
         .from("test_iterations")
@@ -142,11 +158,13 @@ async function getPreviousRoundStatuses(iterationId: string): Promise<Map<string
     if (previousError) throw previousError;
     if (!previous) return new Map();
 
-    const { data: rows, error: rowsError } = await supabase
+    let rowsQuery = supabase
         .from("test_case_results")
         .select("test_case_id, status")
         .eq("iteration_id", previous.id)
         .not("test_case_id", "is", null);
+    if (orgId) rowsQuery = rowsQuery.eq("organization_id", orgId);
+    const { data: rows, error: rowsError } = await rowsQuery;
     if (rowsError) throw rowsError;
 
     return new Map(rows.map((row) => [row.test_case_id as string, row.status]));
@@ -165,13 +183,14 @@ export async function getIterationsBySuiteId(testSuiteId: string): Promise<testI
     return data.map(toIteration);
 }
 
+// The suite's open round (not_started or in_progress) — at most one exists.
 export async function getActiveIteration(testSuiteId: string): Promise<testIteration | null> {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("test_iterations")
         .select(ITERATION_SELECT)
         .eq("testing_suite_id", testSuiteId)
-        .eq("status", "in_progress")
+        .in("status", OPEN_ITERATION_STATUSES)
         .maybeSingle();
 
     if (error) throw error;
@@ -186,7 +205,7 @@ export type iterationSection = { slug: string; name: string; includedCount: numb
 // Lightweight per-iteration section list — just enough to build the sidebar's
 // Iteration → Section tree without loading every iteration's full result set
 // (getIterationResults) up front.
-export async function getSectionsByIteration(testSuiteId: string): Promise<Map<string, iterationSection[]>> {
+export async function getSectionsByIteration(testSuiteId: string, orgId?: string): Promise<Map<string, iterationSection[]>> {
     const supabase = await createClient();
     const { data: iterations, error: iterationsError } = await supabase
         .from("test_iterations")
@@ -195,11 +214,12 @@ export async function getSectionsByIteration(testSuiteId: string): Promise<Map<s
     if (iterationsError) throw iterationsError;
     if (!iterations.length) return new Map();
 
-    const { data, error } = await supabase
+    let query = supabase
         .from("test_case_results")
         .select("id, iteration_id, section_slug, section_name, section_order, included_in_run")
-        .in("iteration_id", iterations.map((i) => i.id))
-        .order("section_order", { ascending: true });
+        .in("iteration_id", iterations.map((i) => i.id));
+    if (orgId) query = query.eq("organization_id", orgId);
+    const { data, error } = await query.order("section_order", { ascending: true });
     if (error) throw error;
 
     const map = new Map<string, iterationSection[]>();
@@ -226,8 +246,8 @@ export type iterationTestSection = { slug: string; name: string; testCases: test
 // the live suite. Callers that only need status/results should reach for
 // getIterationResults directly; this is for screens that just need what's
 // included (Test Cases tab's iteration browser).
-export async function getIterationTestSections(iterationId: string): Promise<iterationTestSection[]> {
-    const results = await getIterationResults(iterationId);
+export async function getIterationTestSections(iterationId: string, orgId?: string): Promise<iterationTestSection[]> {
+    const results = await getIterationResults(iterationId, orgId);
     const bySlug = new Map<string, iterationTestSection>();
     for (const row of results) {
         if (!row.sectionSlug) continue;
@@ -242,12 +262,14 @@ export async function getIterationTestSections(iterationId: string): Promise<ite
 // exclude them from "add more test cases" pickers so the same case can't be
 // added twice (apply_iteration_sync already no-ops on that, this just keeps
 // the picker's counts honest).
-export async function getIterationTestCaseIds(iterationId: string): Promise<Set<string>> {
+export async function getIterationTestCaseIds(iterationId: string, orgId?: string): Promise<Set<string>> {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    let query = supabase
         .from("test_case_results")
         .select("test_case_id")
         .eq("iteration_id", iterationId);
+    if (orgId) query = query.eq("organization_id", orgId);
+    const { data, error } = await query;
     if (error) throw error;
     return new Set(data.map((row) => row.test_case_id).filter((id): id is string => !!id));
 }
@@ -258,7 +280,7 @@ export async function getIterationTestCaseIds(iterationId: string): Promise<Set<
 // column so test_case_results stays the single source of truth. Cases not
 // snapshotted into that round (e.g. added after it started) are absent from
 // the map, so callers should fall back to the case's own default status.
-export async function getLatestIterationCaseStatuses(testSuiteId: string): Promise<Map<string, testCaseStatus>> {
+export async function getLatestIterationCaseStatuses(testSuiteId: string, orgId?: string): Promise<Map<string, testCaseStatus>> {
     const supabase = await createClient();
     const { data: latest, error: latestError } = await supabase
         .from("test_iterations")
@@ -270,10 +292,12 @@ export async function getLatestIterationCaseStatuses(testSuiteId: string): Promi
     if (latestError) throw latestError;
     if (!latest) return new Map();
 
-    const { data, error } = await supabase
+    let query = supabase
         .from("test_case_results")
         .select("test_case_id, status")
         .eq("iteration_id", latest.id);
+    if (orgId) query = query.eq("organization_id", orgId);
+    const { data, error } = await query;
     if (error) throw error;
 
     // Being snapshotted into a currently-running round is itself a status:
@@ -291,18 +315,17 @@ export async function getLatestIterationCaseStatuses(testSuiteId: string): Promi
     );
 }
 
-export async function getIterationResults(iterationId: string): Promise<testResultRow[]> {
+export async function getIterationResults(iterationId: string, orgId?: string): Promise<testResultRow[]> {
     const supabase = await createClient();
+    let query = supabase.from("test_case_results").select(RESULT_SELECT).eq("iteration_id", iterationId);
+    if (orgId) query = query.eq("organization_id", orgId);
     const [{ data, error }, previousStatuses] = await Promise.all([
-        supabase
-            .from("test_case_results")
-            .select(RESULT_SELECT)
-            .eq("iteration_id", iterationId)
+        query
             .order("section_order", { ascending: true })
             .order("order_index", { ascending: true })
             .order("order_index", { referencedTable: "test_step_results", ascending: true })
             .order("created_at", { referencedTable: "test_step_results.test_remarks", ascending: true }),
-        getPreviousRoundStatuses(iterationId),
+        getPreviousRoundStatuses(iterationId, orgId),
     ]);
 
     if (error) throw error;
@@ -310,6 +333,7 @@ export async function getIterationResults(iterationId: string): Promise<testResu
     return data.map((row) => ({
         id: row.id,
         testCaseId: row.test_case_id,
+        organizationId: row.organization_id,
         code: row.code,
         title: row.title,
         status: row.status,
@@ -349,16 +373,31 @@ export async function getIterationResults(iterationId: string): Promise<testResu
     }));
 }
 
-export async function getIterationChanges(iterationId: string): Promise<iterationChange[]> {
+export async function getIterationChanges(iterationId: string, orgId?: string): Promise<iterationChange[]> {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("get_iteration_changes", { p_iteration_id: iterationId });
     if (error) throw error;
-    return data.map((row) => ({
+    return data.filter((row) => !orgId || row.organization_id === orgId).map((row) => ({
         change: row.change as iterationChange["change"],
         testCaseId: row.test_case_id,
         testCaseResultId: row.test_case_result_id,
         code: row.code,
         title: row.title,
         hasResults: row.has_results,
+        organizationId: row.organization_id,
+        organizationName: row.organization_name,
     }));
+}
+
+// Who takes part in this round, in compareOrganizations order.
+export async function getIterationParticipants(iterationId: string): Promise<iterationParticipant[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("iteration_participants")
+        .select("submitted_at, organization:organizations ( id, name, type )")
+        .eq("iteration_id", iterationId);
+    if (error) throw error;
+    return data
+        .map((row) => ({ organization: row.organization, submittedAt: row.submitted_at }))
+        .sort((a, b) => compareOrganizations(a.organization, b.organization));
 }

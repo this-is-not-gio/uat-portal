@@ -104,7 +104,7 @@ export async function getSignOffContext(suiteId: string): Promise<{ hasActiveIte
         counts = countStatuses(data.map((row) => row.status));
     }
     return {
-        hasActiveIteration: iterations.some((i) => i.status === "in_progress"),
+        hasActiveIteration: iterations.some((i) => i.status === "not_started" || i.status === "in_progress"),
         latestCompleted: latestCompleted ? { name: latestCompleted.name, counts } : null,
     };
 }

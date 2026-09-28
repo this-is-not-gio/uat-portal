@@ -18,7 +18,8 @@ import {
 } from "@/components/ui/sheet";
 import { Constants } from "@/lib/supabase/database.types";
 import { saveTestCase, type testCaseDraft } from "@/lib/supabase/authoring-actions";
-import type { testCase } from "@/lib/supabase/test-cases";
+import type { audience, testCase } from "@/lib/supabase/test-cases";
+import { AUDIENCE_DESCRIPTIONS, AUDIENCE_LABELS } from "@/components/audience-badge";
 
 type priority = testCaseDraft["priority"];
 type roleAssignee = NonNullable<testCaseDraft["roleAssignee"]>;
@@ -44,6 +45,7 @@ function fromTestCase(testCase?: testCase) {
 		description: testCase?.description ?? "",
 		priority: (testCase?.priority ?? "medium") as priority,
 		roleAssignee: (testCase?.roleAssignee ?? null) as roleAssignee | null,
+		audience: (testCase?.audience ?? "internal") as audience,
 		preconditions: (testCase?.preconditions ?? []).map((p): draftPrecondition => ({ key: newKey(), id: p.id, condition: p.condition })),
 		steps: testCase?.stepsToExecute?.length
 			? testCase.stepsToExecute.map((s): draftStep => ({
@@ -96,6 +98,7 @@ export default function TestCaseEditor({
 				description: form.description,
 				priority: form.priority,
 				roleAssignee: form.roleAssignee,
+				audience: form.audience,
 				preconditions: form.preconditions
 					.filter((p) => p.condition.trim())
 					.map(({ id, condition }) => ({ id, condition: condition.trim() })),
@@ -137,7 +140,7 @@ export default function TestCaseEditor({
 						<Label htmlFor="tc-description">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
 						<Textarea id="tc-description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} disabled={isPending} />
 					</div>
-					<div className="grid grid-cols-3 gap-3">
+					<div className="grid grid-cols-2 gap-3">
 						<div className="flex flex-col gap-2">
 							<Label>Section</Label>
 							<Select value={sectionId} onValueChange={(value) => value && setSectionId(value)} disabled={isPending}>
@@ -165,6 +168,22 @@ export default function TestCaseEditor({
 								<SelectContent alignItemWithTrigger={false}>
 									<SelectItem value="">None</SelectItem>
 									{Constants.public.Enums.role_assignee_type.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex flex-col gap-2">
+							<Label>Audience</Label>
+							<Select value={form.audience} onValueChange={(value) => value && setForm((f) => ({ ...f, audience: value as audience }))} disabled={isPending}>
+								<SelectTrigger className="w-full"><SelectValue>{AUDIENCE_LABELS[form.audience]}</SelectValue></SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									{Constants.public.Enums.audience.map((a) => (
+										<SelectItem key={a} value={a}>
+											<div className="flex flex-col">
+												<p className="text-sm">{AUDIENCE_LABELS[a]}</p>
+												<p className="text-xs text-muted-foreground">{AUDIENCE_DESCRIPTIONS[a]}</p>
+											</div>
+										</SelectItem>
+									))}
 								</SelectContent>
 							</Select>
 						</div>

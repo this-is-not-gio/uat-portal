@@ -62,10 +62,10 @@ export default async function TestsuitePage({
 	searchParams,
 }: {
 	params: Promise<{ testingSuiteSlug: string; section?: string[] }>;
-	searchParams: Promise<{ tab?: string; iteration?: string }>;
+	searchParams: Promise<{ tab?: string; iteration?: string; org?: string }>;
 }) {
 	const { testingSuiteSlug, section } = await params;
-	const { tab, iteration } = await searchParams;
+	const { tab, iteration, org } = await searchParams;
 	// Test Cases gets the raw path (it also handles the nested
 	// testing-itration/{iterationNumber}/{section} shape); other tabs only
 	// ever see a plain section slug.
@@ -94,7 +94,7 @@ export default async function TestsuitePage({
 
 	const testResultsTabSlot =
 		tab === "test-results" ?
-			<TestResultTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionSlug={sectionSlug} iterationNumber={iteration} />
+			<TestResultTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionSlug={sectionSlug} iterationNumber={iteration} orgId={org} />
 			: null
 
 	return (

@@ -62,7 +62,9 @@ export default function ResultLeaf({
 			return;
 		}
 		const iteration = iterationNumber ?? searchParams.get("iteration");
-		router.push(`${targetPath}?tab=test-results${iteration ? `&iteration=${iteration}` : ""}`);
+		// Keep the picked org; if it isn't in the target round the tab falls back to the default.
+		const org = searchParams.get("org");
+		router.push(`${targetPath}?tab=test-results${iteration ? `&iteration=${iteration}` : ""}${org ? `&org=${org}` : ""}`);
 	}
 
 	const isActive = active ?? (pathname === (href ?? targetPath) || (slug === "all" && pathname === suitePath));

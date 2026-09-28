@@ -296,6 +296,8 @@ export default function OverviewTab({ suite, overview }: { suite: { name: string
 											<div className="flex flex-row items-center gap-2">
 												<p className="font-semibold">{iteration.name}</p>
 												{iteration.status === "in_progress" && <Badge variant="secondary" className="text-xs bg-blue-600/20">In Progress</Badge>}
+												{iteration.status === "not_started" && <Badge variant="secondary" className="text-xs">Not Started</Badge>}
+												{iteration.status === "stopped" && <Badge variant="secondary" className="text-xs bg-red-600/15 text-red-800">Stopped</Badge>}
 											</div>
 											{iteration.label && <p className="text-xs text-muted-foreground">{iteration.label}</p>}
 											<CountsLine counts={iteration.counts} />

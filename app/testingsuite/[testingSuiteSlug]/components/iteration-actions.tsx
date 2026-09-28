@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CircleStop, Flag } from "lucide-react";
+import { CircleStop, Flag, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -14,11 +14,13 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
-import { cancelIteration, completeIteration } from "@/lib/supabase/iteration-actions";
+import { beginIteration, cancelIteration, completeIteration, stopIteration } from "@/lib/supabase/iteration-actions";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 
-// Complete / Cancel for the running round. Cancel is only offered while
-// nothing has been recorded; the DB enforces the same rule.
+// Lifecycle actions for the open round:
+//   not_started: Start / Cancel
+//   in_progress: Stop / Complete, plus Cancel while nothing has been recorded
+// The DB enforces the same transitions (begin/stop/complete/cancel_iteration).
 export default function IterationActions({
 	iteration,
 	testSuiteSlug,
@@ -30,11 +32,88 @@ export default function IterationActions({
 	untestedCount: number;
 	hasRecordedResults: boolean;
 }) {
+	if (iteration.status === "not_started") {
+		return (
+			<div className="flex flex-row items-center gap-2">
+				<CancelIterationButton iteration={iteration} testSuiteSlug={testSuiteSlug} />
+				<StartIterationButton iteration={iteration} />
+			</div>
+		);
+	}
+	if (iteration.status !== "in_progress") return null;
 	return (
 		<div className="flex flex-row items-center gap-2">
 			{!hasRecordedResults && <CancelIterationButton iteration={iteration} testSuiteSlug={testSuiteSlug} />}
+			<StopIterationButton iteration={iteration} />
 			<CompleteIterationButton iteration={iteration} untestedCount={untestedCount} />
 		</div>
+	);
+}
+
+function StartIterationButton({ iteration }: { iteration: testIteration }) {
+	const [error, setError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
+
+	function onStart() {
+		setError(null);
+		startTransition(async () => {
+			const result = await beginIteration({ iterationId: iteration.id });
+			if (!result.ok) setError(result.error);
+		});
+	}
+
+	return (
+		<div className="flex flex-col items-end gap-1">
+			<Button size="lg" onClick={onStart} disabled={isPending}>
+				<Play className="h-4 w-4" />
+				<p className="text-xs">{isPending ? "Starting…" : "Start Iteration"}</p>
+			</Button>
+			{error && <p className="text-xs text-destructive">{error}</p>}
+		</div>
+	);
+}
+
+function StopIterationButton({ iteration }: { iteration: testIteration }) {
+	const [open, setOpen] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
+
+	function onStop() {
+		setError(null);
+		startTransition(async () => {
+			const result = await stopIteration({ iterationId: iteration.id });
+			if (!result.ok) {
+				setError(result.error);
+				return;
+			}
+			setOpen(false);
+		});
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={setOpen}>
+			<DialogTrigger render={
+				<Button size="lg" variant="outline">
+					<CircleStop className="h-4 w-4" />
+					<p className="text-xs">Stop Iteration</p>
+				</Button>
+			} />
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Stop {iteration.name}?</DialogTitle>
+					<DialogDescription>
+						Ends the round early. Recorded results are kept as read-only history, but a stopped round can&apos;t be used to sign off the suite.
+					</DialogDescription>
+				</DialogHeader>
+				{error && <p className="text-xs text-destructive">{error}</p>}
+				<DialogFooter>
+					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Keep testing</DialogClose>
+					<Button variant="destructive" onClick={onStop} disabled={isPending}>
+						{isPending ? "Stopping…" : "Stop iteration"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 
@@ -111,7 +190,7 @@ function CancelIterationButton({ iteration, testSuiteSlug }: { iteration: testIt
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger render={
 				<Button size="lg" variant="outline">
-					<CircleStop className="h-4 w-4" />
+					<Trash2 className="h-4 w-4" />
 					<p className="text-xs">Cancel Iteration</p>
 				</Button>
 			} />
@@ -119,7 +198,7 @@ function CancelIterationButton({ iteration, testSuiteSlug }: { iteration: testIt
 				<DialogHeader>
 					<DialogTitle>Cancel {iteration.name}?</DialogTitle>
 					<DialogDescription>
-						Nothing has been recorded in this round yet, so it will be deleted as if it was never started.
+						Nothing has been recorded in this round yet, so it will be deleted as if it was never planned.
 					</DialogDescription>
 				</DialogHeader>
 				{error && <p className="text-xs text-destructive">{error}</p>}

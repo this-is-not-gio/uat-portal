@@ -1,4 +1,4 @@
-import { ClipboardIcon, ClipboardList, FolderClock, IterationCw } from "lucide-react";
+import { Badge, ClipboardIcon, ClipboardList, Flag, FolderClock, IterationCw, Play, StopCircle } from "lucide-react";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getIterationTestSections, getIterationTestCaseIds } from "@/lib/supabase/test-iterations";
@@ -7,6 +7,7 @@ import { getIterationScopeOptions } from "@/lib/supabase/iteration-actions";
 import { format } from "date-fns";
 import { IterationTestCaseList } from "./components/iteration-test-case-list";
 import AddTestCasesControl, { type addableSection } from "./components/add-test-cases-control";
+import { Button } from "@/components/ui/button";
 
 export async function TestIterationComponent({ testSuiteId, suiteName, iteration }: { testSuiteId: string; suiteName: string; iteration: testIteration | null }): Promise<import("react").JSX.Element> {
 	const sections = iteration ? await getIterationTestSections(iteration.id) : [];
@@ -27,7 +28,7 @@ export async function TestIterationComponent({ testSuiteId, suiteName, iteration
 		}
 	}
 
-	if(allTestCases.length === 0) {
+	if (allTestCases.length === 0) {
 		return (
 			<div className="flex-1 p-4 flex flex-col gap-4">
 				<div className="">
@@ -54,7 +55,6 @@ export async function TestIterationComponent({ testSuiteId, suiteName, iteration
 						</div>
 						{/* <Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge> */}
 					</div>
-					{iteration?.status === "in_progress" && <AddTestCasesControl iterationId={iteration.id} sections={addableSections} />}
 				</div>
 				<div className="flex-1 flex items-center justify-center">
 					<div className="flex flex-col items-center justify-center gap-5 py-12">
@@ -101,7 +101,34 @@ export async function TestIterationComponent({ testSuiteId, suiteName, iteration
 						</div>
 						{/* <Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge> */}
 					</div>
-					{iteration?.status === "in_progress" && <AddTestCasesControl iterationId={iteration.id} sections={addableSections} />}
+					<div className="">
+						{/* {iteration?.status === "in_progress" ?
+							<div className="flex flex-row items-center gap-2">
+								<Button size="lg" variant="outline" className="text-xs" disabled={addableSections.length === 0}>
+									<StopCircle size={14} />
+									<span>Stop Iteration</span>
+								</Button>
+								<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
+									<Flag size={14} />
+									<span>Complete Iteration</span>
+								</Button>
+							</div>
+							: iteration?.status === "completed" ?
+								<></>
+							: <div className="flex flex-row items-center gap-2">
+								<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
+									<Flag size={14} />
+									<span>Complete Iteration</span>
+								</Button>
+							</div>
+						} */}
+						{/* <div className="flex flex-row items-center gap-2">
+							<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
+								<Play size={14} />
+								<span>Start Iteration</span>
+							</Button>
+						</div> */}
+					</div>
 				</div>
 				<IterationTestCaseList testCases={allTestCases} iteration={iteration} />
 			</div>

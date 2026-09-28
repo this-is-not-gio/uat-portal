@@ -36,7 +36,7 @@ export default function SignOffDialog({
 	const [isPending, startTransition] = useTransition();
 
 	const blocker = hasActiveIteration
-		? "Complete the running iteration before signing off."
+		? "Complete, stop or cancel the open iteration before signing off."
 		: !latestCompleted
 			? "At least one completed iteration is needed to sign off."
 			: null;

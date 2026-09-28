@@ -1,9 +1,11 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
-import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
+import { getIterationChanges, getIterationParticipants, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./components/result-leaf";
 import TestResultComponents from "./test-result-components";
 import StartIterationDialog from "./components/start-iteration-dialog";
+import ResultOrgPicker from "./components/result-org-picker";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import type { suiteStatus } from "@/lib/supabase/Init";
 import { ChevronRight, ClipboardList, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ export default async function TestResultTab({
 	suiteStatus,
 	sectionSlug,
 	iterationNumber,
+	orgId,
 }: {
 	testSuiteId: string;
 	testSuiteSlug: string;
@@ -35,6 +38,8 @@ export default async function TestResultTab({
 	suiteStatus: suiteStatus;
 	sectionSlug?: string;
 	iterationNumber?: string;
+	// ?org= from the URL; falls back to the viewer's own org, then the first participant.
+	orgId?: string;
 }) {
 	if (suiteStatus === "draft") {
 		return (
@@ -81,14 +86,15 @@ export default async function TestResultTab({
 		);
 	}
 
-	const activeIteration = iterations.find((iteration) => iteration.status === "in_progress") ?? null;
+	// The open round: planned (not_started) or running (in_progress).
+	const activeIteration = iterations.find((iteration) => iteration.status === "not_started" || iteration.status === "in_progress") ?? null;
 
-	// Explicit ?iteration=N wins; otherwise the running round (that's where
-	// testing happens), then the latest completed one.
+	// Explicit ?iteration=N wins; otherwise the open round (that's where
+	// testing happens), then the latest finished (completed or stopped) one.
 	const selectedIteration =
 		iterations.find((iteration) => String(iteration.iterationNumber) === iterationNumber) ??
 		activeIteration ??
-		iterations.find((iteration) => iteration.status === "completed") ??
+		iterations.find((iteration) => iteration.status === "completed" || iteration.status === "stopped") ??
 		null;
 
 	// Mirrors start_iteration's guard: Draft and Archived suites can't start a round.
@@ -97,10 +103,21 @@ export default async function TestResultTab({
 	// that already has one planned/completed round and can plan another.
 	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "signed_off");
 
+	// Each participant has its own copy of the round, so show one org's rows at a time.
+	const [participants, currentUser] = selectedIteration
+		? await Promise.all([getIterationParticipants(selectedIteration.id), getCurrentUser()])
+		: [[], null];
+	const participantOrgs = participants.map((p) => p.organization);
+	const selectedOrg =
+		participantOrgs.find((o) => o.id === orgId) ??
+		participantOrgs.find((o) => o.id === currentUser?.organization?.id) ??
+		participantOrgs[0] ??
+		null;
+
 	const [rawResults, changes] = selectedIteration
 		? await Promise.all([
-			getIterationResults(selectedIteration.id),
-			selectedIteration.status === "in_progress" ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
+			getIterationResults(selectedIteration.id, selectedOrg?.id),
+			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id, selectedOrg?.id) : Promise.resolve([]),
 		])
 		: [[], []];
 	// Testers only need to know about edits the vendor can't sync into this round:
@@ -127,6 +144,14 @@ export default async function TestResultTab({
 		<>
 			<div className="w-100 shrink-0 border-r flex flex-col">
 				<SidebarContent>
+					{selectedOrg && participantOrgs.length > 1 && (
+						<SidebarGroup>
+							<SidebarGroupLabel>Organization</SidebarGroupLabel>
+							<SidebarGroupContent className="px-2">
+								<ResultOrgPicker organizations={participantOrgs} selectedId={selectedOrg.id} />
+							</SidebarGroupContent>
+						</SidebarGroup>
+					)}
 					{iterations.length > 0 && (
 						<SidebarGroup>
 							<SidebarGroupLabel>Test Iterations</SidebarGroupLabel>
@@ -145,8 +170,8 @@ export default async function TestResultTab({
 			</div>
 			{selectedIteration ? (
 				<TestResultComponents
-					// Remount on iteration/section switch so client state reseeds from the new rows.
-					key={`${selectedIteration.id}:${selectedIteration.status}:${sectionSlug ?? "all"}`}
+					// Remount on iteration/section/org switch so client state reseeds from the new rows.
+					key={`${selectedIteration.id}:${selectedIteration.status}:${sectionSlug ?? "all"}:${selectedOrg?.id ?? ""}`}
 					iteration={selectedIteration}
 					testSuiteSlug={testSuiteSlug}
 					sectionName={sectionName}

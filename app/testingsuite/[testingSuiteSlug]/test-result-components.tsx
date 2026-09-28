@@ -54,6 +54,7 @@ export default function TestResultComponents({
 	const [onlyChangedMidRound, setOnlyChangedMidRound] = useState(false);
 
 	const isRunning = iteration.status === "in_progress";
+	const isOpen = isRunning || iteration.status === "not_started";
 	const passed = testResultRows.filter((row) => row.status === "Passed").length;
 	const failed = testResultRows.filter((row) => row.status === "Failed").length;
 	const blocked = testResultRows.filter((row) => row.status === "Blocked").length;
@@ -82,6 +83,12 @@ export default function TestResultComponents({
 									{isRunning && (
 										<Badge variant="secondary" className="text-xs bg-blue-600/20">In Progress</Badge>
 									)}
+									{iteration.status === "not_started" && (
+										<Badge variant="secondary" className="text-xs">Not Started</Badge>
+									)}
+									{iteration.status === "stopped" && (
+										<Badge variant="secondary" className="text-xs bg-red-600/15 text-red-800">Stopped</Badge>
+									)}
 								</div>
 								<div className="flex flex-row items-center gap-2">
 									<p className="text-xs text-muted-foreground font-mono">{sectionName} · {formatIterationTimestamp(iteration)}</p>
@@ -96,7 +103,7 @@ export default function TestResultComponents({
 						</div>
 					</div>
 					<div className="flex flex-row items-center gap-2">
-						{isRunning && (
+						{isOpen && (
 							<IterationActions
 								iteration={iteration}
 								testSuiteSlug={testSuiteSlug}
@@ -104,7 +111,7 @@ export default function TestResultComponents({
 								hasRecordedResults={iterationHasResults || testResultRows.some(hasResults)}
 							/>
 						)}
-						<Button className="" size="lg" variant={isRunning ? "outline" : "default"}>
+						<Button className="" size="lg" variant={isOpen ? "outline" : "default"}>
 							<FileUpIcon/>
 							<p className="text-xs">Export Test Results</p>
 						</Button>
