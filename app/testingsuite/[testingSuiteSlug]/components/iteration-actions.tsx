@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { beginIteration, cancelIteration, completeIteration, stopIteration } from "@/lib/supabase/iteration-actions";
 import type { testIteration } from "@/lib/supabase/test-iterations";
+import type { organization } from "@/lib/supabase/organizations";
+import UnsubmittedOrgsWarning from "./unsubmitted-orgs-warning";
 
 // Lifecycle actions for the open round:
 //   not_started: Start / Cancel
@@ -26,11 +28,14 @@ export default function IterationActions({
 	testSuiteSlug,
 	untestedCount,
 	hasRecordedResults,
+	unsubmittedOrgs = [],
 }: {
 	iteration: testIteration;
 	testSuiteSlug: string;
 	untestedCount: number;
 	hasRecordedResults: boolean;
+	// External participants that haven't submitted yet; Complete warns about them (6.2).
+	unsubmittedOrgs?: organization[];
 }) {
 	if (iteration.status === "not_started") {
 		return (
@@ -45,7 +50,7 @@ export default function IterationActions({
 		<div className="flex flex-row items-center gap-2">
 			{!hasRecordedResults && <CancelIterationButton iteration={iteration} testSuiteSlug={testSuiteSlug} />}
 			<StopIterationButton iteration={iteration} />
-			<CompleteIterationButton iteration={iteration} untestedCount={untestedCount} />
+			<CompleteIterationButton iteration={iteration} untestedCount={untestedCount} unsubmittedOrgs={unsubmittedOrgs} />
 		</div>
 	);
 }
@@ -117,7 +122,7 @@ function StopIterationButton({ iteration }: { iteration: testIteration }) {
 	);
 }
 
-function CompleteIterationButton({ iteration, untestedCount }: { iteration: testIteration; untestedCount: number }) {
+export function CompleteIterationButton({ iteration, untestedCount, unsubmittedOrgs }: { iteration: testIteration; untestedCount: number; unsubmittedOrgs: organization[] }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -149,6 +154,7 @@ function CompleteIterationButton({ iteration, untestedCount }: { iteration: test
 						Results become read-only history. Corrections go into the next round.
 					</DialogDescription>
 				</DialogHeader>
+				<UnsubmittedOrgsWarning organizations={unsubmittedOrgs} context="complete" />
 				{untestedCount > 0 && (
 					<p className="text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3">
 						{untestedCount} test case{untestedCount === 1 ? " is" : "s are"} not fully tested yet. They will be recorded as they stand.

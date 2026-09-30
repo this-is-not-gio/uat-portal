@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from "react";
 import type { currentUser } from "@/lib/supabase/auth";
+import { can, type permission } from "@/lib/auth/permissions";
 
 const CurrentUserContext = createContext<currentUser | null>(null);
 
@@ -12,4 +13,9 @@ export function CurrentUserProvider({ user, children }: { user: currentUser; chi
 
 export function useCurrentUser() {
 	return useContext(CurrentUserContext);
+}
+
+// For hiding/disabling controls: `const canAuthor = useCan("author")`. The server still re-checks.
+export function useCan(permission: permission) {
+	return can(useCurrentUser(), permission);
 }

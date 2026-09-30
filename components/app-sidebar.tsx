@@ -1,14 +1,16 @@
 "use client";
 
-import { Book, BookMarked, Bug, ClipboardEditIcon, FlaskConical, House, TestTubeDiagonal } from "lucide-react";
+import { Book, BookMarked, Bug, ChevronRight, Clipboard, ClipboardEditIcon, Download, FlaskConical, House, Pencil, TestTubeDiagonal, UserGroup } from "lucide-react";
 import * as React from "react"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
 import { NavMain } from "./nav-main";
 import { NavSecondary } from "./nav-secondary";
 import { Badge } from "./ui/badge";
-import { TestingSuites } from "@/lib/supabase/Init";
+import type { SidebarSuite } from "@/lib/supabase/Init";
 import type { currentUser } from "@/lib/supabase/auth";
+import { can } from "@/lib/auth/permissions";
 import { SignOutButton } from "./sign-out-button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 
 const data = {
 	user: {
@@ -23,10 +25,23 @@ const data = {
 			icon: House,
 		},
 		{
-			title: "Master Plan",
-			url: "/master-plan",
+			title: "Testing Master Plan",
+			url: "/masterPlan",
 			icon: Book,
+		},
+		{
+			title: "Participants",
+			url: "/admin/users",
+			icon: UserGroup,
 		}
+	],
+	// Internal and External testers: one home link, no Master Plan.
+	navTester: [
+		{
+			title: "My Testing",
+			url: "/dashboard",
+			icon: House,
+		},
 	],
 	// navComponents: [
 	//     {
@@ -86,7 +101,8 @@ const BADGE_VARIANTS = {
 
 
 
-export function AppSidebar({ testingSuites, user, ...props }: React.ComponentProps<typeof Sidebar> & { testingSuites: TestingSuites; user: currentUser }) {
+export function AppSidebar({ testingSuites, user, ...props }: React.ComponentProps<typeof Sidebar> & { testingSuites: SidebarSuite[]; user: currentUser }) {
+	const isAdmin = can(user, "admin_area");
 	const badge = BADGE_VARIANTS[user.organization?.type ?? "fallback"] ?? BADGE_VARIANTS.fallback;
 	const Icon = badge.icon;
 	// First + last initial ("Gio Talingdan" -> "GT"); falls back to the email when there is no name.
@@ -100,23 +116,19 @@ export function AppSidebar({ testingSuites, user, ...props }: React.ComponentPro
 						size="lg"
 						className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground [&_svg]:size-4"
 					>
-						<div className="flex aspect-square size-10 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-2xl">
-							<ClipboardEditIcon />
+						<div className="flex aspect-square items-center size-10 justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-2xl">
+							<Clipboard className="size-5!" />
 						</div>
 						<div className="grid flex-1 text-left text-sm leading-tight">
 							<span className="truncate font-semibold">User Acceptance Test</span>
-							<Badge variant={"secondary"} className={`flex gap-1 items-center ${badge.BadgeClassName}`}>
-								<Icon className="size-3" />
-								<span className="font-semibold">{badge.Label}</span>
-							</Badge>
+							<span className="truncate text-xs text-muted-foreground"> {badge.Label}</span>
 						</div>
 					</SidebarMenuButton>
-					{/* Phase 5: org filter for Admin/Internal goes here (replaces the old mock tenant Select). */}
 				</SidebarMenu>
 			</SidebarHeader>
 			<SidebarContent>
-				<NavMain items={data.navMain} />
-				<NavSecondary testingSuites={testingSuites} />
+				<NavMain items={isAdmin ? data.navMain : data.navTester} />
+				<NavSecondary testingSuites={testingSuites} user={user} />
 			</SidebarContent>
 			<SidebarFooter>
 				<SidebarMenu>
@@ -128,7 +140,7 @@ export function AppSidebar({ testingSuites, user, ...props }: React.ComponentPro
 								</div>
 								<div className="min-w-0">
 									<p className="truncate text-sm font-semibold">{user.fullName || user.email}</p>
-									<p className="truncate text-xs text-muted-foreground">{user.role}</p>
+									<p className="truncate text-xs text-muted-foreground">{isAdmin ? user.role : user.organization?.name ?? user.role}</p>
 								</div>
 							</div>
 							<SignOutButton />

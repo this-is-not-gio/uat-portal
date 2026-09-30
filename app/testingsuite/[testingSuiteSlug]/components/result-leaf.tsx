@@ -26,6 +26,8 @@ export default function ResultLeaf({
 	className,
 	onClick,
 	testCaseCount,
+	totalCount,
+	statusLabel,
 	...rest
 }: {
 	name: string;
@@ -46,6 +48,10 @@ export default function ResultLeaf({
 	// instead of `?tab=test-results`).
 	href?: string;
 	testCaseCount?: number;
+	// "iteration-section" only: all of the section's cases in this round (the "/ total").
+	totalCount?: number;
+	// "iteration" only: the round's status badge.
+	statusLabel?: string;
 } & React.ComponentProps<typeof SidebarMenuButton>) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -93,19 +99,11 @@ export default function ResultLeaf({
 			className={className}
 		>
 			<IconComponent />
-			<div className="flex flex-row items-center gap-2 truncate">
-			{name}
-			{
-				itemtype === "iteration-section" && (
-					selectedCount !== undefined && selectedCount !== 0 ? (
-						<Badge variant="secondary" className="text-xs ml-auto"><span className="font-mono">{selectedCount}</span> Test Cases</Badge>
-					) : (
-						<Badge variant="secondary" className="text-xs ml-auto">No Test Cases Included</Badge>
-					)
-				)
-			}
-
-			</div>
+			<span className="truncate">{name}</span>
+			{statusLabel && <Badge variant="secondary" className="text-xs ml-auto shrink-0">{statusLabel}</Badge>}
+			{itemtype === "iteration-section" && (
+				<span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">{selectedCount ?? 0}/{totalCount ?? selectedCount ?? 0}</span>
+			)}
 		</SidebarMenuButton>
 	)
 }

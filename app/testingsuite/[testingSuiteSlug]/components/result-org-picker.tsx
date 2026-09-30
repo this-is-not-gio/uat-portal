@@ -10,9 +10,12 @@ import { ORG_TYPE_LABELS } from "./participant-picker";
 export default function ResultOrgPicker({
 	organizations,
 	selectedId,
+	ownOrgId,
 }: {
 	organizations: organization[];
 	selectedId: string;
+	// Marks the viewer's own org "(mine)" (tester Test Cases lens).
+	ownOrgId?: string;
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -29,13 +32,13 @@ export default function ResultOrgPicker({
 	return (
 		<Select value={selectedId} onValueChange={pick}>
 			<SelectTrigger className="w-full">
-				<SelectValue>{selected?.name}</SelectValue>
+				<SelectValue>{selected?.name}{selected && selected.id === ownOrgId ? " (mine)" : ""}</SelectValue>
 			</SelectTrigger>
 			<SelectContent alignItemWithTrigger={false}>
 				{organizations.map((org) => (
 					<SelectItem key={org.id} value={org.id}>
 						<div className="flex flex-col">
-							<p className="text-sm">{org.name}</p>
+							<p className="text-sm">{org.name}{org.id === ownOrgId ? " (mine)" : ""}</p>
 							<p className="text-xs text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</p>
 						</div>
 					</SelectItem>

@@ -1,11 +1,15 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
-import { getIterationChanges, getIterationParticipants, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
+import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./components/result-leaf";
 import TestResultComponents from "./test-result-components";
 import StartIterationDialog from "./components/start-iteration-dialog";
 import ResultOrgPicker from "./components/result-org-picker";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { can } from "@/lib/auth/permissions";
+import { canWithdrawParticipation, getParticipationProgress, unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
+import ParticipationPanel from "./components/participation-panel";
+import SubmissionBar from "./components/submission-bar";
 import type { suiteStatus } from "@/lib/supabase/Init";
 import { ChevronRight, ClipboardList, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -101,11 +105,12 @@ export default async function TestResultTab({
 	// A brand-new Ready suite (no iterations yet) is handled by the early
 	// return above, with its own Start Testing CTA — this covers a Ready suite
 	// that already has one planned/completed round and can plan another.
-	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "signed_off");
+	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "sign_off_issued" || suiteStatus === "signed_off");
 
 	// Each participant has its own copy of the round, so show one org's rows at a time.
+	// Participation carries each org's counts + submission; RLS gives External only its own row.
 	const [participants, currentUser] = selectedIteration
-		? await Promise.all([getIterationParticipants(selectedIteration.id), getCurrentUser()])
+		? await Promise.all([getParticipationProgress(selectedIteration.id), getCurrentUser()])
 		: [[], null];
 	const participantOrgs = participants.map((p) => p.organization);
 	const selectedOrg =
@@ -131,6 +136,18 @@ export default async function TestResultTab({
 	const iterationHasResults = results.some((row) =>
 		row.status !== "Untested" || (row.stepsToExecute ?? []).some((step) => step.status !== "Untested" || (step.remarks?.length ?? 0) > 0)
 	);
+
+	// Phase 6: External submits its own org's rows; once submitted they're read-only (0014's guard).
+	const ownParticipation = participants.find((p) => p.organization.id === currentUser?.organization?.id) ?? null;
+	const isViewingOwnOrg = !!ownParticipation && selectedOrg?.id === ownParticipation.organization.id;
+	const isOwnOrgSubmitted = isViewingOwnOrg && !!ownParticipation.submittedAt;
+	const showSubmission = isViewingOwnOrg && can(currentUser, "submit");
+	// Until an Admin/Internal user completes or stops the round (0019).
+	const canWithdraw = isOwnOrgSubmitted && can(currentUser, "submit") && !!selectedIteration && await canWithdrawParticipation(selectedIteration.id);
+	// Remarks outlive the lock (0020): any started round, own org's rows (Admin: any org's).
+	const canRemark = !!selectedIteration && selectedIteration.status !== "not_started" && can(currentUser, "execute")
+		&& (isViewingOwnOrg || currentUser?.role === "Admin");
+	const showParticipation = can(currentUser, "view_all_results") && participants.length > 0;
 
 	// Same rule as the Test Cases tab: "all" (or no section) shows the whole
 	// suite, a section slug narrows the table and the scorecards to it.
@@ -177,6 +194,22 @@ export default async function TestResultTab({
 					sectionName={sectionName}
 					results={visibleResults}
 					iterationHasResults={iterationHasResults}
+					isLocked={isOwnOrgSubmitted}
+					canRemark={canRemark}
+					unsubmittedOrgs={unsubmittedParticipantOrgs(participants)}
+					participation={showParticipation ? <ParticipationPanel participation={participants} selectedOrgId={selectedOrg?.id ?? null} /> : null}
+					submission={showSubmission && ownParticipation ? (
+						<SubmissionBar
+							iteration={selectedIteration}
+							organizationName={ownParticipation.organization.name}
+							counts={ownParticipation.counts}
+							submittedAt={ownParticipation.submittedAt}
+							canWithdraw={canWithdraw}
+							untestedCases={results
+								.filter((row) => row.status === "Untested" || row.status === "In Progress")
+								.map((row) => ({ id: row.id, code: row.code ?? null, title: row.title, sectionName: row.sectionName }))}
+						/>
+					) : null}
 				/>
 			) : (
 				<div className="flex-1 p-4 flex flex-col items-center justify-center gap-1 text-center">

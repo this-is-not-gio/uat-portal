@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	Activity,
 	ClipboardList,
@@ -50,6 +50,7 @@ import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Board } from "@/components/board/board";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { clearTreeState } from "./components/tree-collapsible";
 
 
 
@@ -57,13 +58,20 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 
 
 
-export default function PageTab({ overviewTab, testCasesTab, testResultsTab }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode }) {
+// showTestResults is false for testers (Internal/External): their results live in the Test Cases tab.
+export default function PageTab({ overviewTab, testCasesTab, testResultsTab, showTestResults = true }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode; showTestResults?: boolean }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const tab = searchParams.get("tab") ?? "overview";
 	
 	const [,testSuiteSlug, sectionPath] = pathname.split("/").filter(Boolean);
+
+	// Sidebar folders stay as the user left them while moving around Test
+	// Cases; leaving the tab (by click, back button or link) resets them.
+	useEffect(() => {
+		if (tab !== "test-cases") clearTreeState();
+	}, [tab]);
 
 	function handleTabChange(value: string) {
 		if (value === "test-cases") {
@@ -85,10 +93,12 @@ export default function PageTab({ overviewTab, testCasesTab, testResultsTab }: {
 						<ClipboardList data-icon="inline-start" />
 						Test Cases
 					</TabsTrigger>
-					<TabsTrigger value="test-results" className="w-full">
-						<ListChecks data-icon="inline-start" />
-						Test Results
-					</TabsTrigger>
+					{showTestResults && (
+						<TabsTrigger value="test-results" className="w-full">
+							<ListChecks data-icon="inline-start" />
+							Test Results
+						</TabsTrigger>
+					)}
 					{/* <TabsTrigger value="activity" className="w-full">
 					<Activity data-icon="inline-start" />
 					Activity
@@ -106,9 +116,11 @@ export default function PageTab({ overviewTab, testCasesTab, testResultsTab }: {
 				<TabsContent value="test-cases" className="w-full h-full min-h-0 flex flex-row">
 					{testCasesTab}
 				</TabsContent>
-				<TabsContent value="test-results" className="w-full h-full min-h-0 flex flex-row">
-					{testResultsTab}
-				</TabsContent>
+				{showTestResults && (
+					<TabsContent value="test-results" className="w-full h-full min-h-0 flex flex-row">
+						{testResultsTab}
+					</TabsContent>
+				)}
 			</Tabs>
 		</div>
 	);

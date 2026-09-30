@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { caseState } from "./case-states";
 
 export const TEST_CASE_SELECT = `
   id,
@@ -19,8 +20,7 @@ export const TEST_CASE_SELECT = `
     step,
     order_index,
     status,
-    expected_results ( id, result, order_index ),
-    test_remarks ( id, remark, created_at, profile:profiles(id, full_name, role ) )
+    expected_results ( id, result, order_index )
   )
 ` as const;
 
@@ -77,6 +77,8 @@ export type testCase = {
     preconditions?: preCondition[];
     stepsToExecute?: testStep[];
     created_at?: string;
+    // Admin authoring view Status/Result, from get_suite_case_states.
+    caseState?: caseState;
 };
 
 export type profile = {

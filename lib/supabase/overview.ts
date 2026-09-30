@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { getIterationsBySuiteId, type testIteration } from "./test-iterations";
+import { getIterationParticipants, getIterationsBySuiteId, type iterationParticipant, type testIteration } from "./test-iterations";
+import type { organization } from "./organizations";
 import type { testCaseStatus } from "./test-cases";
 
 export type statusCounts = Record<"total" | "passed" | "failed" | "blocked" | "inProgress" | "untested", number>;
@@ -13,6 +14,9 @@ export type signOff = {
     exceptions: statusCounts;
     revokedAt: string | null;
     revokedBy: string | null;
+    // Null while the vendor's issued sign-off waits for the client (suite status sign_off_issued).
+    acknowledgedAt: string | null;
+    acknowledgedBy: string | null;
 };
 
 export type suiteOverview = {
@@ -34,7 +38,7 @@ function countStatuses(statuses: testCaseStatus[]): statusCounts {
     };
 }
 
-// sign_off_suite stores its counts with snake_case keys.
+// issue_sign_off stores its counts with snake_case keys.
 function toCounts(raw: unknown): statusCounts {
     const r = (raw ?? {}) as Record<string, number>;
     return { total: r.total ?? 0, passed: r.passed ?? 0, failed: r.failed ?? 0, blocked: r.blocked ?? 0, inProgress: r.in_progress ?? 0, untested: r.untested ?? 0 };
@@ -50,12 +54,7 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
             .eq("sections.test_suite_id", suiteId),
         supabase
             .from("suite_sign_offs")
-            .select(`
-                id, signed_off_at, note, exceptions, revoked_at,
-                iteration:test_iterations ( name ),
-                signer:profiles!suite_sign_offs_signed_off_by_fkey ( full_name ),
-                revoker:profiles!suite_sign_offs_revoked_by_fkey ( full_name )
-            `)
+            .select(SIGN_OFF_SELECT)
             .eq("testing_suite_id", suiteId)
             .order("signed_off_at", { ascending: false }),
     ]);
@@ -78,33 +77,172 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
         testCaseCount: casesResult.data.length,
         roles: Array.from(new Set(casesResult.data.map((c) => c.role_assignee).filter((r): r is NonNullable<typeof r> => !!r))).sort(),
         iterations: iterations.map((iteration) => ({ ...iteration, counts: countStatuses(statusesByIteration.get(iteration.id) ?? []) })),
-        signOffs: signOffsResult.data.map((row) => ({
-            id: row.id,
-            iterationName: row.iteration?.name ?? "—",
-            signedOffBy: row.signer?.full_name ?? null,
-            signedOffAt: row.signed_off_at,
-            note: row.note,
-            exceptions: toCounts(row.exceptions),
-            revokedAt: row.revoked_at,
-            revokedBy: row.revoker?.full_name ?? null,
-        })),
+        signOffs: signOffsResult.data.map(toSignOff),
     };
+}
+
+const SIGN_OFF_SELECT = `
+    id, signed_off_at, note, exceptions, revoked_at, acknowledged_at,
+    iteration:test_iterations ( name ),
+    signer:profiles!suite_sign_offs_signed_off_by_fkey ( full_name ),
+    revoker:profiles!suite_sign_offs_revoked_by_fkey ( full_name ),
+    acknowledger:profiles!suite_sign_offs_acknowledged_by_fkey ( full_name )
+` as const;
+
+function toSignOff(row: {
+    id: string; signed_off_at: string; note: string | null; exceptions: unknown; revoked_at: string | null; acknowledged_at: string | null;
+    iteration: { name: string } | null; signer: { full_name: string | null } | null; revoker: { full_name: string | null } | null; acknowledger: { full_name: string | null } | null;
+}): signOff {
+    return {
+        id: row.id,
+        iterationName: row.iteration?.name ?? "—",
+        signedOffBy: row.signer?.full_name ?? null,
+        signedOffAt: row.signed_off_at,
+        note: row.note,
+        exceptions: toCounts(row.exceptions),
+        revokedAt: row.revoked_at,
+        revokedBy: row.revoker?.full_name ?? null,
+        acknowledgedAt: row.acknowledged_at,
+        acknowledgedBy: row.acknowledger?.full_name ?? null,
+    };
+}
+
+// The vendor's issued sign-off still waiting for the client's acknowledgement, if any.
+export async function getPendingSignOff(suiteId: string): Promise<signOff | null> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("suite_sign_offs")
+        .select(SIGN_OFF_SELECT)
+        .eq("testing_suite_id", suiteId)
+        .is("revoked_at", null)
+        .is("acknowledged_at", null)
+        .order("signed_off_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (error) throw error;
+    return data ? toSignOff(data) : null;
+}
+
+// Testing orgs (Internal and External) that haven't submitted. The vendor never submits,
+// so its rows never count as missing.
+export function unsubmittedParticipantOrgs(participants: iterationParticipant[]): organization[] {
+    return participants.filter((p) => p.organization.type !== "vendor" && !p.submittedAt).map((p) => p.organization);
+}
+
+// Whether the viewer's org can take back its submission for this round: while it is still in
+// progress, i.e. until an Admin/Internal user completes or stops it (0019).
+export async function canWithdrawParticipation(iterationId: string): Promise<boolean> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("can_withdraw_participation", { p_iteration_id: iterationId });
+    if (error) throw error;
+    return data;
+}
+
+export type participationProgress = iterationParticipant & { counts: statusCounts };
+
+// Per-org progress for one round (Participation panel). RLS already narrows both reads for
+// External (own participant row, own results), so this returns just their own row for them.
+export async function getParticipationProgress(iterationId: string): Promise<participationProgress[]> {
+    const supabase = await createClient();
+    const [participants, { data, error }] = await Promise.all([
+        getIterationParticipants(iterationId),
+        supabase.from("test_case_results").select("organization_id, status").eq("iteration_id", iterationId),
+    ]);
+    if (error) throw error;
+    const statusesByOrg = new Map<string, testCaseStatus[]>();
+    for (const row of data) {
+        statusesByOrg.set(row.organization_id, [...(statusesByOrg.get(row.organization_id) ?? []), row.status]);
+    }
+    return participants.map((p) => ({ ...p, counts: countStatuses(statusesByOrg.get(p.organization.id) ?? []) }));
 }
 
 // What the Sign Off dialog needs: whether a round is still running, and the
 // latest completed round's counts (the one sign-off is based on).
-export async function getSignOffContext(suiteId: string): Promise<{ hasActiveIteration: boolean; latestCompleted: { name: string; counts: statusCounts } | null }> {
+// unsubmittedOrgs: testing orgs in that round that never submitted (warn, don't block: 6.2).
+// currentIteration: the open round, else the newest one (isFallback), with its progress
+// (tested = Passed/Failed/Blocked). A participating org counts only its own rows; anyone
+// else (vendor) counts each case once, tested only when every org has tested it.
+export type currentIterationProgress = {
+    iteration: testIteration;
+    isFallback: boolean;
+    counts: statusCounts;
+    tested: number;
+    percent: number;
+    // The viewer's org in this round, if it takes part (for Submit Result).
+    ownParticipation: iterationParticipant | null;
+    // Other testing orgs in this round still to submit; 0 means the viewer's submit finishes the round.
+    othersPending: number;
+};
+
+export type signOffContext = {
+    hasActiveIteration: boolean;
+    latestCompleted: { name: string; counts: statusCounts; unsubmittedOrgs: organization[] } | null;
+    currentIteration: currentIterationProgress | null;
+    // Suite cases with no finished result: never in a completed round, or left Untested / In progress
+    // in the latest one. Only a warning when issuing the sign-off.
+    openUntestedCases: number;
+};
+
+export async function getSignOffContext(suiteId: string, orgId?: string): Promise<signOffContext> {
     const supabase = await createClient();
-    const iterations = await getIterationsBySuiteId(suiteId);
+    const [iterations, caseStates] = await Promise.all([
+        getIterationsBySuiteId(suiteId),
+        supabase.rpc("get_suite_case_states", { p_suite_id: suiteId }),
+    ]);
+    if (caseStates.error) throw caseStates.error;
+    const openUntestedCases = caseStates.data.filter((c) => c.status !== "tested" || c.result === "Untested" || c.result === "In progress").length;
+    const openIteration = iterations.find((i) => i.status === "not_started" || i.status === "in_progress") ?? null;
+    const current = openIteration ?? iterations[0] ?? null;
+    let currentIteration: currentIterationProgress | null = null;
+    if (current) {
+        const [{ data, error }, currentParticipants] = await Promise.all([
+            supabase.from("test_case_results").select("id, organization_id, test_case_id, status").eq("iteration_id", current.id),
+            getIterationParticipants(current.id),
+        ]);
+        if (error) throw error;
+        const ownRows = orgId ? data.filter((row) => row.organization_id === orgId) : [];
+        let statuses: testCaseStatus[];
+        if (ownRows.length > 0) {
+            statuses = ownRows.map((row) => row.status);
+        } else {
+            // One entry per case: its least-finished status across orgs. Deleted cases keep their own row.
+            const rank = (s: testCaseStatus) => (s === "Untested" ? 0 : s === "In Progress" ? 1 : 2);
+            const byCase = new Map<string, testCaseStatus>();
+            for (const row of data) {
+                const key = row.test_case_id ?? row.id;
+                const seen = byCase.get(key);
+                if (!seen || rank(row.status) < rank(seen)) byCase.set(key, row.status);
+            }
+            statuses = [...byCase.values()];
+        }
+        const currentCounts = countStatuses(statuses);
+        const tested = currentCounts.passed + currentCounts.failed + currentCounts.blocked;
+        currentIteration = {
+            iteration: current,
+            isFallback: !openIteration,
+            counts: currentCounts,
+            tested,
+            percent: currentCounts.total ? Math.round((tested / currentCounts.total) * 100) : 0,
+            ownParticipation: currentParticipants.find((p) => p.organization.id === orgId) ?? null,
+            othersPending: unsubmittedParticipantOrgs(currentParticipants).filter((o) => o.id !== orgId).length,
+        };
+    }
     const latestCompleted = iterations.find((i) => i.status === "completed") ?? null;
     let counts = countStatuses([]);
+    let unsubmittedOrgs: organization[] = [];
     if (latestCompleted) {
-        const { data, error } = await supabase.from("test_case_results").select("status").eq("iteration_id", latestCompleted.id);
+        const [{ data, error }, participants] = await Promise.all([
+            supabase.from("test_case_results").select("status").eq("iteration_id", latestCompleted.id),
+            getIterationParticipants(latestCompleted.id),
+        ]);
         if (error) throw error;
         counts = countStatuses(data.map((row) => row.status));
+        unsubmittedOrgs = unsubmittedParticipantOrgs(participants);
     }
     return {
-        hasActiveIteration: iterations.some((i) => i.status === "not_started" || i.status === "in_progress"),
-        latestCompleted: latestCompleted ? { name: latestCompleted.name, counts } : null,
+        hasActiveIteration: !!openIteration,
+        latestCompleted: latestCompleted ? { name: latestCompleted.name, counts, unsubmittedOrgs } : null,
+        currentIteration,
+        openUntestedCases,
     };
 }

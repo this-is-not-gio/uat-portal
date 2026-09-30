@@ -133,11 +133,12 @@ const author_role_badge_classnames: Record<string, { className: string, Icon: Lu
 // definition: the live test case (Test Cases tab), no results.
 // execute:    a row of a running iteration; steps, remarks and the case result are editable.
 // review:     a row of a completed iteration; results are read-only.
+// canRemark:  show the remark box even in review mode (submitted org or closed round). Defaults to execute.
 export type testCaseSheetMode = "definition" | "execute" | "review";
 
 type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[] };
 
-export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", headerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; headerActions?: React.ReactNode }) {
+export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", canRemark = mode === "execute", footerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; canRemark?: boolean; footerActions?: React.ReactNode }) {
 	const showResults = mode !== "definition";
 	const currentUser = useCurrentUser();
 	const author = currentUser ? { id: currentUser.id, role: currentUser.role, full_name: currentUser.fullName } : undefined;
@@ -192,10 +193,10 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 				<div className="flex flex-row items-center justify-between gap-2">
 					<div className="flex gap-2">
 						{testCase.roleAssignee && <Badge variant="secondary">{testCase.roleAssignee}</Badge>}
-						{testCase.audience && <AudienceBadge audience={testCase.audience} />}
 						<Badge variant="secondary">{testCase.stepsToExecute?.length || 0} Steps</Badge>
+						{/* {testCase.audience && <AudienceBadge audience={testCase.audience} />} */}
+						<Badge variant="secondary">{testCase.audience === "both" ? "Internal & External" : testCase.audience === "internal" ? "Internal" : "External"}</Badge>
 					</div>
-					{headerActions && <div className="flex flex-row items-center gap-1">{headerActions}</div>}
 				</div>
 			</SheetHeader>
 			<div className="px-8">
@@ -313,7 +314,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 													</ol>
 												</div>
 											</div>
-											<Accordion className="w-full">
+											{showResults && <Accordion className="w-full">
 												<AccordionItem className="border-none">
 													<div className="flex flex-row items-center justify-between gap-2">
 														<div className="flex items-center gap-1.5">
@@ -392,7 +393,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 
 																		) : null
 																	}
-																	{mode === "execute" && <div className="flex flex-row gap-2 group/remark">
+																	{showResults && canRemark && <div className="flex flex-row gap-2 group/remark">
 																		<div className="flex flex-col items-center group-first/remark:pt-2">
 																			<div className={`w-0.5 bg-accent rounded-full self-center ${remarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div>
 																			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
@@ -422,7 +423,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 														</div>
 													</AccordionContent>
 												</AccordionItem>
-											</Accordion>
+											</Accordion>}
 										</div>
 									</div>
 								);
@@ -567,7 +568,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 				</div>
 			</div>}
-			{mode === "execute" && (
+			{mode === "execute" ? (
 				<SheetFooter className="flex flex-row justify-between sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					<div className="flex flex-row items-center gap-2 justify-between w-full">
 						<div className="flex flex-row items-center gap-2">
@@ -589,7 +590,11 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						/>
 					</div>
 				</SheetFooter>
-			)}
+			) : footerActions ? (
+				<SheetFooter className="flex flex-row justify-end gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
+					{footerActions}
+				</SheetFooter>
+			) : null}
 		</SheetContent>
 	)
 }

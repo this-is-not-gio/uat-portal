@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { TEST_CASE_SELECT, audience, testCase, testCaseStatus, testStepStatus } from "./test-cases";
-import { getLatestIterationCaseStatuses } from "./test-iterations";
+import type { caseFlag, caseOrgResult, caseResult, caseState, caseStatus } from "./case-states";
 
 type TestCaseRow = {
     id: string;
@@ -21,14 +21,6 @@ type TestCaseRow = {
               step: string;
               status: testStepStatus | null;
               expected_results: { id: string; result: string }[] | null;
-              test_remarks:
-                  | {
-                        id: string;
-                        remark: string;
-                        created_at: string | null;
-                        profile: { id: string; full_name: string; role: string } | null;
-                    }[]
-                  | null;
           }[]
         | null;
 };
@@ -114,17 +106,6 @@ function mapTestCaseRow(testCase: TestCaseRow) {
                         id: result.id,
                         result: result.result,
                     })) || [],
-                remarks:
-                    step.test_remarks?.map((remark) => ({
-                        id: remark.id,
-                        remark: remark.remark,
-                        author: {
-                            id: remark.profile?.id ?? "",
-                            full_name: remark.profile?.full_name ?? "",
-                            role: remark.profile?.role ?? "",
-                        },
-                        created_at: remark.created_at ?? undefined,
-                    })) || [],
             })) || [],
         created_at: testCase.created_at,
     };
@@ -153,7 +134,7 @@ export async function getSection(testSectionId: string): Promise<testSection> {
 
 export async function getSectionBySlug(testSuiteId: string, slug: string): Promise<testSection> {
     const supabase = await createClient();
-    const [{ data, error }, latestStatuses] = await Promise.all([
+    const [{ data, error }, caseStates] = await Promise.all([
         supabase
             .from("sections")
             .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
@@ -164,7 +145,7 @@ export async function getSectionBySlug(testSuiteId: string, slug: string): Promi
                 ascending: true,
             })
             .single(),
-        getLatestIterationCaseStatuses(testSuiteId),
+        getSuiteCaseStates(testSuiteId),
     ]);
 
     if (error) throw error;
@@ -172,13 +153,13 @@ export async function getSectionBySlug(testSuiteId: string, slug: string): Promi
     return {
         id: data.id,
         name: data.name,
-        testCases: data.test_cases?.map((row) => applyLatestStatus(mapTestCaseRow(row), latestStatuses)) || [],
+        testCases: data.test_cases?.map((row) => withCaseState(mapTestCaseRow(row), caseStates)) || [],
     };
 }
 
 export async function getAllTestCasesBySuiteId(testSuiteId: string): Promise<testSection> {
     const supabase = await createClient();
-    const [{ data, error }, latestStatuses] = await Promise.all([
+    const [{ data, error }, caseStates] = await Promise.all([
         supabase
             .from("sections")
             .select(`id, name, test_cases(${TEST_CASE_SELECT})`)
@@ -188,7 +169,7 @@ export async function getAllTestCasesBySuiteId(testSuiteId: string): Promise<tes
                 referencedTable: "test_cases",
                 ascending: true,
             }),
-        getLatestIterationCaseStatuses(testSuiteId),
+        getSuiteCaseStates(testSuiteId),
     ]);
 
     if (error) throw error;
@@ -196,14 +177,31 @@ export async function getAllTestCasesBySuiteId(testSuiteId: string): Promise<tes
     return {
         id: testSuiteId,
         name: "All Sections",
-        testCases: data.flatMap((section) => section.test_cases?.map((row) => applyLatestStatus(mapTestCaseRow(row), latestStatuses)) || []),
+        testCases: data.flatMap((section) => section.test_cases?.map((row) => withCaseState(mapTestCaseRow(row), caseStates)) || []),
     };
 }
 
-// Overrides the case's default/master status with its outcome in the most
-// recent iteration, if it was part of one — see getLatestIterationCaseStatuses.
-// `inIteration` is exposed separately so the UI can distinguish "not part of
-// any round yet" from a genuine, recorded "Untested" outcome within one.
-function applyLatestStatus(tc: ReturnType<typeof mapTestCaseRow>, latestStatuses: Map<string, testCaseStatus>) {
-    return { ...tc, status: latestStatuses.get(tc.id) ?? tc.status, inIteration: latestStatuses.has(tc.id) };
+function withCaseState(tc: ReturnType<typeof mapTestCaseRow>, caseStates: Map<string, caseState>) {
+    return { ...tc, caseState: caseStates.get(tc.id) };
+}
+
+// Admin authoring view Status/flags/Result per live case, keyed by test case id
+// (rules in get_suite_case_states, migration 0021).
+export async function getSuiteCaseStates(testSuiteId: string): Promise<Map<string, caseState>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_suite_case_states", { p_suite_id: testSuiteId });
+    if (error) throw error;
+    return new Map(
+        data.map((row) => [
+            row.test_case_id,
+            {
+                status: row.status as caseStatus,
+                flags: (row.flags ?? []) as caseFlag[],
+                result: (row.result ?? null) as caseResult | null,
+                resultRoundName: row.result_round_name ?? null,
+                openRoundName: row.open_round_name ?? null,
+                perOrg: (row.per_org ?? []) as caseOrgResult[],
+            },
+        ])
+    );
 }

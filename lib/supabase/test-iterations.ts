@@ -99,6 +99,7 @@ const RESULT_SELECT = `
   included_in_run,
   sync_kind,
   completed_at,
+  live_case:test_cases ( audience ),
   executor:profiles!test_case_results_executed_by_fkey ( id, full_name, role ),
   test_case_result_archives ( id, reason, archived_at, snapshot, archiver:profiles ( full_name ) ),
   test_step_results (
@@ -200,7 +201,8 @@ export async function getActiveIteration(testSuiteId: string): Promise<testItera
 // resultIds: every test_case_results row in this section for this
 // iteration — the ids apply_iteration_sync's `remove` argument needs to pull
 // the whole section back out of the round (it rejects rows with results).
-export type iterationSection = { slug: string; name: string; includedCount: number; resultIds: string[] };
+// includedCount/totalCount count each test case once, even though every org has its own row.
+export type iterationSection = { slug: string; name: string; includedCount: number; totalCount: number; resultIds: string[] };
 
 // Lightweight per-iteration section list — just enough to build the sidebar's
 // Iteration → Section tree without loading every iteration's full result set
@@ -216,24 +218,34 @@ export async function getSectionsByIteration(testSuiteId: string, orgId?: string
 
     let query = supabase
         .from("test_case_results")
-        .select("id, iteration_id, section_slug, section_name, section_order, included_in_run")
+        .select("id, iteration_id, test_case_id, section_slug, section_name, section_order, included_in_run")
         .in("iteration_id", iterations.map((i) => i.id));
     if (orgId) query = query.eq("organization_id", orgId);
     const { data, error } = await query.order("section_order", { ascending: true });
     if (error) throw error;
 
     const map = new Map<string, iterationSection[]>();
+    const caseIds = new Map<iterationSection, { all: Set<string>; included: Set<string> }>();
     for (const row of data) {
         if (!row.section_slug) continue;
         const sections = map.get(row.iteration_id) ?? [];
         let section = sections.find((s) => s.slug === row.section_slug);
         if (!section) {
-            section = { slug: row.section_slug, name: row.section_name ?? row.section_slug, includedCount: 0, resultIds: [] };
+            section = { slug: row.section_slug, name: row.section_name ?? row.section_slug, includedCount: 0, totalCount: 0, resultIds: [] };
             sections.push(section);
+            caseIds.set(section, { all: new Set(), included: new Set() });
         }
-        if (row.included_in_run) section.includedCount += 1;
+        // Rows of a since-deleted case have no test_case_id; count those rows on their own.
+        const caseKey = row.test_case_id ?? row.id;
+        const ids = caseIds.get(section)!;
+        ids.all.add(caseKey);
+        if (row.included_in_run) ids.included.add(caseKey);
         section.resultIds.push(row.id);
         map.set(row.iteration_id, sections);
+    }
+    for (const [section, ids] of caseIds) {
+        section.totalCount = ids.all.size;
+        section.includedCount = ids.included.size;
     }
     return map;
 }
@@ -338,6 +350,8 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
         title: row.title,
         status: row.status,
         roleAssignee: row.role_assignee ?? undefined,
+        // Audience isn't snapshotted, so read it off the live case (null if it was deleted).
+        audience: row.live_case?.audience ?? undefined,
         sectionName: row.section_name,
         sectionSlug: row.section_slug,
         completedAt: row.completed_at,

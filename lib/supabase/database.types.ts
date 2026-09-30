@@ -204,6 +204,8 @@ export type Database = {
       }
       suite_sign_offs: {
         Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
           exceptions: Json
           id: string
           iteration_id: string
@@ -215,6 +217,8 @@ export type Database = {
           testing_suite_id: string
         }
         Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           exceptions?: Json
           id?: string
           iteration_id: string
@@ -226,6 +230,8 @@ export type Database = {
           testing_suite_id: string
         }
         Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
           exceptions?: Json
           id?: string
           iteration_id?: string
@@ -237,6 +243,13 @@ export type Database = {
           testing_suite_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "suite_sign_offs_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "suite_sign_offs_iteration_id_fkey"
             columns: ["iteration_id"]
@@ -791,6 +804,28 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acknowledge_sign_off: {
+        Args: { p_by?: string; p_suite_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          exceptions: Json
+          id: string
+          iteration_id: string
+          note: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signed_off_at: string
+          signed_off_by: string | null
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "suite_sign_offs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       add_iteration_participant: {
         Args: { p_iteration_id: string; p_org_id: string }
         Returns: number
@@ -842,6 +877,10 @@ export type Database = {
         }
       }
       can_see_all_results: { Args: never; Returns: boolean }
+      can_withdraw_participation: {
+        Args: { p_iteration_id: string }
+        Returns: boolean
+      }
       cancel_iteration: { Args: { p_iteration_id: string }; Returns: undefined }
       case_preconditions_json: {
         Args: { p_test_case_id: string }
@@ -904,8 +943,60 @@ export type Database = {
           title: string
         }[]
       }
+      get_sidebar_suites: {
+        Args: never
+        Returns: {
+          code: string
+          my_ever_participated: boolean
+          my_in_open_round: boolean
+          my_remaining: number
+          my_submitted_at: string
+          name: string
+          open_iteration_name: string
+          open_iteration_number: number
+          open_iteration_status: Database["public"]["Enums"]["iteration_status"]
+          open_planned_end: string
+          slug: string
+          status: Database["public"]["Enums"]["suite_status"]
+          suite_id: string
+        }[]
+      }
+      get_suite_case_states: {
+        Args: { p_suite_id: string }
+        Returns: {
+          flags: string[]
+          open_round_name: string
+          per_org: Json
+          result: string
+          result_round_name: string
+          status: string
+          test_case_id: string
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
       is_internal: { Args: never; Returns: boolean }
+      issue_sign_off: {
+        Args: { p_by?: string; p_note?: string; p_suite_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          exceptions: Json
+          id: string
+          iteration_id: string
+          note: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signed_off_at: string
+          signed_off_by: string | null
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "suite_sign_offs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       org_sees_audience: {
         Args: {
           p_audience: Database["public"]["Enums"]["audience"]
@@ -929,6 +1020,10 @@ export type Database = {
         Args: { p_case_result_id: string }
         Returns: undefined
       }
+      remove_iteration_participant: {
+        Args: { p_iteration_id: string; p_org_id: string }
+        Returns: undefined
+      }
       reorder_sections: {
         Args: { p_section_ids: string[]; p_suite_id: string }
         Returns: undefined
@@ -938,6 +1033,10 @@ export type Database = {
         Returns: undefined
       }
       save_test_case: { Args: { p_payload: Json }; Returns: string }
+      set_case_inclusion: {
+        Args: { p_case_result_ids: string[]; p_included: boolean }
+        Returns: undefined
+      }
       set_suite_status: {
         Args: {
           p_status: Database["public"]["Enums"]["suite_status"]
@@ -956,26 +1055,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "testing_suites"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      sign_off_suite: {
-        Args: { p_by?: string; p_note?: string; p_suite_id: string }
-        Returns: {
-          exceptions: Json
-          id: string
-          iteration_id: string
-          note: string | null
-          revoked_at: string | null
-          revoked_by: string | null
-          signed_off_at: string
-          signed_off_by: string | null
-          testing_suite_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "suite_sign_offs"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1034,6 +1113,20 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "test_iterations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      submit_participation: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          iteration_id: string
+          organization_id: string
+          submitted_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "iteration_participants"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1145,6 +1238,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      withdraw_participation: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          iteration_id: string
+          organization_id: string
+          submitted_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "iteration_participants"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       audience: "internal" | "external" | "both"
@@ -1161,7 +1268,13 @@ export type Database = {
         | "Deputy-Commissioner"
         | "Insurance Commissioner"
         | "Company Admin"
-      suite_status: "draft" | "ready" | "in_testing" | "signed_off" | "archived"
+      suite_status:
+        | "draft"
+        | "ready"
+        | "in_testing"
+        | "sign_off_issued"
+        | "signed_off"
+        | "archived"
       test_case_lifecycle: "new" | "updated"
       test_case_status:
         | "Untested"
@@ -1313,7 +1426,14 @@ export const Constants = {
         "Insurance Commissioner",
         "Company Admin",
       ],
-      suite_status: ["draft", "ready", "in_testing", "signed_off", "archived"],
+      suite_status: [
+        "draft",
+        "ready",
+        "in_testing",
+        "sign_off_issued",
+        "signed_off",
+        "archived",
+      ],
       test_case_lifecycle: ["new", "updated"],
       test_case_status: [
         "Untested",

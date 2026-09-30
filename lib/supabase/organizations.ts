@@ -19,3 +19,16 @@ export async function getOrganizations(): Promise<organization[]> {
     if (error) throw error;
     return data.sort(compareOrganizations);
 }
+
+// Tester accounts (Internal/External) per org id, for the participant pickers.
+// RLS: Admin/Internal see every profile; others only get their own org's count.
+export async function getTesterCountsByOrg(): Promise<Record<string, number>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("profiles").select("organization_id").in("role", ["Internal", "External"]);
+    if (error) throw error;
+    const counts: Record<string, number> = {};
+    for (const profile of data) {
+        if (profile.organization_id) counts[profile.organization_id] = (counts[profile.organization_id] ?? 0) + 1;
+    }
+    return counts;
+}

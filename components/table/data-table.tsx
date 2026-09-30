@@ -26,10 +26,11 @@ import {
 import { Sheet, SheetTrigger } from "@/components/ui/sheet"
 
 import { features, type DataTableFeatures } from "./data-table-features"
-import { ClipboardCheck, ClipboardIcon, ClipboardXIcon, ChevronLeft, ChevronRight } from "lucide-react"
+import { ClipboardCheck, ClipboardIcon, ClipboardXIcon, ChevronLeft, ChevronRight, FileIcon } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { createContext, useContext, useId, useState } from "react"
+import { EmptyState } from "../ui/empty-state"
 
 // Lets a column's own cell render function (e.g. the leading status icon in
 // columns.tsx) become the drag handle for row reordering, instead of DataTable
@@ -44,6 +45,8 @@ interface DataTableProps<TData extends RowData & { id: string }> {
 	columns: ColumnDef<DataTableFeatures, TData>[]
 	data: TData[]
 	renderRowDetail?: (row: TData) => React.ReactNode
+	// Called when a row's detail sheet closes (e.g. to refresh server data it may have changed).
+	onDetailClose?: () => void
 	// When set, rows get a drag handle and can be reordered; called with the
 	// dragged row's id and the id it was dropped onto.
 	onReorder?: (activeId: string, overId: string) => void
@@ -54,6 +57,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 	columns,
 	data,
 	renderRowDetail,
+	onDetailClose,
 	onReorder,
 }: DataTableProps<TData>) {
 	const table = useTable<DataTableFeatures, TData>({
@@ -98,6 +102,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 			openRowId={openRowId}
 			setOpenRowId={setOpenRowId}
 			renderRowDetail={renderRowDetail ? () => renderRowDetail(row.original) : undefined}
+			onDetailClose={onDetailClose}
 		/>
 	))
 
@@ -114,8 +119,8 @@ export function DataTable<TData extends RowData & { id: string }>({
 					)
 				) : (
 					<TableRow>
-						<TableCell colSpan={columns.length} className=" text-center last:border border-amber-400">
-							No results.
+						<TableCell colSpan={columns.length} className="">
+							<EmptyState icon={FileIcon} title="No Test Cases" description="There are no test cases to display." />
 						</TableCell>
 					</TableRow>
 				)
@@ -176,6 +181,7 @@ function DataRow({
 	renderRowDetail,
 	openRowId,
 	setOpenRowId,
+	onDetailClose,
 }: {
 	rowId: string
 	cells: React.ReactNode[]
@@ -183,6 +189,7 @@ function DataRow({
 	renderRowDetail?: () => React.ReactNode
 	openRowId: string | null
 	setOpenRowId: (id: string | null) => void
+	onDetailClose?: () => void
 }) {
 	const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: rowId, disabled: !sortable })
 	const style = sortable ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : undefined } : undefined
@@ -199,7 +206,10 @@ function DataRow({
 	}
 
 	return (
-		<Sheet open={openRowId === rowId} onOpenChange={(open) => setOpenRowId(open ? rowId : null)}>
+		<Sheet open={openRowId === rowId} onOpenChange={(open) => {
+			setOpenRowId(open ? rowId : null)
+			if (!open) onDetailClose?.()
+		}}>
 			<SheetTrigger
 				nativeButton={false}
 				render={

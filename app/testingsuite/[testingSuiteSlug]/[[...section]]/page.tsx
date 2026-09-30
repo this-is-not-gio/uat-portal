@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import {
 	ClipboardList,
@@ -9,6 +9,7 @@ import {
 	LucideIcon,
 	CircleCheckBig,
 	CircleDashed,
+	Stamp,
 		Circle,
 		CircleCheck,
 	} from "lucide-react";
@@ -19,26 +20,31 @@ import { getSuiteReadinessIssues, getTestSuite } from "@/lib/supabase/test-suite
 import PageTab from "../page-tab";
 import TestCasesTab from "../test-cases-tab";
 import TestResultTab from "../test-result-tab";
+import TesterTestCasesTab from "../tester-test-cases-tab";
+import { getCurrentUser } from "@/lib/supabase/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import SuiteStatusButton, { READINESS_ISSUES } from "../components/suite-status-button";
 import SuiteDialog from "@/components/suite-dialog";
 import { Pencil } from "lucide-react";
 import StartIterationDialog from "../components/start-iteration-dialog";
-import SignOffDialog from "../components/sign-off-dialog";
-import { getSignOffContext, getSuiteOverview } from "@/lib/supabase/overview";
+import SignOffDialog, { AcknowledgeSignOffDialog } from "../components/sign-off-dialog";
+import { getPendingSignOff, getSignOffContext, getSuiteOverview } from "@/lib/supabase/overview";
 import OverviewTab from "../overview-tab";
 import OverviewTabSkeleton from "../overview-tab-skeleton";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import SubmitResultsDialog from "../components/submit-results-dialog";
+import { can } from "@/lib/auth/permissions";
 
 
 
-type testingsuiteLifeCycle = "draft" | "ready" | "in_testing" | "signed_off" | "archived";
+type testingsuiteLifeCycle = "draft" | "ready" | "in_testing" | "sign_off_issued" | "signed_off" | "archived";
 
 const statusMapping: Record<testingsuiteLifeCycle, { Icon: LucideIcon, label: string, className: string, nextStatusIcon: LucideIcon | null }> = {
 	draft: { Icon: ClipboardList, label: "Drafting", className: "bg-gray-500/10 border-gray-800/50 text-gray-800", nextStatusIcon: CircleCheckBig },
 	ready: { Icon: CircleCheckBig, label: "For Testing", className: "bg-green-500/10 border-green-800/50 text-green-800", nextStatusIcon: ListChecks },
-	in_testing: { Icon: ListChecks, label: "In Testing", className: "bg-blue-500/10 border-blue-800/50 text-blue-800", nextStatusIcon: Activity },
+	in_testing: { Icon: ListChecks, label: "In Testing", className: "bg-blue-500/10 border-blue-800/50 text-blue-800", nextStatusIcon: Stamp },
+	sign_off_issued: { Icon: Stamp, label: "Sign-off Issued", className: "bg-amber-500/10 border-amber-800/50 text-amber-800", nextStatusIcon: Activity },
 	signed_off: { Icon: Activity, label: "Signed Off", className: "bg-purple-500/20 border-purple-800/50 text-purple-800", nextStatusIcon: Paperclip },
 	archived: { Icon: Paperclip, label: "Archived", className: "bg-red-500/20 border-red-800/50 text-red-800", nextStatusIcon: ClipboardList },
 
@@ -72,11 +78,26 @@ export default async function TestsuitePage({
 	const sectionSlug = section?.[0];
 	const testSuite = await getTestSuite({ slug: testingSuiteSlug });
 	if (!testSuite) notFound();
+	const currentUser = await getCurrentUser();
+	// Testers (Internal/External) never see a suite before it's handed over for testing.
+	const isTester = currentUser?.role === "Internal" || currentUser?.role === "External";
+	if (isTester && (testSuite.status === "draft" || testSuite.status === "ready")) notFound();
+	// Testers have no Test Results tab; their round results are in Test Cases, so send old links there.
+	if (isTester && tab === "test-results") {
+		const query = new URLSearchParams({ tab: "test-cases", ...(iteration ? { iteration } : {}), ...(org ? { org } : {}) });
+		redirect(`/testingsuite/${testingSuiteSlug}/all?${query}`);
+	}
 	// Only needed for the Sign Off button.
-	const signOffContext = testSuite.status === "in_testing" ? await getSignOffContext(testSuite.id) : null;
+	const signOffContext = testSuite.status === "in_testing" ? await getSignOffContext(testSuite.id, currentUser?.organization?.id) : null;
+	// Vendor has issued the sign-off; the client acknowledges it to close the suite.
+	const pendingSignOff = testSuite.status === "sign_off_issued" ? await getPendingSignOff(testSuite.id) : null;
 	// Draft checklist: what still blocks Mark as Ready (the DB runs the same check on the move).
 	const draftIssues = testSuite.status === "draft" ? await getSuiteReadinessIssues(testSuite.id) : [];
 	const canMarkReady = draftIssues.length === 0;
+	// Submit Result: the viewer's org in the open round, until it submits (the Test Cases notice takes over from there).
+	const currentRound = signOffContext?.currentIteration ?? null;
+	const ownParticipation = currentRound?.ownParticipation ?? null;
+	const showSubmit = can(currentUser, "submit") && !!ownParticipation && !currentRound?.isFallback && !ownParticipation.submittedAt;
 	const Icon = statusMapping[testSuite.status].Icon;
 	const NextIcon = statusMapping[testSuite.status].nextStatusIcon
 
@@ -88,12 +109,14 @@ export default async function TestsuitePage({
 			: null
 
 	const testCasesTabSlot =
-		tab === "test-cases" ?
+		tab === "test-cases" && isTester && currentUser ?
+			<TesterTestCasesTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionSlug={sectionSlug} iterationNumber={iteration} orgId={org} currentUser={currentUser} />
+		: tab === "test-cases" ?
 			<TestCasesTab  testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionPath={section} />
 			: null
 
 	const testResultsTabSlot =
-		tab === "test-results" ?
+		tab === "test-results" && !isTester ?
 			<TestResultTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionSlug={sectionSlug} iterationNumber={iteration} orgId={org} />
 			: null
 
@@ -185,18 +208,75 @@ export default async function TestsuitePage({
 								/>
 							</div>
 						) : testSuite.status === "in_testing" && signOffContext ? (
-							<div className="">
-								<SignOffDialog
-									suiteId={testSuite.id}
-									hasActiveIteration={signOffContext.hasActiveIteration}
-									latestCompleted={signOffContext.latestCompleted}
-									trigger={
-										<Button className="flex flex-row items-center gap-2">
-											{NextIcon && <NextIcon className="h-4 w-4" />}
-											<p className="text-xs">Sign Off</p>
-										</Button>
-									}
-								/>
+							<div className="flex flex-row items-center gap-4">
+								{/* Open round, else the newest one (isFallback). Counts the viewer's own org's cases (Admin: each case once). */}
+								{signOffContext.currentIteration && (
+									<div className="flex flex-col items-end gap-1">
+										<div className="flex flex-row items-center gap-2">
+											<p className="font-semibold text-sm">{signOffContext.currentIteration.iteration.name}</p>
+											<p className="text-xs text-muted-foreground">
+												{signOffContext.currentIteration.isFallback ? "Last round" : "Current round"}
+											</p>
+										</div>
+										<div className="flex flex-row items-center gap-2">
+											<div className="h-1.5 w-32 overflow-hidden rounded-full bg-muted">
+												<div className="h-full bg-primary" style={{ width: `${signOffContext.currentIteration.percent}%` }} />
+											</div>
+											<p className="font-mono text-xs text-muted-foreground">
+												{signOffContext.currentIteration.tested}/{signOffContext.currentIteration.counts.total} · {signOffContext.currentIteration.percent}%
+											</p>
+										</div>
+									</div>
+								)}
+								{/* Testing orgs submit first; Internal's Sign Off only appears once its own org has submitted. Admin only sees progress. */}
+								{showSubmit && currentRound && ownParticipation && (
+									<SubmitResultsDialog
+										iteration={currentRound.iteration}
+										organizationName={ownParticipation.organization.name}
+										counts={currentRound.counts}
+										tested={currentRound.tested}
+										othersPending={currentRound.othersPending}
+									/>
+								)}
+								{/* Step 1: the vendor issues the sign-off once every round is finished (untested cases only warn). */}
+								{can(currentUser, "issue_sign_off") ? (
+									<SignOffDialog
+										suiteId={testSuite.id}
+										hasActiveIteration={signOffContext.hasActiveIteration}
+										latestCompleted={signOffContext.latestCompleted}
+										openUntestedCases={signOffContext.openUntestedCases}
+										trigger={
+											<Button className="flex flex-row items-center gap-2">
+												{NextIcon && <NextIcon className="h-4 w-4" />}
+												<p className="text-xs">Issue Sign-off</p>
+											</Button>
+										}
+									/>
+								) : null}
+							</div>
+						) : testSuite.status === "sign_off_issued" ? (
+							// Step 2: the client acknowledges, which closes the suite (signed_off).
+							<div className="flex flex-row items-center gap-4">
+								<div className="flex flex-col items-end">
+									<p className="font-semibold text-sm">
+										{pendingSignOff ? `Issued by ${pendingSignOff.signedOffBy ?? "the vendor"}` : "Sign-off issued"}
+									</p>
+									<p className="text-xs text-muted-foreground">
+										{pendingSignOff ? `Based on ${pendingSignOff.iterationName} · ` : ""}Waiting for the client to acknowledge
+									</p>
+								</div>
+								{can(currentUser, "sign_off") && pendingSignOff && (
+									<AcknowledgeSignOffDialog
+										suiteId={testSuite.id}
+										signOff={pendingSignOff}
+										trigger={
+											<Button className="flex flex-row items-center gap-2">
+												{NextIcon && <NextIcon className="h-4 w-4" />}
+												<p className="text-xs">Acknowledge Sign-off</p>
+											</Button>
+										}
+									/>
+								)}
 							</div>
 						) : testSuite.status === "signed_off" ? (
 							<div className="">
@@ -216,7 +296,7 @@ export default async function TestsuitePage({
 				</div>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col">
-				<PageTab overviewTab={overviewTabSlot} testCasesTab={testCasesTabSlot} testResultsTab={testResultsTabSlot} />
+				<PageTab overviewTab={overviewTabSlot} testCasesTab={testCasesTabSlot} testResultsTab={testResultsTabSlot} showTestResults={!isTester} />
 			</div>
 		</div>
 	)

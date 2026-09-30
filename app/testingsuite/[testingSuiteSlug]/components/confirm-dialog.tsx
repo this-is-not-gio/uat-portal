@@ -75,10 +75,7 @@ export default function ConfirmDialog({
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
 					<Button variant="destructive" onClick={confirm} disabled={isPending}>
-						{
-							error ? null :
-								<Trash2 className="h-3.5 w-3.5" />
-						}
+						<Trash2 className="h-3.5 w-3.5" />
 						{isPending ? "Working…" : confirmLabel}
 					</Button>
 				</DialogFooter>

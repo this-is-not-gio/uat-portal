@@ -4,14 +4,15 @@ import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
 import { TestingSuites } from "@/lib/supabase/Init"
 import { TestCase } from "../types"
-import { Ban, CircleCheck, CircleX, Clipboard, ClipboardCheck, GripVertical, Info, TestTube, TestTubeDiagonal, TestTubes, TriangleAlert, Waypoints } from "lucide-react"
-import { Badge } from "../ui/badge"
+import { Ban, CircleCheck, CircleX, Clipboard, ClipboardCheck, ClipboardX, GitBranchPlus, GitCompare, GitPullRequest, GripVertical, Info, LucideIcon, Scissors, Stars, TestTube, TestTubeDiagonal, TestTubes, TriangleAlert, Waypoints } from "lucide-react"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card"
 import { testCase } from "@/lib/supabase/test-cases"
 import { cn } from "@/lib/utils"
 import type { suiteStatus } from "@/lib/supabase/Init"
 import { useDragHandle } from "./data-table"
 import { AudienceBadge } from "../audience-badge"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
+import { caseResultLabel, shortRoundName, type caseFlag, type caseState } from "@/lib/supabase/case-states"
 
 
 // export type testCaseStatus = "Untested" | "In Progress" | "Passed" | "Failed";
@@ -43,13 +44,21 @@ export const TestStatusMapping = {
 	}
 } as const
 
-
-
-const SYNC_MARKERS = {
-	not_in_round: { label: "🆕 Not in round", className: "border-blue-600/40 bg-blue-50 text-blue-800" },
-	changed: { label: "✏️ Changed", className: "border-amber-600/40 bg-amber-50 text-amber-800" },
-	outdated: { label: "⚠️ Outdated · retest next round", className: "border-red-600/40 bg-red-50 text-red-800" },
-} as const;
+const TestCaseStatusBadge: Record<caseState["status"], { label: string; className: string, icon: LucideIcon }> = {
+	"in_testing": { label: "In Testing", className: "bg-gray-100 text-gray-800 border-gray-600/40", icon: TestTubeDiagonal },
+	"for_testing": { label: "For Testing", className: "bg-purple-50 text-purple-800 border-purple-600/40", icon: TestTube },
+	"not_ready": { label: "Not Ready", className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: TriangleAlert },
+	"tested": { label: "Tested", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: ClipboardCheck },
+	"ready": { label: "Ready", className: "bg-green-50 text-green-800 border-green-600/40", icon: Clipboard },
+}
+const TestCaseFlags: Record<caseFlag, { label: string; className: string; icon: typeof Stars }> = {
+	"incomplete": { label: "Incomplete", className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: TriangleAlert },
+	"changed_after_testing": { label: "Changed After Testing", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitPullRequest },
+	"update_pending": { label: "Update Pending", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitCompare },
+	"skipped": { label: "Skipped", className: "bg-gray-50 text-gray-800 border-gray-600/40", icon: Scissors },
+	"changed_since": { label: "Changed Since Last Test", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitBranchPlus },
+	"new": { label: "New", className: "bg-green-50 text-green-800 border-green-600/40", icon: Stars },
+}
 
 const columnHelper = createColumnHelper<DataTableFeatures, testCase>()
 
@@ -57,44 +66,80 @@ const columnHelper = createColumnHelper<DataTableFeatures, testCase>()
 // so useDragHandle() is called from something ESLint's rules-of-hooks
 // recognizes as a component — it's still rendered via flexRender's
 // React.createElement, so this was always runtime-safe, just lint-unclear.
-function TestCaseTitleCell({ row, suiteStatus }: { row: testCase; suiteStatus: suiteStatus }) {
-	const status = TestStatusMapping[row.status as keyof typeof TestStatusMapping];
-	const Icon = status?.icon || Info;
+function TestCaseTitleCell({ row }: { row: testCase; suiteStatus: suiteStatus }) {
 	const dragHandle = useDragHandle();
 	return (
 		<div className="flex flex-row justify-between items-center gap-1">
-			<div className="flex flex-row items-center gap-4">
-				{dragHandle ? (
-					<span
-						{...dragHandle.attributes}
-						{...dragHandle.listeners}
-						className="cursor-grab active:cursor-grabbing touch-none text-muted-foreground"
-						onClick={(e) => e.stopPropagation()}
-						aria-label="Drag to reorder"
-					>
-						<GripVertical size={15} />
-					</span>
-				) : (
-					<Icon data-icon="inline-start" size={15} className={`text-${row.status === "Passed" ? "green-800" : row.status === "Failed" ? "red-500" : "gray-500"}`} />
-				)}
-				<div className="">
-					<div className="flex flex-row items-center gap-2">
-						<p className="text-sm">{row.title}</p>
-						{row.lifecycleStatus === "updated" && (
-							<Badge variant="outline" className="text-xs">Updated</Badge>
-						)}
-						{/* Set by the Test Cases tab while a round runs: where this live case stands vs the round. */}
-						{(() => {
-							const marker = (row as testCase & { syncMarker?: keyof typeof SYNC_MARKERS }).syncMarker;
-							return marker ? (
-								<Badge variant="outline" className={`text-xs ${SYNC_MARKERS[marker].className}`}>{SYNC_MARKERS[marker].label}</Badge>
-							) : null;
-						})()}
-					</div>
-					<p className="text-xs text-muted-foreground">{row.code}</p>
-				</div>
+			<div className="">
+				<p className="text-sm">{row.title}</p>
+				<p className="font-mono text-xs text-muted-foreground">{row.code}</p>
 			</div>
 		</div>
+	)
+}
+
+// Flag text with the round it refers to, e.g. "Skipped · UAT 01".
+function flagText(flag: caseFlag, state: caseState) {
+	const label = TestCaseFlags[flag].label;
+	if (flag === "skipped" || flag === "changed_since") return `${label} · ${shortRoundName(state.resultRoundName)}`;
+	if (flag === "new") return `${label} · not in ${shortRoundName(state.openRoundName)}`;
+	return label;
+}
+
+// Status badge plus the top flag as an icon; the tooltip lists every flag (flags[0] is the highest priority).
+function CaseStatusCell({ state }: { state?: caseState }) {
+	if (!state) return null;
+	const status = TestCaseStatusBadge[state.status];
+	const topFlag = state.flags[0];
+	const flag = topFlag ? TestCaseFlags[topFlag] : undefined;
+	const FlagIcon = flag?.icon;
+	return (
+		<div className="flex flex-row items-center justify-end gap-2">
+			{flag && FlagIcon && (
+				<Tooltip>
+					<TooltipTrigger render={
+						<div className={cn("w-fit p-1 rounded-md flex flex-row items-center gap-1", flag.className)} aria-label={flagText(topFlag, state)}>
+							<FlagIcon size={15} />
+						</div>
+					} />
+					<TooltipContent className="flex flex-col items-start gap-0.5">
+						{state.flags.map((f, index) => (
+							<p key={f} className={index === 0 ? "font-semibold" : undefined}>{flagText(f, state)}</p>
+						))}
+					</TooltipContent>
+				</Tooltip>
+			)}
+			<div className={cn("rounded-md py-1 px-1.5 w-fit flex flex-row items-center gap-1", status.className)}>
+				<status.icon size={12} />
+				<p className="text-xs font-semibold">{status.label}</p>
+			</div>
+		</div>
+	)
+}
+
+// Result rolled up across orgs; hover shows each org's result in that round.
+function CaseResultCell({ state }: { state?: caseState }) {
+	if (!state?.result) return <p className="text-xs text-muted-foreground">—</p>;
+	const style = TestStatusMapping[state.result === "In progress" ? "In Progress" : state.result];
+	const Icon = style.icon;
+	return (
+		<HoverCard>
+			<HoverCardTrigger render={
+				<div className={cn("rounded-md py-1 px-1.5 w-fit flex flex-row items-center gap-1.5", style.className)}>
+					<Icon size={12} />
+					<p className="text-xs font-semibold">{caseResultLabel(state)}</p>
+				</div>
+			} />
+			<HoverCardContent className="w-fit p-3 flex flex-col gap-1.5">
+				<p className="text-xs font-semibold">{state.resultRoundName}</p>
+				{state.perOrg.map((org) => (
+					<div key={org.organizationId} className="flex flex-row items-center justify-between gap-4">
+						<p className="text-xs">{org.organizationName}</p>
+						<p className="text-xs text-muted-foreground">{org.result}{org.changed ? " · changed since" : ""}</p>
+					</div>
+				))}
+			</HoverCardContent>
+		</HoverCard>
 	)
 }
 
@@ -113,12 +158,12 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 			header: "Preconditions",
 			cell: (info) => (
 				info.getValue()?.length === 0 ? (
-					<div className="flex flex-row items-center gap-2">
-						<p className="text-xs text-muted-foreground">No Preconditions</p>
+					<div className="flex flex-row items-center gap-2 justify-between">
+						<p className="font-mono text-xs text-muted-foreground">—</p>
 						<HoverCard>
 							<HoverCardTrigger render={
 								<div className="flex flex-row items-center gap-1 rounded-md p-1 bg-blue-600/5 w-fit">
-									<Info size={15} className="text-blue-800" />
+									<Info size={15} className="text-blue-800"/>
 								</div>
 							} />
 							<HoverCardContent className="w-fit p-4 flex flex-col gap-3">
@@ -145,7 +190,6 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 						<ClipboardCheck size={15} className="text-gray-800" />
 						<div className="flex flex-row items-center gap-0.5">
 							<p className="font-mono text-xs text-gray-800">{info.getValue()?.length}</p>
-							<p className="text-xs text-gray-800 font-semibold">Preconditions</p>
 						</div>
 					</div>
 				)
@@ -160,11 +204,11 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 				// recompute that count here from the real step data instead.
 				const stepsMissingExpected = steps.filter((step) => (step.expectedResults?.length ?? 0) === 0);
 				return steps.length === 0 ? (
-					<div className="flex flex-row items-center gap-2">
-						<p className="text-xs text-muted-foreground">No Steps</p>
+					<div className="flex flex-row items-center gap-2 justify-between">
+						<p className="font-mono text-xs text-muted-foreground">—</p>
 						<HoverCard>
 							<HoverCardTrigger render={
-								<div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-amber-600/5 w-fit">
+								<div className="flex flex-row items-center gap-1.5 rounded-md py-1 px-1.5 bg-amber-600/5 w-fit">
 									<TriangleAlert size={15} className="text-amber-800" />
 								</div>
 							} />
@@ -273,36 +317,8 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 			}
 		}),
 		columnHelper.display({
-			id: "readiness",
-			header: "Status",
-			cell: (info) => {
-				const issues = (info.row.original as testCase & { readinessIssues?: string[] }).readinessIssues ?? [];
-				return issues.length === 0 ? (
-					<Badge variant="outline" className="text-xs border-green-600/50 bg-green-50 text-green-800">
-						<CircleCheck data-icon="inline-start" size={12} />
-						Ready
-					</Badge>
-				) : (
-					<Badge variant="outline" className="text-xs border-amber-600/50 bg-amber-50 text-amber-800">
-						<TriangleAlert data-icon="inline-start" size={12} />
-						Not ready
-					</Badge>
-				);
-			}
+			id: "status",
+			cell: (info) => <CaseStatusCell state={info.row.original.caseState} />,
 		}),
-		...(showExecutionStatus ? [columnHelper.accessor("status", {
-			header: "Current Testing Status",
-			cell: (info) => {
-				const status = TestStatusMapping[info.getValue() as keyof typeof TestStatusMapping];
-				const Icon = status?.icon || Info;
-				const variant = status?.variant || "outline";
-				return (
-					<Badge className={`text-xs ${info.getValue() === "Passed" ? "bg-green-100 text-green-800" : ""}`} variant={variant || "outline"}>
-						<Icon data-icon="inline-start" size={15} className={`text-${info.getValue() === "Passed" ? "green-800" : "gray-500"}`} />
-						{info.getValue()}
-					</Badge>
-				)
-			}
-		})] : []),
 	])
 }

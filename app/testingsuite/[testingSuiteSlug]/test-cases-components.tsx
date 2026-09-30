@@ -40,15 +40,6 @@ export type authoringContext = {
 	sync: { iteration: { id: string; name: string }; changes: iterationChange[] } | null;
 };
 
-// Row marker relative to the running round: not in it yet, edited-but-untested, or edited-after-testing.
-function syncMarkerFor(sync: authoringContext["sync"], testCaseId: string): "not_in_round" | "changed" | "outdated" | undefined {
-	const change = sync?.changes.find((c) => c.testCaseId === testCaseId);
-	if (!change) return undefined;
-	if (change.change === "added") return "not_in_round";
-	if (change.change === "changed") return change.hasResults ? "outdated" : "changed";
-	return undefined;
-}
-
 // Edit/Delete for a table row — same hover-reveal pattern as the sidebar's
 // SectionMenu: hidden until the row (group/row, set by DataTable) is hovered
 // or focused, instead of a dropdown.
@@ -112,7 +103,6 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 	const testCaseData = orderedTestCases.map((tc) => ({
 		...tc,
 		readinessIssues: authoring.readinessIssues.filter((issue) => issue.testCaseId === tc.id).map((issue) => issue.issue),
-		syncMarker: syncMarkerFor(authoring.sync, tc.id),
 	}));
 	// "All Sections" carries the suite id; default new cases to the open section, else the first one.
 	const defaultSectionId = authoring.sections.some((s) => s.id === section?.id) ? section?.id : authoring.sections[0]?.id;
@@ -135,7 +125,7 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 			if (f.field === "search") return tc.title.toLowerCase().includes(f.value.toLowerCase());
 			const actual = f.field === "status" ? tc.status
 				: f.field === "audience" ? (tc.audience && AUDIENCE_LABELS[tc.audience])
-				: tc.roleAssignee;
+					: tc.roleAssignee;
 			const isEqual = actual === f.value;
 			return f.operator === "is" ? isEqual : !isEqual;
 		})
@@ -192,23 +182,6 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 	} else if (testCases.length === 0 && section?.name !== "All Sections") {
 		return (
 			<div className="flex flex-col p-4 w-full gap-4">
-				<div className="">
-					<Breadcrumb>
-						<BreadcrumbList>
-							<BreadcrumbItem>
-								<p className="text-xs text-muted-foreground">Test Suite</p>
-							</BreadcrumbItem>
-							<BreadcrumbSeparator />
-							<BreadcrumbItem>
-								<p className="text-xs text-muted-foreground">SEC Endorsement</p>
-							</BreadcrumbItem>
-							<BreadcrumbSeparator />
-							<BreadcrumbItem>
-								<p className="text-xs text-muted-foreground">SEC Endorsement</p>
-							</BreadcrumbItem>
-						</BreadcrumbList>
-					</Breadcrumb>
-				</div>
 				<div className="bg-gray-50/30 px-4 py-3 border rounded-md flex flex-row items-center justify-between">
 					<div className="flex flex-row items-center gap-2">
 						<ClipboardIcon size={16} />
@@ -217,11 +190,11 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 					</div>
 				</div>
 				<SearchFilterCombobox
-						filters={filters}
-						onFiltersChange={setFilters}
-						roleAssigneeValues={roleAssigneeValues}
-						includeAudience
-						disabled
+					filters={filters}
+					onFiltersChange={setFilters}
+					roleAssigneeValues={roleAssigneeValues}
+					includeAudience
+					disabled
 				/>
 				<div className="flex-1 flex items-center justify-center">
 					<div className="flex flex-col items-center justify-center gap-5 py-12">
@@ -248,23 +221,6 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 
 		<ScrollArea className="flex-1 shrink-0 border-r flex flex-col px-2">
 			<div className="flex-1 p-4 flex flex-col gap-4">
-				<div className="">
-					<Breadcrumb>
-						<BreadcrumbList>
-							<BreadcrumbItem>
-								<p className="text-xs text-muted-foreground">Test Suite</p>
-							</BreadcrumbItem>
-							<BreadcrumbSeparator />
-							<BreadcrumbItem>
-								<p className="text-xs text-muted-foreground">SEC Endorsement</p>
-							</BreadcrumbItem>
-							<BreadcrumbSeparator />
-							<BreadcrumbItem>
-								<p className="text-xs text-muted-foreground">SEC Endorsement</p>
-							</BreadcrumbItem>
-						</BreadcrumbList>
-					</Breadcrumb>
-				</div>
 				{authoring.sync && authoring.editable && (
 					<SyncBanner
 						// Remount when the set of changes differs so the default selection follows it.
@@ -308,38 +264,32 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 					</Tabs> */}
 				</div>
 				<Suspense fallback={<Skeleton className="h-70 w-full" />}>
-					<Tabs value={viewMode} className="min-h-0 flex-1">
-						<TabsContent value="table" className="min-h-0 flex-1">
-							<DataTable
-								columns={tableColumns}
-								data={filteredTestCases}
-								onReorder={canReorder ? handleReorder : undefined}
-								renderRowDetail={(testCase) =>
-									<TestCaseSheet testCase={testCase}
-										onChangeTestCase={() => {}}
-										headerActions={authoring.editable && (
-											<>
-												<TestCaseEditor
-													sections={authoring.sections}
-													testCase={testCase}
-													trigger={<Button size="sm" variant="outline"><Pencil className="h-3.5 w-3.5" /> Edit</Button>}
-												/>
-												<ConfirmDialog
-													title={`Delete ${testCase.code ?? "this test case"}?`}
-													description="Rounds that already copied it keep their results."
-													confirmLabel="Delete test case"
-													onConfirm={() => deleteTestCase({ testCaseId: testCase.id })}
-													trigger={<Button size="sm" variant="ghost"><Trash2 className="h-3.5 w-3.5" /> Delete</Button>}
-												/>
-											</>
-										)}
-									/>}
-							/>
-						</TabsContent>
-						<TabsContent value="board" className="min-h-0 flex-1">
-							{/* <Board testCases={testCasesState} setTestCases={setTestCases} /> */}
-						</TabsContent >
-					</Tabs >
+					<DataTable
+						columns={tableColumns}
+						data={filteredTestCases}
+						onReorder={canReorder ? handleReorder : undefined}
+						renderRowDetail={(testCase) =>
+							<TestCaseSheet testCase={testCase}
+								onChangeTestCase={() => { }}
+								footerActions={authoring.editable && (
+									<>
+										<TestCaseEditor
+											sections={authoring.sections}
+											testCase={testCase}
+											trigger={<Button variant="outline" size="lg" className="text-foreground hover:text-foreground font-semibold px-10"><Pencil className="h-3.5 w-3.5" /> Edit </Button>}
+										/>
+										<ConfirmDialog
+											title={`Delete ${testCase.code ?? "this test case"}?`}
+											description="Rounds that already copied it keep their results."
+											confirmLabel="Delete test case"
+											onConfirm={() => deleteTestCase({ testCaseId: testCase.id })}
+											trigger={<Button variant="destructive" size="lg" className="text-destructive hover:text-destructive font-semibold px-10"><Trash2 className="h-3.5 w-3.5" /> Delete</Button>}
+										/>
+
+									</>
+								)}
+							/>}
+					/>
 				</Suspense >
 			</div >
 		</ScrollArea >

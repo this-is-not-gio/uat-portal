@@ -21,7 +21,7 @@ import { applyIterationSync } from "@/lib/supabase/sync-actions";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 
-type notIncludedSection = { id: string; name: string; slug: string; testCasesLength: number; testCaseIds: string[] };
+export type notIncludedSection ={ id: string; name: string; slug: string; testCasesLength: number; testCaseIds: string[] };
 
 // Create a section (then open it) or rename an existing one. Pass `trigger`
 // for an uncontrolled dialog, or `open`/`onOpenChange` to drive it from a menu.

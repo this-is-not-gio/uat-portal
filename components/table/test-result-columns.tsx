@@ -36,6 +36,55 @@ function SyncBadges({ row }: { row: testResultRow }) {
 	);
 }
 
+// Remarks across every step of the case.
+export function RemarkCountCell({ row }: { row: testResultRow }) {
+	const remarkCount = (row.stepsToExecute ?? [])
+		.reduce((count, step) => count + (step.remarks?.length ?? 0), 0);
+	return (
+		<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-100/50 w-fit">
+			<MessageSquare size={15} className="text-gray-800" />
+			<p className="font-mono text-xs text-gray-800">{remarkCount}</p>
+		</div>
+	);
+}
+
+// Step outcome counts; statuses with no steps are hidden.
+export function ResultSummaryCell({ row }: { row: testResultRow }) {
+	const steps = row.stepsToExecute ?? [];
+	const passed = steps.filter((s) => s.status === "Passed").length;
+	const failed = steps.filter((s) => s.status === "Failed").length;
+	const skipped = steps.filter((s) => s.status === "Skipped").length;
+	const blocked = steps.filter((s) => s.status === "Blocked").length;
+	return (
+		<div className="flex flex-row gap-1">
+			{passed > 0 && (
+				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-green-600/20 w-fit">
+					<CircleCheck size={15} className="text-green-800" />
+					<p className="font-mono text-xs text-green-800">{passed}</p>
+				</div>
+			)}
+			{failed > 0 && (
+				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-red-600/20 w-fit">
+					<CircleX size={15} className="text-red-800" />
+					<p className="font-mono text-xs text-red-800">{failed}</p>
+				</div>
+			)}
+			{skipped > 0 && (
+				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/20 w-fit">
+					<SkipForward size={15} className="text-gray-800" />
+					<p className="font-mono text-xs text-gray-800">{skipped}</p>
+				</div>
+			)}
+			{blocked > 0 && (
+				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/20 w-fit">
+					<CircleOffIcon size={15} className="text-gray-800" />
+					<p className="font-mono text-xs text-gray-800">{blocked}</p>
+				</div>
+			)}
+		</div>
+	);
+}
+
 const columnHelper = createColumnHelper<DataTableFeatures, testResultRow>()
 
 export const testResultColumns = columnHelper.columns([
@@ -73,55 +122,12 @@ export const testResultColumns = columnHelper.columns([
 	}),
 	columnHelper.display({
 		header: "Remarks",
-		cell: (info) => {
-			const remarkCount = (info.row.original.stepsToExecute ?? [])
-				.reduce((count, step) => count + (step.remarks?.length ?? 0), 0);
-			return (
-				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-100/50 w-fit">
-					<MessageSquare size={15} className="text-gray-800" />
-					<p className="font-mono text-xs text-gray-800">{remarkCount}</p>
-				</div>
-			);
-		},
+		cell: (info) => <RemarkCountCell row={info.row.original} />,
 	}),
 
 	columnHelper.display({
 		header: "Result Summary",
-		cell: (info) => {
-			const steps = info.row.original.stepsToExecute ?? [];
-			const passed = steps.filter((s) => s.status === "Passed").length;
-			const failed = steps.filter((s) => s.status === "Failed").length;
-			const skipped = steps.filter((s) => s.status === "Skipped").length;
-			const blocked = steps.filter((s) => s.status === "Blocked").length;
-			return (
-				<div className="flex flex-row gap-1">
-					{passed > 0 && (
-						<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-green-600/20 w-fit">
-							<CircleCheck size={15} className="text-green-800" />
-							<p className="font-mono text-xs text-green-800">{passed}</p>
-						</div>
-					)}
-					{failed > 0 && (
-						<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-red-600/20 w-fit">
-							<CircleX size={15} className="text-red-800" />
-							<p className="font-mono text-xs text-red-800">{failed}</p>
-						</div>
-					)}
-					{skipped > 0 && (
-						<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/20 w-fit">
-							<SkipForward size={15} className="text-gray-800" />
-							<p className="font-mono text-xs text-gray-800">{skipped}</p>
-						</div>
-					)}
-					{blocked > 0 && (
-						<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/20 w-fit">
-							<CircleOffIcon size={15} className="text-gray-800" />
-							<p className="font-mono text-xs text-gray-800">{blocked}</p>
-						</div>
-					)}
-				</div>
-			);
-		}
+		cell: (info) => <ResultSummaryCell row={info.row.original} />,
 	}),
 	columnHelper.accessor("previousStatus", {
 		header: "Last Round",

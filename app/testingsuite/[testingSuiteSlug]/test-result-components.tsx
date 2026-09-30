@@ -7,11 +7,13 @@ import { DataTable } from "@/components/table/data-table";
 import { testResultColumns } from "@/components/table/test-result-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import { cn, formatIterationTimestamp } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
 import IterationActions from "./components/iteration-actions";
+import type { organization } from "@/lib/supabase/organizations";
 
 
 function SummaryCard({ label, count, icon, iconClassName }: { label: string; count: number; icon: React.ReactNode; iconClassName?: string }) {
@@ -41,6 +43,11 @@ export default function TestResultComponents({
 	sectionName,
 	results,
 	iterationHasResults,
+	isLocked = false,
+	canRemark = false,
+	unsubmittedOrgs = [],
+	participation,
+	submission,
 }: {
 	iteration: testIteration;
 	testSuiteSlug: string;
@@ -48,7 +55,17 @@ export default function TestResultComponents({
 	results: testResultRow[];
 	// Across the whole iteration, not just the visible section (decides whether Cancel is offered).
 	iterationHasResults: boolean;
+	// The viewer's own org submitted this round, so its rows open read-only (Phase 6).
+	isLocked?: boolean;
+	// Remarks stay open after submitting and after the round ends (0020).
+	canRemark?: boolean;
+	// External orgs that haven't submitted; the Complete dialog warns about them.
+	unsubmittedOrgs?: organization[];
+	// Participation panel (Admin/Internal) and Submit bar (External), rendered by the server tab.
+	participation?: React.ReactNode;
+	submission?: React.ReactNode;
 }) {
+	const router = useRouter();
 	const [testResultRows, setTestResultRows] = useState<testResultRow[]>(results);
 	const [onlyFailedLastRound, setOnlyFailedLastRound] = useState(false);
 	const [onlyChangedMidRound, setOnlyChangedMidRound] = useState(false);
@@ -109,6 +126,7 @@ export default function TestResultComponents({
 								testSuiteSlug={testSuiteSlug}
 								untestedCount={testResultRows.filter((row) => row.status === "Untested" || row.status === "In Progress").length}
 								hasRecordedResults={iterationHasResults || testResultRows.some(hasResults)}
+								unsubmittedOrgs={unsubmittedOrgs}
 							/>
 						)}
 						<Button className="" size="lg" variant={isOpen ? "outline" : "default"}>
@@ -117,6 +135,8 @@ export default function TestResultComponents({
 						</Button>
 					</div>
 				</div>
+				{submission}
+				{participation}
 				<div className="flex flex-row items-center justify-between gap-2">
 					<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
 					<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
@@ -152,10 +172,14 @@ export default function TestResultComponents({
 					<DataTable
 						columns={testResultColumns}
 						data={visibleRows}
+						// Result writes don't revalidate and the root layout doesn't re-render on
+						// navigation, so refresh once on close to keep the sidebar's "N left" current.
+						onDetailClose={() => router.refresh()}
 						renderRowDetail={(row) => (
 							<TestCaseSheet
 								testCase={row}
-								mode={isRunning ? "execute" : "review"}
+								mode={isRunning && !isLocked ? "execute" : "review"}
+								canRemark={canRemark}
 								onChangeTestCase={(updated) => {
 									setTestResultRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
 								}}

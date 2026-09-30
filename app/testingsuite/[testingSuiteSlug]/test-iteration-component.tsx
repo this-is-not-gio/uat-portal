@@ -1,19 +1,36 @@
-import { Badge, ClipboardIcon, ClipboardList, Flag, FolderClock, IterationCw, Play, StopCircle } from "lucide-react";
+import { Badge, ClipboardIcon, ClipboardList, Flag, FolderClock, IterationCw, MoreHorizontal, Play, StopCircle } from "lucide-react";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getIterationTestSections, getIterationTestCaseIds } from "@/lib/supabase/test-iterations";
+import { getIterationTestSections, getIterationTestCaseIds, getIterationParticipants } from "@/lib/supabase/test-iterations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 import { getIterationScopeOptions } from "@/lib/supabase/iteration-actions";
+import { getTesterCountsByOrg } from "@/lib/supabase/organizations";
 import { format } from "date-fns";
 import { IterationTestCaseList } from "./components/iteration-test-case-list";
+import type { notIncludedSection } from "./components/section-dialog";
 import AddTestCasesControl, { type addableSection } from "./components/add-test-cases-control";
 import { Button } from "@/components/ui/button";
+import IterationHeaderMenu from "./components/iteration-header-menu";
+import { CompleteIterationButton } from "./components/iteration-actions";
+import { unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
 
-export async function TestIterationComponent({ testSuiteId, suiteName, iteration }: { testSuiteId: string; suiteName: string; iteration: testIteration | null }): Promise<import("react").JSX.Element> {
-	const sections = iteration ? await getIterationTestSections(iteration.id) : [];
-	const allTestCases = sections ? sections.flatMap((section) => section.testCases).filter((tc) => tc.includedInRun) : [];
+export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suiteName, iteration, sectionsNotIncluded }: {
+	testSuiteId: string;
+	testSuiteSlug: string;
+	suiteName: string;
+	iteration: testIteration | null;
+	// Set only while the round is planned/running — enables its Add Section/Add Participant buttons.
+	sectionsNotIncluded?: notIncludedSection[];
+}): Promise<import("react").JSX.Element> {
+	const [sections, participants, testerCounts] = iteration
+		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id), getTesterCountsByOrg()])
+		: [[], [], {}];
+	// Every result row (excluded ones included) so the table can show what's left out.
+	const allRows = sections.flatMap((section) => section.testCases);
+	const allTestCases = allRows.filter((tc) => tc.includedInRun);
 
-	// Only a running round can actually take more test cases (apply_iteration_sync enforces this too).
+	// Note: a running round can no longer take more test cases (0023 locks its case set), so
+	// AddTestCasesControl stays unused; this list currently only feeds the header buttons' disabled state.
 	let addableSections: addableSection[] = [];
 	if (iteration?.status === "in_progress") {
 		const [scope, existingIds] = await Promise.all([
@@ -102,26 +119,31 @@ export async function TestIterationComponent({ testSuiteId, suiteName, iteration
 						{/* <Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge> */}
 					</div>
 					<div className="">
-						{/* {iteration?.status === "in_progress" ?
-							<div className="flex flex-row items-center gap-2">
-								<Button size="lg" variant="outline" className="text-xs" disabled={addableSections.length === 0}>
-									<StopCircle size={14} />
-									<span>Stop Iteration</span>
-								</Button>
-								<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
-									<Flag size={14} />
-									<span>Complete Iteration</span>
-								</Button>
+						{iteration?.status === "not_started" ?
+							<div className="flex flex-row items-center gap-1">
 							</div>
-							: iteration?.status === "completed" ?
-								<></>
-							: <div className="flex flex-row items-center gap-2">
-								<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
-									<Flag size={14} />
-									<span>Complete Iteration</span>
-								</Button>
-							</div>
-						} */}
+							: iteration?.status === "in_progress" ?
+								<div className="flex flex-row items-center gap-1">
+									<Button size="lg" variant="outline" className="text-xs" disabled={addableSections.length === 0}>
+										<StopCircle size={14} />
+										<span>Stop Iteration</span>
+									</Button>
+									<CompleteIterationButton
+										iteration={iteration}
+										untestedCount={allTestCases.filter((tc) => tc.status === "Untested" || tc.status === "In Progress").length}
+										unsubmittedOrgs={unsubmittedParticipantOrgs(participants)}
+									/>
+									<IterationHeaderMenu iteration={iteration} />
+								</div>
+								: iteration?.status === "completed" ?
+									<></>
+									: <div className="flex flex-row items-center gap-2">
+										<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
+											<Flag size={14} />
+											<span>Complete Iteration</span>
+										</Button>
+									</div>
+						}
 						{/* <div className="flex flex-row items-center gap-2">
 							<Button size="lg" className="text-xs" disabled={addableSections.length === 0}>
 								<Play size={14} />
@@ -130,7 +152,13 @@ export async function TestIterationComponent({ testSuiteId, suiteName, iteration
 						</div> */}
 					</div>
 				</div>
-				<IterationTestCaseList testCases={allTestCases} iteration={iteration} />
+				<IterationTestCaseList
+					testCases={allRows}
+					iteration={iteration}
+					roundActions={sectionsNotIncluded ? { suiteId: testSuiteId, testSuiteSlug, sectionsNotIncluded } : undefined}
+					participants={participants}
+					testerCounts={testerCounts}
+				/>
 			</div>
 		</ScrollArea>
 	);

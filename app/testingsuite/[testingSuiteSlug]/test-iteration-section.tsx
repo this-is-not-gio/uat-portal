@@ -1,7 +1,8 @@
-import { CalendarChevronsRight, ClipboardList, FolderClock } from "lucide-react";
+import { CalendarChevronsRight, ClipboardList, FolderClock, Lock } from "lucide-react";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getIterationTestSections } from "@/lib/supabase/test-iterations";
+import { getIterationTestSections, getIterationParticipants } from "@/lib/supabase/test-iterations";
+import { getTesterCountsByOrg } from "@/lib/supabase/organizations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 import { Button } from "@/components/ui/button";
 import { IterationTestCaseList } from "./components/iteration-test-case-list";
@@ -18,7 +19,9 @@ export async function TestIterationSection({
 	iteration: testIteration | null;
 	sectionSlug?: string;
 }): Promise<import("react").JSX.Element> {
-	const sections = iteration ? await getIterationTestSections(iteration.id) : [];
+	const [sections, participants, testerCounts] = iteration
+		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id), getTesterCountsByOrg()])
+		: [[], [], {}];
 	const section = sections.find((s) => s.slug === sectionSlug);
 	const testCases = section?.testCases ?? [];
 
@@ -56,6 +59,13 @@ export async function TestIterationSection({
 							<p className="text-xs text-muted-foreground font-mono">{iteration?.name}</p>
 						</div>
 					</div>
+					{/* Which cases a round runs is fixed once it starts (set_case_inclusion 0022, apply_iteration_sync 0023). */}
+					{iteration && iteration.status !== "not_started" && (
+						<div className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
+							<Lock size={14} />
+							<p>Test cases are locked for this round</p>
+						</div>
+					)}
 					{/* <Button size="lg" className="text-xs">
 						<CalendarChevronsRight size={16} className="mr-1" />
 						Start Testing Iteration
@@ -76,7 +86,7 @@ export async function TestIterationSection({
 						</div>
 					</div>
 				) : (
-					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable sectionSlug={sectionSlug} />
+					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={iteration?.status === "not_started"} sectionSlug={sectionSlug} participants={participants} testerCounts={testerCounts} />
 				)}
 			</div>
 		</ScrollArea>

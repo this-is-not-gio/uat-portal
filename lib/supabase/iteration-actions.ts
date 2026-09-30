@@ -6,7 +6,7 @@ import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database } from "./database.types";
-import { getOrganizations, type organization } from "./organizations";
+import { getOrganizations, getTesterCountsByOrg, type organization } from "./organizations";
 import { getIterationParticipants } from "./test-iterations";
 
 // Lifecycle rules live in Postgres (see the suite lifecycle RPCs), so their
@@ -58,12 +58,24 @@ export async function setSuiteStatus({ suiteId, status }: { suiteId: string; sta
     return { ok: true, data: undefined };
 }
 
-// Signs off on the latest completed iteration; a note is required unless every case passed.
-export async function signOffSuite({ suiteId, note }: { suiteId: string; note: string }): Promise<actionResult> {
+// Vendor issues the sign-off on the latest completed iteration (every round must be finished).
+// Untested cases are only warned about in the dialog; the note is optional.
+export async function issueSignOff({ suiteId, note }: { suiteId: string; note: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("issue_sign_off", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Client acknowledges the issued sign-off, which closes the suite (signed_off).
+export async function acknowledgeSignOff({ suiteId }: { suiteId: string }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "sign_off")) return denied("sign_off");
     const supabase = await createClient();
-    const { error } = await supabase.rpc("sign_off_suite", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined });
+    const { error } = await supabase.rpc("acknowledge_sign_off", { p_suite_id: suiteId, p_by: user.id });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
@@ -101,14 +113,26 @@ export async function addParticipant({ iterationId, organizationId }: { iteratio
     return { ok: true, data: { addedCount: data } };
 }
 
+// Withdraws an org from a planned/running round — only while it has no recorded results (0024).
+export async function removeParticipant({ iterationId, organizationId }: { iterationId: string; organizationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("remove_iteration_participant", { p_iteration_id: iterationId, p_org_id: organizationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
 // What the org pickers list: every org, plus (for a running round) which already take part.
-export async function getParticipantOptions({ iterationId }: { iterationId?: string } = {}): Promise<actionResult<{ organizations: organization[]; participantIds: string[] }>> {
+export async function getParticipantOptions({ iterationId }: { iterationId?: string } = {}): Promise<actionResult<{ organizations: organization[]; participantIds: string[]; testerCounts: Record<string, number> }>> {
     try {
-        const [organizations, participants] = await Promise.all([
+        const [organizations, participants, testerCounts] = await Promise.all([
             getOrganizations(),
             iterationId ? getIterationParticipants(iterationId) : Promise.resolve([]),
+            getTesterCountsByOrg(),
         ]);
-        return { ok: true, data: { organizations, participantIds: participants.map((p) => p.organization.id) } };
+        return { ok: true, data: { organizations, participantIds: participants.map((p) => p.organization.id), testerCounts } };
     } catch (error) {
         return fail(error as { message: string });
     }
@@ -151,6 +175,31 @@ export async function cancelIteration({ iterationId }: { iterationId: string }):
     if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("cancel_iteration", { p_iteration_id: iterationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Participation (External orgs) ----------------------------------------------
+
+// Marks the caller's org as done with this round. After this the DB rejects that org's
+// result writes (0014's guard) until it withdraws. Submitting never closes the round: it stays
+// in progress until an Admin/Internal user completes it (0019).
+export async function submitParticipation({ iterationId }: { iterationId: string }): Promise<actionResult<{ submittedAt: string }>> {
+    const user = await requireUser();
+    if (!can(user, "submit")) return denied("submit");
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("submit_participation", { p_iteration_id: iterationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: { submittedAt: data.submitted_at ?? new Date().toISOString() } };
+}
+
+export async function withdrawParticipation({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "submit")) return denied("submit");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("withdraw_participation", { p_iteration_id: iterationId });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
@@ -214,12 +263,11 @@ export async function setCaseResultStatus({ caseResultId, status }: { caseResult
 }
 
 //Saving or including the testcase for the given iterations 
-export async function setCaseResultInclusion({caseResultId, included }: { caseResultId: string; included: boolean }): Promise<actionResult> {
+// Every org's row of a case goes in one call. Admin only; excluding a row that already has
+// results is rejected by set_case_inclusion (0022) with a message fit to show the user.
+export async function setCaseResultInclusion({ caseResultIds, included }: { caseResultIds: string[]; included: boolean }): Promise<actionResult> {
     const supabase = await createClient();
-    const { error } = await supabase
-        .from("test_case_results")
-        .update({ included_in_run: included })
-        .eq("id", caseResultId);
+    const { error } = await supabase.rpc("set_case_inclusion", { p_case_result_ids: caseResultIds, p_included: included });
     if (error) return fail(error);
     return { ok: true, data: undefined };
 }

@@ -11,11 +11,12 @@ import {
 	BreadcrumbPage,
 	BreadcrumbSeparator,
 } from "./ui/breadcrumb";
-import type { TestingSuites } from "@/lib/supabase/Init";
+import type { SidebarSuite } from "@/lib/supabase/Init";
 
 const SEGMENT_LABELS: Record<string, string> = {
 	dashboard: "Dashboard",
-	masterPlan: "Master Plan",
+	masterPlan: "Testing Master Plan",
+	exports: "Exports",
 	testingsuite: "Testing Suites",
 };
 
@@ -25,13 +26,13 @@ const TAB_LABELS: Record<string, string> = {
 	"test-results": "Test Results",
 };
 
-function labelForSegment(segment: string, testingSuites: TestingSuites) {
+function labelForSegment(segment: string, testingSuites: SidebarSuite[]) {
 	const suite = testingSuites.find((testingSuite) => testingSuite.slug === segment);
 	if (suite) return suite.title;
 	return SEGMENT_LABELS[segment] ?? decodeURIComponent(segment);
 }
 
-export function SiteHeader({ testingSuites }: { testingSuites: TestingSuites }) {
+export function SiteHeader({ testingSuites }: { testingSuites: SidebarSuite[] }) {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const segments = pathname.split("/").filter(Boolean);

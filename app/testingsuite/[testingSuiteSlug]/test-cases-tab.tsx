@@ -1,5 +1,5 @@
 
-import { CollapsibleContent, CollapsibleTrigger, Collapsible } from "@/components/ui/collapsible";
+import { CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
 import { getAllTestCasesBySuiteId, getSectionBySlug, getTestSectionsByTestSuiteId } from "@/lib/supabase/test-sections";
 import { getActiveIteration, getIterationChanges, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration } from "@/lib/supabase/test-iterations";
@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem } from "@/components/ui/combobox";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ChevronRight, FolderOpen, IterationCw, Plus, Upload } from "lucide-react";
+import { ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { Board } from "@/components/board/board";
@@ -18,8 +19,6 @@ import SectionDialog from "./components/section-dialog";
 import SectionRow from "./components/section-row";
 import SectionList from "./components/section-list";
 import StartIterationDialog from "./components/start-iteration-dialog";
-import IterationRow from "./components/iteration-row";
-import IterationSectionRow from "./components/iteration-section-row";
 import { TestIterationComponent } from "./test-iteration-component";
 import { TestIterationSection } from "./test-iteration-section";
 import { getSuiteTestCaseIssues } from "@/lib/supabase/test-suite";
@@ -29,6 +28,7 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { IterationSelectionProvider } from "./components/iteration-selection-context";
+import TreeCollapsible from "./components/tree-collapsible";
 
 export default async function TestCasesTab({
 	testSuiteId,
@@ -47,7 +47,7 @@ export default async function TestCasesTab({
 
 
 	// Authoring is locked once a suite is signed off or archived (the DB enforces it too).
-	const editable = suiteStatus !== "signed_off" && suiteStatus !== "archived";
+	const editable = suiteStatus !== "sign_off_issued" && suiteStatus !== "signed_off" && suiteStatus !== "archived";
 	// Per-case completeness: drives the Ready/Not ready markers and which cases can be picked for an iteration.
 	const showReadiness = editable;
 
@@ -62,13 +62,23 @@ export default async function TestCasesTab({
 	const iterationSlug = sectionPath?.[0];
 	const matchedIteration = iterations.find(i => i.slug === iterationSlug);
 	const isIterationView = !!matchedIteration;
+	// The round page's Add Section/Add Participant buttons: only on a planned or running round
+	// (Add Section is planned-only; IterationTestCaseList hides it once the round starts).
+	const matchedIterationOpen = editable && (matchedIteration?.status === "not_started" || matchedIteration?.status === "in_progress");
+	const matchedSectionsNotIncluded = matchedIteration && matchedIterationOpen
+		? getSectionsNotIncluded(sectionsByIteration.get(matchedIteration.id) ?? [], suite.sections, new Set(readinessIssues.map((issue) => issue.testCaseId)))
+		: undefined;
 	const sectionSlug = isIterationView ? sectionPath?.[1] : sectionPath?.[0];
 
 	// While a round runs, edits only reach testers through the vendor's Sync.
-	const iterationChanges = activeIteration && editable ? await getIterationChanges(activeIteration.id) : [];
+	// Once it has started its case set is locked (0023), so only content changes can be synced.
+	const allIterationChanges = activeIteration && editable ? await getIterationChanges(activeIteration.id) : [];
+	const iterationChanges = activeIteration?.status === "not_started"
+		? allIterationChanges
+		: allIterationChanges.filter((change) => change.change === "changed");
 	// Mirrors start_iteration's guard: only one round can run at a time, and
 	// Draft/Ready suites start theirs from the Test Results tab's own CTA.
-	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "signed_off");
+	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "sign_off_issued" || suiteStatus === "signed_off");
 	const authoring: authoringContext = {
 		sync: activeIteration ? { iteration: { id: activeIteration.id, name: activeIteration.name }, changes: iterationChanges } : null,
 		suiteId: testSuiteId,
@@ -141,11 +151,10 @@ export default async function TestCasesTab({
 														</div>
 													</div>
 												) : (
-													buildIterationTree(iterations, sectionsByIteration, suite.sections, readinessIssues).map((item, index) => (
+													buildIterationTree(iterations, sectionsByIteration).map((item, index) => (
 														<IterationTree
 															key={index}
 															item={item}
-															testSuiteId={testSuiteId}
 															testSuiteSlug={testSuiteSlug}
 															activeIterationSlug={iterationSlug}
 															activeSectionSlug={sectionSlug}
@@ -187,7 +196,7 @@ export default async function TestCasesTab({
 				sectionSlug ? (
 					<TestIterationSection suiteName={suiteName} iteration={matchedIteration} sectionSlug={sectionSlug} />
 				) : (
-					<TestIterationComponent testSuiteId={testSuiteId} suiteName={suiteName} iteration={matchedIteration} />
+					<TestIterationComponent testSuiteId={testSuiteId} testSuiteSlug={testSuiteSlug} suiteName={suiteName} iteration={matchedIteration} sectionsNotIncluded={matchedSectionsNotIncluded} />
 				)
 			) : (
 				<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} suiteStatus={suiteStatus} />
@@ -201,60 +210,73 @@ type IterationTreeNode = {
 	id: string;
 	slug: string;
 	itemtype: "iteration" | "iteration-section";
-	// Only set on the "iteration" node itself — its section children aren't
-	// independently editable/deletable entities, so they don't need it.
-	iteration?: testIteration;
 	includedCount?: number;
+	totalCount?: number;
+	// Only set on "iteration" nodes: the round's status badge.
+	statusLabel?: string;
 	// Only set on "iteration-section" nodes — what a "Remove section" action
 	// needs to pull this section's cases back out of the round.
 	resultIds?: string[];
 	iterationId?: string;
-	sectionsNotIncluded?: { id: string; name: string; slug: string; testCasesLength: number; testCaseIds: string[] }[];
+	// Running/completed/stopped rounds: no Edit/Delete/Remove section menu.
+	locked?: boolean;
+	// Only set on "iteration" nodes: completed/stopped rounds start collapsed.
+	collapsed?: boolean;
 };
 
 type IterationTreeItem = IterationTreeNode | [IterationTreeNode, ...IterationTreeNode[]];
 
+// Suite sections a round doesn't have yet, with only their complete cases as
+// addable — what SectionDialog lists when it's opened for an iteration.
+function getSectionsNotIncluded(
+	iterationSections: { slug: string }[],
+	suiteSections: { id: string; name: string; slug: string; testCases: { id: string }[] }[],
+	incompleteCaseIds: Set<string>
+) {
+	const includedSlugs = new Set(iterationSections.map((s) => s.slug));
+	return suiteSections
+		.filter((s) => !includedSlugs.has(s.slug))
+		.map((s) => ({
+			id: s.id,
+			name: s.name,
+			slug: s.slug,
+			testCasesLength: s.testCases.length,
+			testCaseIds: s.testCases.filter((tc) => !incompleteCaseIds.has(tc.id)).map((tc) => tc.id),
+		}));
+}
+
 function buildIterationTree(
 	iterations: testIteration[],
-	sectionsByIteration: Map<string, iterationSection[]>,
-	suiteSections: { id: string; name: string; slug: string; testCases: { id: string }[] }[],
-	readinessIssues: { testCaseId: string }[]
+	sectionsByIteration: Map<string, iterationSection[]>
 ): IterationTreeItem[] {
-	// Only complete cases are safe to sync into a round — same rule
-	// start_iteration/AddTestCasesControl already enforce.
-	const incompleteCaseIds = new Set(readinessIssues.map((issue) => issue.testCaseId));
-
+	// The running round first, then a planned one, then finished rounds newest first.
+	const statusRank = (status: testIteration["status"]) => status === "in_progress" ? 0 : status === "not_started" ? 1 : 2;
 	return [...iterations]
-	.sort((a, b) => b.iterationNumber - a.iterationNumber)
+	.sort((a, b) => statusRank(a.status) - statusRank(b.status) || b.startedAt.localeCompare(a.startedAt))
 	.map((iteration): IterationTreeItem => {
+		const isFinished = iteration.status === "completed" || iteration.status === "stopped";
+		// Only a planned round keeps its menus; a running one is locked too, but stays expanded.
+		const isLocked = iteration.status !== "not_started";
 		const sectionNodes: IterationTreeNode[] = (sectionsByIteration.get(iteration.id) ?? []).map((section) => ({
 			name: section.name,
 			id: `${iteration.id}:${section.slug}`,
 			slug: section.slug,
 			itemtype: "iteration-section",
 			includedCount: section.includedCount,
+			totalCount: section.totalCount,
 			resultIds: section.resultIds,
 			iterationId: iteration.id,
+			locked: isLocked,
 		}));
-
-		const includedSlugs = new Set(sectionNodes.map((s) => s.slug));
-		const sectionsNotIncluded = suiteSections
-			.filter((s) => !includedSlugs.has(s.slug))
-			.map((s) => ({
-				id: s.id,
-				name: s.name,
-				slug: s.slug,
-				testCasesLength: s.testCases.length,
-				testCaseIds: s.testCases.filter((tc) => !incompleteCaseIds.has(tc.id)).map((tc) => tc.id),
-			}));
 
 		const iterationNode: IterationTreeNode = {
 			name: iteration.name,
 			id: iteration.id,
 			slug: iteration.slug,
 			itemtype: "iteration",
-			iteration,
-			sectionsNotIncluded,
+			statusLabel: ROUND_STATUS_LABELS[iteration.status],
+			locked: isLocked,
+			collapsed: isFinished,
 		};
 			
 
@@ -296,20 +318,21 @@ function Tree({ item, testSuiteSlug, menu }: { item: TreeItem; testSuiteSlug: st
 
 	return (
 		<SidebarMenuItem>
-			<Collapsible
+			<TreeCollapsible
+				id={`${testSuiteSlug}:suite:${id}`}
 				className="w-full"
 				defaultOpen={itemtype === "test-suite"}
 			>
 				<div className="flex flex-row items-center">
 					<CollapsibleTrigger render={
-						<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible p-4">
+						<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible">
 							<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
 						</Button>
 					} />
 					<SectionLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} />
 				</div>
-				<CollapsibleContent>
-					<SidebarMenuSub	>
+				<CollapsibleContent className="w-full">
+					<SidebarMenuSub className="ml-2.5">
 						{
 							menu && items.every((child): child is TreeNode => !Array.isArray(child) && child.itemtype === "section") ? (
 								<SectionList
@@ -326,7 +349,7 @@ function Tree({ item, testSuiteSlug, menu }: { item: TreeItem; testSuiteSlug: st
 						}
 					</SidebarMenuSub>
 				</CollapsibleContent>
-			</Collapsible>
+			</TreeCollapsible>
 		</SidebarMenuItem>
 	)
 }
@@ -352,15 +375,14 @@ function sideBarSkeleton() {
 	)
 }
 
-function IterationTree({ item, testSuiteId, testSuiteSlug, iterationsSlug, activeIterationSlug, activeSectionSlug }: {
+function IterationTree({ item, testSuiteSlug, iterationsSlug, activeIterationSlug, activeSectionSlug }: {
 	item: IterationTreeItem;
-	testSuiteId: string;
 	testSuiteSlug: string;
 	iterationsSlug?: string;
 	activeIterationSlug?: string;
 	activeSectionSlug?: string;
 }) {
-	const [{ name, id, slug, itemtype, iteration, sectionsNotIncluded, includedCount, resultIds, iterationId }, ...items] = Array.isArray(item) ? item : [item]
+	const [{ name, id, slug, itemtype, includedCount, totalCount, statusLabel, collapsed }, ...items] = Array.isArray(item) ? item : [item]
 	// Path-based, nested under this same tab (sibling to the normal
 	// Testing Suite section view below) rather than the Test Results tab's
 	// `?tab=` scheme — see TestCasesTab's sectionPath handling.
@@ -375,50 +397,34 @@ function IterationTree({ item, testSuiteId, testSuiteSlug, iterationsSlug, activ
 	const active = itemtype === "iteration"
 		? slug === activeIterationSlug && !activeSectionSlug
 		: iterationsSlug === activeIterationSlug && slug === activeSectionSlug;
-	// Both "iteration" and "iteration-section" nodes get a hover-reveal menu
-	// (Edit/Delete iteration, Remove section) — leave room for it.
-	const resultLeafClassName = itemtype === "iteration" || itemtype === "iteration-section" ? "group-has-data-[sidebar=menu-action]/menu-item:pr-14" : undefined;
-
 	if (!items.length) {
-		const leaf = <ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} href={href} active={active} className={resultLeafClassName} testCaseCount={includedCount} />;
-		if (itemtype === "iteration" && iteration) {
-			return <IterationRow iteration={iteration} suiteId={testSuiteId} testSuiteSlug={testSuiteSlug} sectionsNotIncluded={sectionsNotIncluded}>{leaf}</IterationRow>;
-		}
-		if (itemtype === "iteration-section" && iterationId && resultIds) {
-			return <IterationSectionRow iterationId={iterationId} sectionName={name} resultIds={resultIds}>{leaf}</IterationSectionRow>;
-		}
-		return leaf;
+		// No row actions here for now — IterationSectionRow (Remove section) is
+		// kept for later; resultIds/iterationId/locked on the node still feed it.
+		return <SidebarMenuItem><ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} href={href} active={active} testCaseCount={includedCount} totalCount={totalCount} statusLabel={statusLabel} /></SidebarMenuItem>;
 	}
 
-	const headerContent = (
-		<>
+	const header = (
+		<div className="flex flex-row items-center">
 			<CollapsibleTrigger render={
-				<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible p-4">
+				<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible">
 					<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
 				</Button>
 			} />
-			<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} href={href} active={active} className={resultLeafClassName} />
-		</>
+			<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} href={href} active={active} statusLabel={statusLabel} />
+		</div>
 	);
-	// IterationRow only wraps this header line, never the CollapsibleContent
-	// below — that's what keeps hovering a child section from bubbling up and
-	// revealing the parent iteration's own Edit/Delete menu.
-	const header = itemtype === "iteration" && iteration
-		? <IterationRow iteration={iteration} suiteId={testSuiteId} testSuiteSlug={testSuiteSlug} sectionsNotIncluded={sectionsNotIncluded}>{headerContent}</IterationRow>
-		: <div className="flex flex-row items-center">{headerContent}</div>;
 
 	return (
 		<SidebarMenuItem>
-			<Collapsible className="w-full" defaultOpen>
+			<TreeCollapsible id={`${testSuiteSlug}:iteration:${id}`} className="w-full" defaultOpen={!collapsed}>
 				{header}
 				<CollapsibleContent>
-					<SidebarMenuSub>
+					<SidebarMenuSub className="ml-2.5">
 						{
 							items.map((child, index) => (
 								<IterationTree
 									key={index}
 									item={child}
-									testSuiteId={testSuiteId}
 									testSuiteSlug={testSuiteSlug}
 									iterationsSlug={slug}
 									activeIterationSlug={activeIterationSlug}
@@ -428,7 +434,7 @@ function IterationTree({ item, testSuiteId, testSuiteSlug, iterationsSlug, activ
 						}
 					</SidebarMenuSub>
 				</CollapsibleContent>
-			</Collapsible>
+			</TreeCollapsible>
 		</SidebarMenuItem>
 	);
 }

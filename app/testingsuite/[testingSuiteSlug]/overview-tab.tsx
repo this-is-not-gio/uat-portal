@@ -360,11 +360,13 @@ function SignOffEntry({ signOff }: { signOff: suiteOverview["signOffs"][number] 
 	return (
 		<div className="flex flex-col gap-1">
 			<div className="flex flex-row items-center gap-2">
-				<p className="font-semibold">Signed off by {signOff.signedOffBy ?? "Unknown"}</p>
-				{signOff.revokedAt && <Badge variant="outline" className="text-xs">Revoked</Badge>}
+				<p className="font-semibold">Issued by {signOff.signedOffBy ?? "Unknown"}</p>
+				{signOff.revokedAt ? <Badge variant="outline" className="text-xs">Revoked</Badge>
+					: !signOff.acknowledgedAt && <Badge variant="outline" className="text-xs">Awaiting acknowledgement</Badge>}
 			</div>
 			<p className="text-xs text-muted-foreground font-mono">
 				{formatTimestamp(signOff.signedOffAt)} · based on {signOff.iterationName}
+				{signOff.acknowledgedAt && ` · acknowledged ${formatTimestamp(signOff.acknowledgedAt)}${signOff.acknowledgedBy ? ` by ${signOff.acknowledgedBy}` : ""}`}
 				{signOff.revokedAt && ` · reopened ${formatTimestamp(signOff.revokedAt)}${signOff.revokedBy ? ` by ${signOff.revokedBy}` : ""}`}
 			</p>
 			<CountsLine counts={signOff.exceptions} />
