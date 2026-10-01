@@ -83,13 +83,13 @@ export default function SubmitResultsDialog({
 		<Dialog open={open} onOpenChange={(next) => { setOpen(next); setError(null); }}>
 			<DialogTrigger render={trigger} />
 			<DialogContent className="sm:max-w-md">
-				<DialogHeader className="p-2">
+				<DialogHeader className="px-2 pt-2">
 					<DialogTitle>Submit results for {iteration.name}?</DialogTitle>
 					<DialogDescription className="text-xs">
 						This sends {organizationName}&apos;s results to the developers. Your team can&apos;t change them after submitting
 					</DialogDescription>
 				</DialogHeader>
-				<div className="p-2">
+				<div className="px-2">
 					<div className="flex flex-row justify-between items-end">
 						<div className="">
 							<p className="text-xs text-muted-foreground">Testing Iteration:</p>

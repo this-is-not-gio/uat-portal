@@ -66,7 +66,8 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
         const { data, error } = await supabase
             .from("test_case_results")
             .select("iteration_id, status")
-            .in("iteration_id", iterations.map((i) => i.id));
+            .in("iteration_id", iterations.map((i) => i.id))
+            .eq("included_in_run", true);
         if (error) throw error;
         for (const row of data) {
             statusesByIteration.set(row.iteration_id, [...(statusesByIteration.get(row.iteration_id) ?? []), row.status]);
@@ -146,7 +147,7 @@ export async function getParticipationProgress(iterationId: string): Promise<par
     const supabase = await createClient();
     const [participants, { data, error }] = await Promise.all([
         getIterationParticipants(iterationId),
-        supabase.from("test_case_results").select("organization_id, status").eq("iteration_id", iterationId),
+        supabase.from("test_case_results").select("organization_id, status").eq("iteration_id", iterationId).eq("included_in_run", true),
     ]);
     if (error) throw error;
     const statusesByOrg = new Map<string, testCaseStatus[]>();
@@ -196,7 +197,7 @@ export async function getSignOffContext(suiteId: string, orgId?: string): Promis
     let currentIteration: currentIterationProgress | null = null;
     if (current) {
         const [{ data, error }, currentParticipants] = await Promise.all([
-            supabase.from("test_case_results").select("id, organization_id, test_case_id, status").eq("iteration_id", current.id),
+            supabase.from("test_case_results").select("id, organization_id, test_case_id, status").eq("iteration_id", current.id).eq("included_in_run", true),
             getIterationParticipants(current.id),
         ]);
         if (error) throw error;
@@ -232,7 +233,7 @@ export async function getSignOffContext(suiteId: string, orgId?: string): Promis
     let unsubmittedOrgs: organization[] = [];
     if (latestCompleted) {
         const [{ data, error }, participants] = await Promise.all([
-            supabase.from("test_case_results").select("status").eq("iteration_id", latestCompleted.id),
+            supabase.from("test_case_results").select("status").eq("iteration_id", latestCompleted.id).eq("included_in_run", true),
             getIterationParticipants(latestCompleted.id),
         ]);
         if (error) throw error;

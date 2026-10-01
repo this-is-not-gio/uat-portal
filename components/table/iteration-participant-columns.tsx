@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { CheckCircle, CircleDashed, MoreHorizontal, TestTubeDiagonal, Users } from "lucide-react"
+import { CheckCircle, CircleDashed, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import ConfirmDialog from "@/app/testingsuite/[testingSuiteSlug]/components/confirm-dialog"
@@ -62,7 +62,7 @@ export const iterationParticipantColumns = columnHelper.columns([
 					<div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
 						<div className="h-full bg-green-600" style={{ width: `${percent}%` }} />
 					</div>
-					
+
 					<p className="text-xs text-muted-foreground"><span className="text-xs font-mono text-muted-foreground">{tested}/{total}</span> Tested Test Cases</p>
 				</div>
 			)
@@ -71,29 +71,35 @@ export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.display({
 		id: "Submitted",
 		cell: (info) => {
-			const { submittedAt, tested } = info.row.original
+			const { submittedAt, tested, id, name, iterationId } = info.row.original
 			const state = PARTICIPATION_STATES[submittedAt ? "submitted" : tested > 0 ? "testing" : "notTesting"]
 			const Icon = state.icon
 
+
 			return (
-				<div className="w-full flex flex-row items-center gap-1 justify-end">
-					<div className={`w-fit flex flex-row items-center gap-1 rounded-md py-1 px-1.5 ${state.className}`}>
-						<Icon size={15} />
-						<p className="text-xs font-semibold">{state.label}</p>
+				<div className="flex flex-row justify-end gap-2">
+					<div className="w-full flex flex-row items-center gap-1 justify-end">
+						<div className={`w-fit flex flex-row items-center gap-1 rounded-md py-1 px-1.5 ${state.className}`}>
+							<Icon size={15} />
+							<p className="text-xs font-semibold">{state.label}</p>
+						</div>
 					</div>
+					{
+						iterationId ? <ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} /> : null
+					}
 				</div>
 			)
 		},
 
 		//{submittedAt ? format(new Date(submittedAt), "MMM dd yyyy") : "Not submitted"}
 	}),
-	columnHelper.display({
-		id: "action",
-		cell: (info) => {
-			const { id, name, iterationId } = info.row.original
-			return iterationId ? <ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} /> : null
-		},
-	}),
+	// columnHelper.display({
+	// 	id: "action",
+	// 	cell: (info) => {
+	// 		const { id, name, iterationId } = info.row.original
+	// 		return
+	// 	},
+	// }),
 ])
 
 // The dialog sits outside the menu so it stays open after the menu closes.
@@ -101,16 +107,15 @@ function ParticipantActions({ iterationId, organizationId, organizationName }: {
 	const [withdrawOpen, setWithdrawOpen] = useState(false)
 
 	return (
-		<>
+		<div>
 			<DropdownMenu>
-				<DropdownMenuTrigger render={<Button variant="ghost" size="sm" aria-label={`Actions for ${organizationName}`}>
-					<MoreHorizontal className="h-4 w-4" />
-				</Button>}/>
+				<DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${organizationName}`}>
+					<MoreVertical className="h-4 w-4" />
+				</Button>} />
 				<DropdownMenuContent align="end" className="w-56">
 					<DropdownMenuGroup>
-						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuSeparator />
 						<DropdownMenuItem variant="destructive" onClick={() => setWithdrawOpen(true)}>
+							<Trash2 size={14} />
 							Withdraw organization
 						</DropdownMenuItem>
 					</DropdownMenuGroup>
@@ -124,6 +129,6 @@ function ParticipantActions({ iterationId, organizationId, organizationName }: {
 				confirmLabel="Withdraw organization"
 				onConfirm={() => removeParticipant({ iterationId, organizationId })}
 			/>
-		</>
+		</div>
 	)
 }

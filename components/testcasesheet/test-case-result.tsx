@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { testCaseStatus } from "@/lib/supabase/test-cases";
 import { cn } from "@/lib/utils";
-import { useTransition } from "react";
+import type { TransitionStartFunction } from "react";
 import { resetCaseResultToAuto, setCaseResultStatus, type caseResultState } from "@/lib/supabase/iteration-actions";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
@@ -24,15 +24,19 @@ export default function TestCaseResult({
 	current,
 	overridden,
 	onChange,
-	selected_test_case_status_classnames
+	selected_test_case_status_classnames,
+	isPending,
+	startTransition,
 }: {
 	caseResultId: string,
 	current: testCaseStatus,
 	overridden: boolean,
 	onChange: (state: caseResultState) => void,
-	selected_test_case_status_classnames: Record<overrideOption, { className: string; Icon: LucideIcon }>
+	selected_test_case_status_classnames: Record<overrideOption, { className: string; Icon: LucideIcon }>,
+	// Shared by the whole sheet: any result save in flight disables every result button.
+	isPending: boolean,
+	startTransition: TransitionStartFunction,
 }) {
-	const [isPending, startTransition] = useTransition();
 
 	const onSubmit = (newStatus: overrideOption) => {
 		startTransition(async () => {

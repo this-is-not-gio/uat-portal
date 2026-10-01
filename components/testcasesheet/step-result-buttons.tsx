@@ -2,7 +2,7 @@
 
 import { setStepResultStatus, type caseResultState } from "@/lib/supabase/iteration-actions";
 import { testStepStatus } from "@/lib/supabase/test-cases";
-import { useTransition } from "react";
+import type { TransitionStartFunction } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,8 @@ export default function StepResultButton({
 	currentStatus,
 	onStatusChange,
 	statusClassName,
-
+	isPending,
+	startTransition,
 	options
 }: {
 	stepResultId: string;
@@ -22,7 +23,9 @@ export default function StepResultButton({
 	currentStatus: testStepStatus;
 	// Also hands back the case result, which the DB re-derives from its steps.
 	onStatusChange: (newStatus: testStepStatus, caseState: caseResultState) => void;
-
+	// Shared by the whole sheet: any result save in flight disables every result button.
+	isPending: boolean;
+	startTransition: TransitionStartFunction;
 
 	statusClassName?: {
 		[key in testStepStatus]: string;
@@ -34,8 +37,6 @@ export default function StepResultButton({
 		Icon: LucideIcon;
 	}[]
 }) {
-	const [isPending, startTransition] = useTransition();
-
 	const onSubmit = (newStatus: testStepStatus) => {
 		startTransition(async () => {
 			const result = await setStepResultStatus({ caseResultId, stepResultId, status: newStatus });

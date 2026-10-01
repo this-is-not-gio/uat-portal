@@ -1,11 +1,12 @@
-import { CalendarChevronsRight, ClipboardList, FolderClock, Lock } from "lucide-react";
+import { ClipboardList, FolderClock, Lock } from "lucide-react";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getIterationTestSections, getIterationParticipants } from "@/lib/supabase/test-iterations";
 import { getTesterCountsByOrg } from "@/lib/supabase/organizations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
-import { Button } from "@/components/ui/button";
 import { IterationTestCaseList } from "./components/iteration-test-case-list";
+import IterationSectionHeaderMenu from "./components/iteration-section-header-menu";
+import IterationSectionCaseCount from "./components/iteration-section-case-count";
 
 // One section's view within a test iteration — the iteration-scoped
 // counterpart of SectionContent/TestCasesComponents. Scaffolded to match
@@ -24,6 +25,9 @@ export async function TestIterationSection({
 		: [[], [], {}];
 	const section = sections.find((s) => s.slug === sectionSlug);
 	const testCases = section?.testCases ?? [];
+	// Rows are one per case per org, so count distinct cases (as the list and sidebar do).
+	const allCaseIds = new Set(testCases.map((tc) => tc.testCaseId ?? tc.id));
+	const includedCaseIds = new Set(testCases.filter((tc) => tc.includedInRun).map((tc) => tc.testCaseId ?? tc.id));
 
 	return (
 		<ScrollArea className="flex-1 shrink-0 flex flex-col px-2">
@@ -59,17 +63,20 @@ export async function TestIterationSection({
 							<p className="text-xs text-muted-foreground font-mono">{iteration?.name}</p>
 						</div>
 					</div>
-					{/* Which cases a round runs is fixed once it starts (set_case_inclusion 0022, apply_iteration_sync 0023). */}
-					{iteration && iteration.status !== "not_started" && (
-						<div className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
-							<Lock size={14} />
-							<p>Test cases are locked for this round</p>
-						</div>
-					)}
-					{/* <Button size="lg" className="text-xs">
-						<CalendarChevronsRight size={16} className="mr-1" />
-						Start Testing Iteration
-					</Button> */}
+					<div className="flex flex-row items-center gap-4">
+						{iteration && (
+							<IterationSectionCaseCount selectionKey={`${iteration.id}:${sectionSlug}`} initialIncluded={includedCaseIds.size} total={allCaseIds.size} />
+						)}
+						{iteration && iteration.status !== "not_started" ? (
+							<div className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
+								<Lock size={14} />
+								<p>Test cases are locked for this round</p>
+							</div>
+						) : iteration && section ? (
+							<IterationSectionHeaderMenu iteration={iteration} sectionName={section.name} resultIds={testCases.map((tc) => tc.id)} />
+						) : null}
+					</div>
+
 				</div>
 				{testCases.length === 0 ? (
 					<div className="flex-1 flex items-center justify-center">
@@ -86,7 +93,7 @@ export async function TestIterationSection({
 						</div>
 					</div>
 				) : (
-					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={iteration?.status === "not_started"} sectionSlug={sectionSlug} participants={participants} testerCounts={testerCounts} />
+					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} testerCounts={testerCounts} />
 				)}
 			</div>
 		</ScrollArea>

@@ -83,19 +83,18 @@ export async function acknowledgeSignOff({ suiteId }: { suiteId: string }): Prom
 
 // Iterations -----------------------------------------------------------------
 
-// The round's scope: only the picked (complete) test cases are copied in, once per
-// participating org and filtered by each case's audience. orgIds omitted = the client org(s).
-export async function startIteration({ suiteId, label, plannedEndDate, testCaseIds, orgIds }: { suiteId: string; label?: string; plannedEndDate?: string; testCaseIds: string[]; orgIds?: string[] }): Promise<actionResult<{ iterationNumber: number }>> {
+// Plans an empty round (0027): participants and sections are added on the round's page,
+// and begin_iteration checks there's something to test. A blank name falls back to
+// Untitled_Iteration_{n} in the DB.
+export async function startIteration({ suiteId, name, plannedEndDate }: { suiteId: string; name?: string; plannedEndDate?: string }): Promise<actionResult<{ iterationNumber: number }>> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("start_iteration", {
         p_suite_id: suiteId,
         p_created_by: user.id,
-        p_label: label || undefined,
+        p_name: name || undefined,
         p_planned_end_date: plannedEndDate || undefined,
-        p_test_case_ids: testCaseIds,
-        p_org_ids: orgIds,
     });
     if (error) return fail(error);
     refresh();
@@ -124,7 +123,8 @@ export async function removeParticipant({ iterationId, organizationId }: { itera
     return { ok: true, data: undefined };
 }
 
-// What the org pickers list: every org, plus (for a running round) which already take part.
+// What the org pickers list: every client/external org (the vendor doesn't take part in
+// rounds), plus (for a running round) which already take part.
 export async function getParticipantOptions({ iterationId }: { iterationId?: string } = {}): Promise<actionResult<{ organizations: organization[]; participantIds: string[]; testerCounts: Record<string, number> }>> {
     try {
         const [organizations, participants, testerCounts] = await Promise.all([
@@ -132,7 +132,7 @@ export async function getParticipantOptions({ iterationId }: { iterationId?: str
             iterationId ? getIterationParticipants(iterationId) : Promise.resolve([]),
             getTesterCountsByOrg(),
         ]);
-        return { ok: true, data: { organizations, participantIds: participants.map((p) => p.organization.id), testerCounts } };
+        return { ok: true, data: { organizations: organizations.filter((org) => org.type !== "vendor"), participantIds: participants.map((p) => p.organization.id), testerCounts } };
     } catch (error) {
         return fail(error as { message: string });
     }
@@ -180,6 +180,18 @@ export async function cancelIteration({ iterationId }: { iterationId: string }):
     return { ok: true, data: undefined };
 }
 
+// in_progress/stopped -> not_started (0029): erases every recorded result, remark and org
+// submission but keeps the round's participants and cases, so it can be started again.
+export async function resetIteration({ iterationId }: { iterationId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("reset_iteration", { p_iteration_id: iterationId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
 // Participation (External orgs) ----------------------------------------------
 
 // Marks the caller's org as done with this round. After this the DB rejects that org's
@@ -205,15 +217,15 @@ export async function withdrawParticipation({ iterationId }: { iterationId: stri
     return { ok: true, data: undefined };
 }
 
-// Edits an iteration's label/planned end date — its name and slug (what the
-// URL and numbering depend on) are never touched by this.
-export async function updateIterationDetails({ iterationId, label, plannedEndDate }: { iterationId: string; label?: string; plannedEndDate?: string }): Promise<actionResult> {
+// Renames an iteration and sets its planned end date (0028). The slug and number (what the
+// URL depends on) never change; a blank name falls back to Untitled_Iteration_{n}.
+export async function updateIterationDetails({ iterationId, name, plannedEndDate }: { iterationId: string; name?: string; plannedEndDate?: string }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
     const { error } = await supabase.rpc("update_iteration_details", {
         p_iteration_id: iterationId,
-        p_label: label || undefined,
+        p_name: name || undefined,
         p_planned_end_date: plannedEndDate || undefined,
     });
     if (error) return fail(error);

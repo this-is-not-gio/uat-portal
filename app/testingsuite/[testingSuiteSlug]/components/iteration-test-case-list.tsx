@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardIcon, Plus, UserGroup } from "lucide-react";
+import { ClipboardIcon, ClipboardList, Plus, UserGroup, UsersRound } from "lucide-react";
 import { type filterToken } from "./search-filter-combox";
 import type { testCase } from "@/lib/supabase/test-cases";
 import type { iterationParticipant, testIteration, testResultRow } from "@/lib/supabase/test-iterations";
@@ -13,6 +13,7 @@ import { setCaseResultInclusion } from "@/lib/supabase/iteration-actions";
 import { useIterationSelection } from "./iteration-selection-context";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import SectionDialog, { type notIncludedSection } from "./section-dialog";
 import AddParticipantDialog from "./add-participant-dialog";
 
@@ -48,6 +49,7 @@ export function IterationTestCaseList({
 	testCases,
 	iteration,
 	selectable = false,
+	locked = false,
 	sectionSlug,
 	roundActions,
 	participants = [],
@@ -58,6 +60,8 @@ export function IterationTestCaseList({
 	// Checkbox column only makes sense while picking which cases to run in a
 	// section, not in the iteration-wide overview.
 	selectable?: boolean;
+	// Checkboxes still show which cases run, but can't change (a started round's case set is locked).
+	locked?: boolean;
 	sectionSlug?: string;
 	// Set only while the round is planned/running: shows Add Section / Add Participant.
 	roundActions?: { suiteId: string; testSuiteSlug: string; sectionsNotIncluded: notIncludedSection[] };
@@ -94,8 +98,12 @@ export function IterationTestCaseList({
 		return testCases.filter((testCase) => filters.every((filter) => matchesFilter(testCase, filter)));
 	}, [testCases, filters]);
 
-	const caseRows = useMemo(() => groupByCase(visibleTestCases, orgNames), [visibleTestCases, orgNames]);
-	const includedCaseCount = caseRows.filter((row) => row.orgResults.some((result) => selectedIds.has(result.resultId))).length;
+	// The round-wide "All" list shows only what will run; a section view keeps every case so
+	// its checkboxes can show (and, while planned, change) what's left out.
+	const caseRows = useMemo(
+		() => groupByCase(sectionSlug ? visibleTestCases : visibleTestCases.filter((tc) => tc.includedInRun), orgNames),
+		[visibleTestCases, orgNames, sectionSlug]
+	);
 
 	const visibleIds = useMemo(() => visibleTestCases.map((tc) => tc.id), [visibleTestCases]);
 	const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
@@ -104,7 +112,7 @@ export function IterationTestCaseList({
 	// Optimistic, then one set_case_inclusion call. It's all-or-nothing (e.g. unticking a case
 	// that already has results rejects the whole batch), so a failure restores the previous ticks.
 	function applyInclusion(ids: string[], checked: boolean) {
-		if (ids.length === 0) return;
+		if (locked || ids.length === 0) return;
 		const previous = selectedIds;
 		setInclusionError(null);
 		setSelectedIds((current) => {
@@ -132,13 +140,13 @@ export function IterationTestCaseList({
 	}
 
 	const columns = useMemo(
-		() => (selectable ? createIterationTestCaseColumns({ selectedIds, onToggle: handleToggle, allSelected, someSelected, onToggleAll: handleToggleAll }) : createIterationTestCaseColumns({})),
+		() => (selectable ? createIterationTestCaseColumns({ selectedIds, onToggle: handleToggle, allSelected, someSelected, onToggleAll: handleToggleAll, disabled: locked }) : createIterationTestCaseColumns({})),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[selectable, selectedIds, allSelected, someSelected]
+		[selectable, locked, selectedIds, allSelected, someSelected]
 	);
 
 	return (
-		<div className="flex flex-col gap-3">
+		<div className="flex-1 flex flex-col gap-3">
 			{/* <SearchFilterCombobox filters={filters} onFiltersChange={setFilters} roleAssigneeValues={roleAssigneeValues} disabled /> */}
 			{/* <div className="flex flex-row items-center justify-between gap-2">
 				<p className="text-xs font-medium text-muted-foreground">Included Test Cases</p>
@@ -164,9 +172,9 @@ export function IterationTestCaseList({
 					{tab === "test-cases" ? (
 						<div className="flex flex-row items-center justify-between gap-2">
 							<p className="text-xs text-muted-foreground whitespace-nowrap">
-								<span className="font-medium font-mono">{includedCaseCount}</span> out of <span className="font-medium font-mono">{caseRows.length}</span> test cases included in this iteration
+								<span className="font-medium font-mono">{caseRows.length}</span> test {caseRows.length === 1 ? "case" : "cases"} in this iteration
 							</p>
-							{canAddSection && (
+							{canAddSection && caseRows.length > 0 && (
 								<Button onClick={() => setAddSectionOpen(true)}>
 									<Plus className="h-3.5 w-3.5" />
 									<p className="text-xs">Add Section</p>
@@ -178,7 +186,7 @@ export function IterationTestCaseList({
 							<p className="text-xs text-muted-foreground whitespace-nowrap">
 								<span className="font-medium font-mono">{participants.length}</span> {participants.length === 1 ? "organization" : "organizations"} participating 
 							</p>
-							{roundActions && (
+							{roundActions && participants.length > 0 && (
 								<Button onClick={() => setAddParticipantOpen(true)}>
 									<Plus className="h-3.5 w-3.5" />
 									<p className="text-xs">Add Participant</p>
@@ -190,14 +198,53 @@ export function IterationTestCaseList({
 			{inclusionError && (
 				<p role="alert" className="text-xs text-destructive bg-red-50 border border-red-600/30 rounded-md px-3 py-2">{inclusionError}</p>
 			)}
-			{sectionSlug || tab === "test-cases" ? (
+			{/*  */}
+			{ !sectionSlug && tab === "test-cases" && caseRows.length === 0 ? (
+				// Rows are copied per participant, so a section can only be added once an org takes part.
+				<IterationEmptyState
+					icon={<ClipboardList size={45} className="text-muted-foreground" />}
+					title="No sections yet"
+					description={participants.length === 0
+						? "Add a participant first, then add the sections this round will test."
+						: `Add the sections ${iteration?.name ?? "this iteration"} will test.`}
+					action={canAddSection && (participants.length === 0 ? (
+						// A disabled button gets no pointer events, so the span carries the tooltip.
+						<Tooltip>
+							<TooltipTrigger render={<span className="inline-flex" />}>
+								<Button disabled>
+									<Plus className="h-3.5 w-3.5" />
+									<p className="text-xs">Add Section</p>
+								</Button>
+							</TooltipTrigger>
+							<TooltipContent>Add a participant organization first</TooltipContent>
+						</Tooltip>
+					) : (
+						<Button onClick={() => setAddSectionOpen(true)}>
+							<Plus className="h-3.5 w-3.5" />
+							<p className="text-xs">Add Section</p>
+						</Button>
+					))}
+				/>
+			) : !sectionSlug && tab !== "test-cases" && participants.length === 0 ? (
+				<IterationEmptyState
+					icon={<UsersRound size={45} className="text-muted-foreground" />}
+					title="No participants yet"
+					description="Add the organizations that will record results in this round."
+					action={roundActions && (
+						<Button onClick={() => setAddParticipantOpen(true)}>
+							<Plus className="h-3.5 w-3.5" />
+							<p className="text-xs">Add Participant</p>
+						</Button>
+					)}
+				/>
+			) : sectionSlug || tab === "test-cases" ? (
 				<DataTable
 					columns={columns}
 					data={caseRows}
 					renderRowDetail={(row) => <TestCaseSheet testCase={row} onChangeTestCase={() => {}} />}
 				/>
 			) : (
-				<IterationParticipantsTable participants={participants} testCases={testCases} testerCounts={testerCounts} iterationId={roundActions && iteration ? iteration.id : undefined} />
+				<IterationParticipantsTable participants={participants} testCases={testCases} testerCounts={testerCounts} iterationId={roundActions ? iteration?.id : undefined} />
 			)}
 			{roundActions && iteration && (
 				<>
@@ -212,6 +259,24 @@ export function IterationTestCaseList({
 					<AddParticipantDialog iteration={iteration} open={addParticipantOpen} onOpenChange={setAddParticipantOpen} />
 				</>
 			)}
+		</div>
+	);
+}
+
+// Matches the "No test cases yet" empty state used across the suite page.
+function IterationEmptyState({ icon, title, description, action }: { icon: React.ReactNode; title: string; description: string; action?: React.ReactNode }) {
+	return (
+		<div className="flex-1 flex items-center justify-center h-full ">
+			<div className="flex flex-col items-center justify-center text-center gap-5 py-12">
+				<div className="justify-center bg-muted/50 rounded-xl size-20 flex flex-col items-center gap-2">
+					{icon}
+				</div>
+				<div className="flex flex-col items-center justify-center gap-1">
+					<p className="font-semibold text-muted-foreground text-lg">{title}</p>
+					<p className="text-xs text-muted-foreground">{description}</p>
+				</div>
+				{action}
+			</div>
 		</div>
 	);
 }

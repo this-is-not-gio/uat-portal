@@ -28,12 +28,17 @@ function TestCaseTitleCell({
 	selected,
 	indeterminate,
 	onToggle,
+	disabled,
 }: {
 	row: testCase;
 	selected?: boolean;
 	indeterminate?: boolean;
 	onToggle?: (checked: boolean) => void;
+	// Checkbox shown read-only (round already started: its case set is locked).
+	disabled?: boolean;
 }) {
+	// Only meaningful where the checkbox shows: an unticked case isn't part of the round.
+	const isExcluded = !!onToggle && !selected && !indeterminate;
 	const status = TestStatusMapping[row.status as keyof typeof TestStatusMapping];
 	const Icon = status?.icon || Info;
 
@@ -49,11 +54,12 @@ function TestCaseTitleCell({
 									indeterminate={indeterminate}
 									onCheckedChange={(checked) => onToggle(checked === true)}
 									onClick={(event) => event.stopPropagation()}
+									disabled={disabled}
 									aria-label={`Select ${row.title} for testing`}
 								/>
 							)
 						}
-						<div className="flex flex-row items-center gap-3">
+						<div className={`flex flex-row items-center gap-3 ${isExcluded ? "opacity-50" : ""}`}>
 							<div className="">
 								<p className="text-sm">{row.title}</p>
 								{row.lifecycleStatus === "updated" && (
@@ -61,6 +67,7 @@ function TestCaseTitleCell({
 								)}
 								<p className="text-xs text-muted-foreground font-mono">{row.code}</p>
 							</div>
+							{isExcluded && <Badge variant="outline" className="text-xs">Excluded</Badge>}
 							{/* <div className="flex flex-row items-center gap-2">
 								<Tooltip>
 									<TooltipTrigger render={
@@ -130,7 +137,10 @@ export function createIterationTestCaseColumns({
 	allSelected,
 	someSelected,
 	onToggleAll,
+	disabled,
 }: {
+	// Checkboxes shown but read-only (the round's case set is locked once it starts).
+	disabled?: boolean;
 	selectedIds?: Set<string>;
 	onToggle?: (row: iterationCaseRow, checked: boolean) => void;
 	allSelected?: boolean;
@@ -147,6 +157,7 @@ export function createIterationTestCaseColumns({
 							checked={allSelected}
 							indeterminate={someSelected && !allSelected}
 							onCheckedChange={(checked) => onToggleAll(checked === true)}
+							disabled={disabled}
 							aria-label="Select all test cases"
 						/>
 						<p>Test Case</p>
@@ -162,6 +173,7 @@ export function createIterationTestCaseColumns({
 						selected={selectedCount > 0 && selectedCount === row.orgResults.length}
 						indeterminate={selectedCount > 0 && selectedCount < row.orgResults.length}
 						onToggle={onToggle ? (checked) => onToggle(row, checked) : undefined}
+						disabled={disabled}
 					/>
 				)
 			},

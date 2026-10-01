@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createColumnHelper } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
-import { CircleCheck, CircleX, ClipboardIcon, Eye, Info, Search, TriangleAlert, File } from "lucide-react";
+import { CircleCheck, CircleX, ClipboardIcon, Eye, Info, Search, TriangleAlert, File, ListCheck, TestTubesIcon, Icon, LucideIcon, GitBranch } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,11 +27,11 @@ const isUntested = (row: testResultRow) => row.status === "Untested" || row.stat
 // Vendor sync touched it this round, or it was edited/removed after it was tested.
 const isChanged = (row: testResultRow) => row.syncKind !== null || row.pendingChange !== undefined;
 
-const STATUS_FILTERS: { value: statusFilter; label: string; match: (row: testResultRow) => boolean }[] = [
-	{ value: "all", label: "All", match: () => true },
-	{ value: "untested", label: "Untested", match: isUntested },
-	{ value: "failed", label: "Failed", match: (row) => row.status === "Failed" },
-	{ value: "changed", label: "Changed", match: isChanged },
+const STATUS_FILTERS: { value: statusFilter; label: string; icon: LucideIcon; match: (row: testResultRow) => boolean }[] = [
+	{ value: "all", label: "All", match: () => true, icon: ListCheck },
+	{ value: "untested", label: "Untested", match: isUntested, icon: TestTubesIcon },
+	// { value: "failed", label: "Failed", match: (row) => row.status === "Failed" , icon: CircleX},
+	{ value: "changed", label: "Changed", match: isChanged, icon: GitBranch },
 ];
 
 function changeLabel(row: testResultRow): string | null {
@@ -152,14 +152,14 @@ export default function TesterTestCasesComponents({
 	const submittedNote = submittedAt ? `${orgLabel} submitted its results on ${formatDateTime(submittedAt)}.` : null;
 	const notice =
 		!isOwnLens ? [`Viewing ${organizationName ?? "another organization"}'s results. Review only.`, submittedNote].filter(Boolean).join(" ")
-		: iteration.status === "not_started" ? "This round hasn't started yet. Testing opens once it begins."
-		: hasEnded ? [
-			`This round ${iteration.status === "stopped" ? "was stopped" : "ended"}${iteration.completedAt ? ` on ${formatDateTime(iteration.completedAt)}` : ""}.`,
-			submittedNote ?? `${orgLabel} didn't submit before it closed.`,
-			"Results are view only.",
-		].join(" ")
-		: submittedNote ? `${submittedNote} Results are view only${canWithdraw ? "; withdraw the submission to make changes until the round is completed" : ""}.`
-		: null;
+			: iteration.status === "not_started" ? "This round hasn't started yet. Testing opens once it begins."
+				: hasEnded ? [
+					`This round ${iteration.status === "stopped" ? "was stopped" : "ended"}${iteration.completedAt ? ` on ${formatDateTime(iteration.completedAt)}` : ""}.`,
+					submittedNote ?? `${orgLabel} didn't submit before it closed.`,
+					"Results are view only.",
+				].join(" ")
+					: submittedNote ? `${submittedNote} Results are view only${canWithdraw ? "; withdraw the submission to make changes until the round is completed" : ""}.`
+						: null;
 	// Submitted while the round runs gets the green "done" look.
 	const isSubmittedNotice = isOwnLens && !hasEnded && !!submittedNote;
 
@@ -190,7 +190,7 @@ export default function TesterTestCasesComponents({
 						<div className="px-2 py-1 rounded-md bg-red-200/20">
 							<span className="flex flex-row items-center gap-1 text-xs text-red-800"><CircleX size={14} /><span className="font-mono">{failed}</span></span>
 						</div>
-						
+
 					</div>
 				</div>
 				{notice && (
@@ -201,17 +201,21 @@ export default function TesterTestCasesComponents({
 					</div>
 				)}
 				<div className="flex flex-row flex-wrap items-center gap-2">
-					{STATUS_FILTERS.map((filter) => (
-						<Button
-							key={filter.value}
-							size="sm"
-							variant={statusFilter === filter.value ? "default" : "outline"}
-							onClick={() => setStatusFilter(filter.value)}
-						>
-							<p className="text-xs">{filter.label}</p>
-							<span className={cn("font-mono text-xs", statusFilter === filter.value ? "" : "text-muted-foreground")}>{rows.filter(filter.match).length}</span>
-						</Button>
-					))}
+					{STATUS_FILTERS.map((filter) => {
+						const Icon = filter.icon;
+						return (
+							<Button
+								key={filter.value}
+								size="sm"
+								variant={statusFilter === filter.value ? "default" : "outline"}
+								onClick={() => setStatusFilter(filter.value)}
+							>
+								<Icon size={15} className="mr-1" />
+								<p className="text-xs">{filter.label}</p>
+								<span className={cn("font-mono text-xs", statusFilter === filter.value ? "" : "text-muted-foreground")}>{rows.filter(filter.match).length}</span>
+							</Button>
+						)
+					})}
 					<Select value={role} onValueChange={(value) => setRole(value ?? ALL_ROLES)}>
 						<SelectTrigger size="sm" className="w-48">
 							<SelectValue>{role === ALL_ROLES ? "All roles" : role}</SelectValue>

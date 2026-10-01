@@ -1,19 +1,22 @@
 "use client";
 
-import { Ban, CalendarClock, CircleCheck, CircleDashed, CircleX, Clipboard, FileUpIcon, History, RefreshCw } from "lucide-react";
+import { Ban, CalendarClock, CircleCheck, CircleDashed, CircleDot, CircleX, Clipboard, FileClock, FileUpIcon, FolderClock, History, RefreshCw, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
 import { testResultColumns } from "@/components/table/test-result-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import { cn, formatIterationTimestamp } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
 import IterationActions from "./components/iteration-actions";
 import type { organization } from "@/lib/supabase/organizations";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ORG_TYPE_LABELS } from "./components/participant-picker";
+// import { SelectTrigger } from "@base-ui/react";
 
 
 function SummaryCard({ label, count, icon, iconClassName }: { label: string; count: number; icon: React.ReactNode; iconClassName?: string }) {
@@ -33,6 +36,38 @@ function SummaryCard({ label, count, icon, iconClassName }: { label: string; cou
 	);
 }
 
+// The viewed org's part of the round: testing, submitted, or pulled back after submitting.
+// "not_submitted" is a finished round the org never submitted.
+export type participationStatus = { kind: "in_progress" | "submitted" | "withdrawn" | "not_submitted"; at: string | null };
+
+const PARTICIPATION_BADGES: Record<participationStatus["kind"], { label: string; Icon: typeof CircleDot; className: string; prefix: string }> = {
+	in_progress: { label: "In Progress", Icon: CircleDot, className: "border-blue-600/40 bg-blue-50 text-blue-800", prefix: "" },
+	submitted: { label: "Submitted", Icon: CircleCheck, className: "border-green-800/30 bg-green-50 text-green-800", prefix: "Submitted on " },
+	withdrawn: { label: "Withdrawn", Icon: Undo2, className: "border-amber-600/40 bg-amber-50 text-amber-800", prefix: "Withdrawn on " },
+	not_submitted: { label: "Not Submitted", Icon: CircleDashed, className: "text-muted-foreground", prefix: "" },
+};
+
+function ParticipationBadge({ status }: { status: participationStatus }) {
+	const { label, Icon, className, prefix } = PARTICIPATION_BADGES[status.kind];
+	return (
+		<div className="flex flex-row items-center gap-2 w-fit">
+			{
+				status.kind === "not_submitted" || status.kind === "in_progress" ? null : (
+					<p className="text-xs text-muted-foreground">{label} on {status.at ? format(parseISO(status.at), "MMM d yyyy, h:mm a") : "N/A"}</p>
+				)
+			}
+			<Badge
+				variant="outline"
+				className={cn("text-xs", className)}
+				title={status.at && prefix ? `${prefix}${format(parseISO(status.at), "MMM d yyyy, h:mm a")}` : undefined}
+			>
+				<Icon data-icon="inline-start" />
+				{label}
+			</Badge>
+		</div>
+	);
+}
+
 function hasResults(row: testResultRow): boolean {
 	return row.status !== "Untested" || (row.stepsToExecute ?? []).some((step) => step.status !== "Untested" || (step.remarks?.length ?? 0) > 0);
 }
@@ -48,14 +83,17 @@ export default function TestResultComponents({
 	unsubmittedOrgs = [],
 	participation,
 	submission,
+	participantOrgs = [],
+	selectedOrgId = null,
+	participationStatus = null,
 }: {
 	iteration: testIteration;
 	testSuiteSlug: string;
 	sectionName: string;
 	results: testResultRow[];
-	// Across the whole iteration, not just the visible section (decides whether Cancel is offered).
+	// Across the whole iteration, not just the visible section (decides whether Cancel/Reset warns about erasing).
 	iterationHasResults: boolean;
-	// The viewer's own org submitted this round, so its rows open read-only (Phase 6).
+	// The org being viewed submitted this round, so its rows open read-only (Phase 6).
 	isLocked?: boolean;
 	// Remarks stay open after submitting and after the round ends (0020).
 	canRemark?: boolean;
@@ -64,8 +102,23 @@ export default function TestResultComponents({
 	// Participation panel (Admin/Internal) and Submit bar (External), rendered by the server tab.
 	participation?: React.ReactNode;
 	submission?: React.ReactNode;
+	// The round's participants; picking one sets ?org= and the server tab refetches its rows.
+	participantOrgs?: organization[];
+	selectedOrgId?: string | null;
+	// null for a planned round (nothing to report yet).
+	participationStatus?: participationStatus | null;
 }) {
 	const router = useRouter();
+	const pathname = usePathname();
+	const searchParams = useSearchParams();
+	const selectedOrg = participantOrgs.find((org) => org.id === selectedOrgId) ?? null;
+
+	function pickParticipant(id: string | null) {
+		if (!id || id === selectedOrgId) return;
+		const params = new URLSearchParams(searchParams.toString());
+		params.set("org", id);
+		router.push(`${pathname}?${params.toString()}`);
+	}
 	const [testResultRows, setTestResultRows] = useState<testResultRow[]>(results);
 	const [onlyFailedLastRound, setOnlyFailedLastRound] = useState(false);
 	const [onlyChangedMidRound, setOnlyChangedMidRound] = useState(false);
@@ -90,61 +143,54 @@ export default function TestResultComponents({
 		<ScrollArea className="flex-1 shrink-0 border-r flex flex-col px-2">
 			<div className="flex-1 p-4 flex flex-col gap-4">
 				<div className="flex flex-row items-center justify-between gap-4">
-					<div className="flex flex-row items-center gap-2">
-						<div>
-							<p className="text-xs text-muted-foreground">Test Result</p>
-							<div className="">
-								<div className="flex flex-row items-center gap-2">
-									<p className="font-semibold">{iteration.name}</p>
-									{iteration.label && <p className="text-muted-foreground">· {iteration.label}</p>}
-									{isRunning && (
-										<Badge variant="secondary" className="text-xs bg-blue-600/20">In Progress</Badge>
-									)}
-									{iteration.status === "not_started" && (
-										<Badge variant="secondary" className="text-xs">Not Started</Badge>
-									)}
-									{iteration.status === "stopped" && (
-										<Badge variant="secondary" className="text-xs bg-red-600/15 text-red-800">Stopped</Badge>
-									)}
-								</div>
-								<div className="flex flex-row items-center gap-2">
-									<p className="text-xs text-muted-foreground font-mono">{sectionName} · {formatIterationTimestamp(iteration)}</p>
-									{iteration.plannedEndDate && (
-										<p className={cn("text-xs font-mono flex flex-row items-center gap-1", isOverdue ? "text-red-700" : "text-muted-foreground")}>
-											<CalendarClock className="size-3" />
-											{isOverdue ? "Overdue · " : "Planned end "}{format(parseISO(iteration.plannedEndDate), "MMM d yyyy")}
-										</p>
-									)}
-								</div>
-							</div>
+					<div className="flex flex-row gap-3 items-center">
+						<FolderClock size={30} className="" />
+						<div className="flex flex-col">
+							<p className="font-semibold text-md">{iteration.name} Results</p>
+							<p className="font-mono text-xs text-muted-foreground">{format(iteration.startedAt, "MMM d yyyy")} to {format(parseISO(iteration?.plannedEndDate || ""), "MMM d yyyy")}</p>
 						</div>
 					</div>
-					<div className="flex flex-row items-center gap-2">
-						{isOpen && (
-							<IterationActions
-								iteration={iteration}
-								testSuiteSlug={testSuiteSlug}
-								untestedCount={testResultRows.filter((row) => row.status === "Untested" || row.status === "In Progress").length}
-								hasRecordedResults={iterationHasResults || testResultRows.some(hasResults)}
-								unsubmittedOrgs={unsubmittedOrgs}
-							/>
-						)}
-						<Button className="" size="lg" variant={isOpen ? "outline" : "default"}>
-							<FileUpIcon/>
-							<p className="text-xs">Export Test Results</p>
+					<div className="flex flex-row items-end justify-end gap-1">
+						{/* <p className="text-xs text-muted-foreground">Participant</p> */}
+						<Button className="text-xs" variant="outline" onClick={() => {}}>
+							<FileUpIcon size={15} />
+							Export Result
 						</Button>
+						<Select value={selectedOrgId} onValueChange={pickParticipant} disabled={participantOrgs.length < 2}>
+							<SelectTrigger className="w-50">
+								<SelectValue>
+									<p className="text-xs font-medium">{selectedOrg ? `${selectedOrg.name} - ${ORG_TYPE_LABELS[selectedOrg.type]}` : "No participants"}</p>
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent alignItemWithTrigger={false}>
+								{participantOrgs.map((org) => (
+									<SelectItem key={org.id} value={org.id}>
+										<div className="flex flex-col">
+											<p className="text-sm">{org.name}</p>
+											<p className="text-xs text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</p>
+										</div>
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+					
+				</div>
+				{/* {submission} */}
+				{/* {participation} */}
+				<div className="flex flex-col gap-1 font-semibold">
+					<div className="">
+						<p className="text-xs">Overview</p>
+					</div>
+					<div className="flex flex-row items-center justify-between gap-2">
+						<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
+						<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
+						<SummaryCard label="Failed Test Cases" count={failed} icon={<CircleX className="text-red-800" />} iconClassName="bg-red-50/50 border-red-800" />
+						<SummaryCard label="Blocked Test Cases" count={blocked} icon={<Ban className="text-gray-800" />} />
+						{/* <SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} /> */}
 					</div>
 				</div>
-				{submission}
-				{participation}
-				<div className="flex flex-row items-center justify-between gap-2">
-					<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
-					<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
-					<SummaryCard label="Failed Test Cases" count={failed} icon={<CircleX className="text-red-800" />} iconClassName="bg-red-50/50 border-red-800" />
-					<SummaryCard label="Blocked Test Cases" count={blocked} icon={<Ban className="text-gray-800" />} />
-					<SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} />
-				</div>
-				{(hasPreviousRound || hasMidRoundChanges) && (
+				{/* {(hasPreviousRound || hasMidRoundChanges) && (
 					<div className="flex flex-row items-center gap-2">
 						{hasPreviousRound && (
 							<Button
@@ -167,8 +213,12 @@ export default function TestResultComponents({
 							</Button>
 						)}
 					</div>
-				)}
-				<div className="min-h-0 flex-1">
+				)} */}
+				<div className="min-h-0 flex-1 flex flex-col gap-2">
+					<div className="flex flex-row justify-between py-1">
+						<p className="text-xs">{`${selectedOrg?.name ?? "Organization"}'s Test Results`}</p>
+						{participationStatus && <ParticipationBadge status={participationStatus} />}
+					</div>
 					<DataTable
 						columns={testResultColumns}
 						data={visibleRows}

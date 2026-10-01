@@ -194,7 +194,7 @@ export default async function TestsuitePage({
 							</div>
 						) : testSuite.status === "ready" ? (
 							<div className="flex flex-row items-center gap-2">
-								<SuiteStatusButton suiteId={testSuite.id} targetStatus="draft" variant="outline">
+								{/* <SuiteStatusButton suiteId={testSuite.id} targetStatus="draft" variant="outline">
 									<p className="text-xs">Back to Draft</p>
 								</SuiteStatusButton>
 								<StartIterationDialog
@@ -205,7 +205,7 @@ export default async function TestsuitePage({
 											<p className="text-xs">Start Testing</p>
 										</Button>
 									}
-								/>
+								/> */}
 							</div>
 						) : testSuite.status === "in_testing" && signOffContext ? (
 							<div className="flex flex-row items-center gap-4">
@@ -238,8 +238,8 @@ export default async function TestsuitePage({
 										othersPending={currentRound.othersPending}
 									/>
 								)}
-								{/* Step 1: the vendor issues the sign-off once every round is finished (untested cases only warn). */}
-								{can(currentUser, "issue_sign_off") ? (
+								{/* Step 1: the vendor issues the sign-off once every test case the rounds need has a finished result. An open round still blocks it inside the dialog. */}
+								{can(currentUser, "issue_sign_off") && signOffContext.openUntestedCases === 0 ? (
 									<SignOffDialog
 										suiteId={testSuite.id}
 										hasActiveIteration={signOffContext.hasActiveIteration}

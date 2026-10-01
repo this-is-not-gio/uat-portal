@@ -12,7 +12,6 @@ export type testIteration = {
     id: string;
     name: string;
     slug: string;
-    label: string | null;
     iterationNumber: number;
     status: iterationStatus;
     startedAt: string;
@@ -26,7 +25,8 @@ export type syncKind = "added" | "updated" | "force_reset";
 // An org taking part in a round. Each participant gets its own result rows, filtered by the
 // cases' audience. Every query below takes an optional `orgId`: omit it to get all
 // participants' rows (one per case per org), pass it for a single org's view.
-export type iterationParticipant = { organization: organization; submittedAt: string | null };
+// withdrawnAt: last withdrawal, cleared when the org submits again (0031).
+export type iterationParticipant = { organization: organization; submittedAt: string | null; withdrawnAt: string | null };
 
 // Results wiped by a vendor force refresh, kept as a frozen copy.
 export type resultArchive = {
@@ -80,7 +80,7 @@ export type testResultRow = testCase & {
     pendingChange?: iterationChange["change"];
 };
 
-const ITERATION_SELECT = "id, name, slug, label, iteration_number, status, started_at, completed_at, planned_end_date" as const;
+const ITERATION_SELECT = "id, name, slug, iteration_number, status, started_at, completed_at, planned_end_date" as const;
 
 const RESULT_SELECT = `
   id,
@@ -116,7 +116,6 @@ type IterationRow = {
     id: string;
     name: string;
     slug: string;
-    label: string | null;
     iteration_number: number;
     status: iterationStatus;
     started_at: string;
@@ -129,7 +128,6 @@ function toIteration(row: IterationRow): testIteration {
         id: row.id,
         name: row.name,
         slug: row.slug,
-        label: row.label,
         iterationNumber: row.iteration_number,
         status: row.status,
         startedAt: row.started_at,
@@ -202,7 +200,9 @@ export async function getActiveIteration(testSuiteId: string): Promise<testItera
 // iteration — the ids apply_iteration_sync's `remove` argument needs to pull
 // the whole section back out of the round (it rejects rows with results).
 // includedCount/totalCount count each test case once, even though every org has its own row.
-export type iterationSection = { slug: string; name: string; includedCount: number; totalCount: number; resultIds: string[] };
+// testedCount: included cases with a Passed/Failed/Blocked result. Scoped to orgId's rows
+// when given; otherwise a case counts once every participant has tested it.
+export type iterationSection = { slug: string; name: string; includedCount: number; totalCount: number; testedCount: number; resultIds: string[] };
 
 // Lightweight per-iteration section list — just enough to build the sidebar's
 // Iteration → Section tree without loading every iteration's full result set
@@ -218,34 +218,38 @@ export async function getSectionsByIteration(testSuiteId: string, orgId?: string
 
     let query = supabase
         .from("test_case_results")
-        .select("id, iteration_id, test_case_id, section_slug, section_name, section_order, included_in_run")
+        .select("id, iteration_id, test_case_id, section_slug, section_name, section_order, included_in_run, status")
         .in("iteration_id", iterations.map((i) => i.id));
     if (orgId) query = query.eq("organization_id", orgId);
     const { data, error } = await query.order("section_order", { ascending: true });
     if (error) throw error;
 
     const map = new Map<string, iterationSection[]>();
-    const caseIds = new Map<iterationSection, { all: Set<string>; included: Set<string> }>();
+    const caseIds = new Map<iterationSection, { all: Set<string>; included: Set<string>; untested: Set<string> }>();
     for (const row of data) {
         if (!row.section_slug) continue;
         const sections = map.get(row.iteration_id) ?? [];
         let section = sections.find((s) => s.slug === row.section_slug);
         if (!section) {
-            section = { slug: row.section_slug, name: row.section_name ?? row.section_slug, includedCount: 0, totalCount: 0, resultIds: [] };
+            section = { slug: row.section_slug, name: row.section_name ?? row.section_slug, includedCount: 0, totalCount: 0, testedCount: 0, resultIds: [] };
             sections.push(section);
-            caseIds.set(section, { all: new Set(), included: new Set() });
+            caseIds.set(section, { all: new Set(), included: new Set(), untested: new Set() });
         }
         // Rows of a since-deleted case have no test_case_id; count those rows on their own.
         const caseKey = row.test_case_id ?? row.id;
         const ids = caseIds.get(section)!;
         ids.all.add(caseKey);
-        if (row.included_in_run) ids.included.add(caseKey);
+        if (row.included_in_run) {
+            ids.included.add(caseKey);
+            if (row.status !== "Passed" && row.status !== "Failed" && row.status !== "Blocked") ids.untested.add(caseKey);
+        }
         section.resultIds.push(row.id);
         map.set(row.iteration_id, sections);
     }
     for (const [section, ids] of caseIds) {
         section.totalCount = ids.all.size;
         section.includedCount = ids.included.size;
+        section.testedCount = ids.included.size - ids.untested.size;
     }
     return map;
 }
@@ -408,10 +412,10 @@ export async function getIterationParticipants(iterationId: string): Promise<ite
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("iteration_participants")
-        .select("submitted_at, organization:organizations ( id, name, type )")
+        .select("submitted_at, withdrawn_at, organization:organizations ( id, name, type )")
         .eq("iteration_id", iterationId);
     if (error) throw error;
     return data
-        .map((row) => ({ organization: row.organization, submittedAt: row.submitted_at }))
+        .map((row) => ({ organization: row.organization, submittedAt: row.submitted_at, withdrawnAt: row.withdrawn_at }))
         .sort((a, b) => compareOrganizations(a.organization, b.organization));
 }

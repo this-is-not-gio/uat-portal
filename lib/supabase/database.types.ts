@@ -51,16 +51,19 @@ export type Database = {
           iteration_id: string
           organization_id: string
           submitted_at: string | null
+          withdrawn_at: string | null
         }
         Insert: {
           iteration_id: string
           organization_id: string
           submitted_at?: string | null
+          withdrawn_at?: string | null
         }
         Update: {
           iteration_id?: string
           organization_id?: string
           submitted_at?: string | null
+          withdrawn_at?: string | null
         }
         Relationships: [
           {
@@ -1032,6 +1035,29 @@ export type Database = {
         Args: { p_section_id: string; p_test_case_ids: string[] }
         Returns: undefined
       }
+      reset_iteration: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          completed_at: string | null
+          created_by: string | null
+          id: string
+          iteration_number: number
+          label: string | null
+          name: string
+          planned_end_date: string | null
+          scope_test_case_ids: string[] | null
+          slug: string
+          started_at: string
+          status: Database["public"]["Enums"]["iteration_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "test_iterations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       save_test_case: { Args: { p_payload: Json }; Returns: string }
       set_case_inclusion: {
         Args: { p_case_result_ids: string[]; p_included: boolean }
@@ -1063,11 +1089,9 @@ export type Database = {
       start_iteration: {
         Args: {
           p_created_by?: string
-          p_label?: string
-          p_org_ids?: string[]
+          p_name?: string
           p_planned_end_date?: string
           p_suite_id: string
-          p_test_case_ids?: string[]
         }
         Returns: {
           completed_at: string | null
@@ -1123,6 +1147,7 @@ export type Database = {
           iteration_id: string
           organization_id: string
           submitted_at: string | null
+          withdrawn_at: string | null
         }
         SetofOptions: {
           from: "*"
@@ -1165,7 +1190,7 @@ export type Database = {
       update_iteration_details: {
         Args: {
           p_iteration_id: string
-          p_label?: string
+          p_name?: string
           p_planned_end_date?: string
         }
         Returns: {
@@ -1244,6 +1269,7 @@ export type Database = {
           iteration_id: string
           organization_id: string
           submitted_at: string | null
+          withdrawn_at: string | null
         }
         SetofOptions: {
           from: "*"

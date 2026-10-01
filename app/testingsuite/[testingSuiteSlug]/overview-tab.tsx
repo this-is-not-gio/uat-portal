@@ -299,7 +299,6 @@ export default function OverviewTab({ suite, overview }: { suite: { name: string
 												{iteration.status === "not_started" && <Badge variant="secondary" className="text-xs">Not Started</Badge>}
 												{iteration.status === "stopped" && <Badge variant="secondary" className="text-xs bg-red-600/15 text-red-800">Stopped</Badge>}
 											</div>
-											{iteration.label && <p className="text-xs text-muted-foreground">{iteration.label}</p>}
 											<CountsLine counts={iteration.counts} />
 											<p className="text-xs text-muted-foreground font-mono">
 												{iteration.completedAt ? `Completed ${formatTimestamp(iteration.completedAt)}` : `Started ${formatTimestamp(iteration.startedAt)}`}

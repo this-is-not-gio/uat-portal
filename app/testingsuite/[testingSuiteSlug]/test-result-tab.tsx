@@ -1,10 +1,11 @@
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
 import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./components/result-leaf";
-import TestResultComponents from "./test-result-components";
+import TreeCollapsible from "./components/tree-collapsible";
+import { ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
+import TestResultComponents, { type participationStatus } from "./test-result-components";
 import StartIterationDialog from "./components/start-iteration-dialog";
-import ResultOrgPicker from "./components/result-org-picker";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/auth/permissions";
 import { canWithdrawParticipation, getParticipationProgress, unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
@@ -18,12 +19,19 @@ type TreeNode = {
 	name: string;
 	id: string;
 	slug: string;
-	itemtype?: "section" | "test-case" | "test-suite" | "iteration";
+	itemtype?: "iteration" | "iteration-section";
 	// The iteration this node belongs to (its own number for an "iteration"
-	// node, its parent's for a "section" node) and whether it's the
+	// node, its parent's for a section node) and whether it's the
 	// currently-selected one — both computed server-side, see buildTree.
 	iterationNumber?: number;
 	active?: boolean;
+	// Same badge + counts as the Test Cases tab's iteration tree.
+	statusLabel?: string;
+	// Section nodes: tested / in-round cases for the picked participant.
+	testedCount?: number;
+	includedCount?: number;
+	// Only set on "iteration" nodes: finished rounds start collapsed unless selected.
+	collapsed?: boolean;
 };
 type TreeItem = TreeNode | [TreeNode, ...TreeItem[]];
 
@@ -119,12 +127,18 @@ export default async function TestResultTab({
 		participantOrgs[0] ??
 		null;
 
-	const [rawResults, changes] = selectedIteration
+	const [rawResults, changes, orgSectionsByIteration] = selectedIteration
 		? await Promise.all([
 			getIterationResults(selectedIteration.id, selectedOrg?.id),
 			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id, selectedOrg?.id) : Promise.resolve([]),
+			selectedOrg ? getSectionsByIteration(testSuiteId, selectedOrg.id) : Promise.resolve(null),
 		])
-		: [[], []];
+		: [[], [], null];
+	// Tree counts follow the picked participant (its links keep ?org=); rounds it
+	// isn't part of keep the all-participants counts.
+	const treeSections = new Map(
+		[...sectionsByIteration].map(([iterationId, sections]) => [iterationId, orgSectionsByIteration?.get(iterationId) ?? sections])
+	);
 	// Testers only need to know about edits the vendor can't sync into this round:
 	// tested rows whose live case changed ("Outdated") or was deleted ("Removed").
 	const pendingByResultId = new Map(
@@ -132,7 +146,10 @@ export default async function TestResultTab({
 			.filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults))
 			.map((change) => [change.testCaseResultId as string, change.change])
 	);
-	const results = rawResults.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
+	// Only the cases planned into the round; left-out rows stay out of the table and scorecards.
+	const results = rawResults
+		.filter((row) => row.includedInRun)
+		.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
 	const iterationHasResults = results.some((row) =>
 		row.status !== "Untested" || (row.stepsToExecute ?? []).some((step) => step.status !== "Untested" || (step.remarks?.length ?? 0) > 0)
 	);
@@ -141,6 +158,16 @@ export default async function TestResultTab({
 	const ownParticipation = participants.find((p) => p.organization.id === currentUser?.organization?.id) ?? null;
 	const isViewingOwnOrg = !!ownParticipation && selectedOrg?.id === ownParticipation.organization.id;
 	const isOwnOrgSubmitted = isViewingOwnOrg && !!ownParticipation.submittedAt;
+	// Whoever is looking, a submitted org's results open read-only. The DB only locks the
+	// org's own users (0014); this keeps Admin/Internal from editing them by accident too.
+	const selectedParticipation = participants.find((p) => p.organization.id === selectedOrg?.id) ?? null;
+	const isSelectedOrgSubmitted = !!selectedParticipation?.submittedAt;
+	const participationStatus: participationStatus | null =
+		!selectedParticipation || selectedIteration?.status === "not_started" ? null
+		: selectedParticipation.submittedAt ? { kind: "submitted", at: selectedParticipation.submittedAt }
+		: selectedParticipation.withdrawnAt ? { kind: "withdrawn", at: selectedParticipation.withdrawnAt }
+		: selectedIteration?.status === "in_progress" ? { kind: "in_progress", at: null }
+		: { kind: "not_submitted", at: null };
 	const showSubmission = isViewingOwnOrg && can(currentUser, "submit");
 	// Until an Admin/Internal user completes or stops the round (0019).
 	const canWithdraw = isOwnOrgSubmitted && can(currentUser, "submit") && !!selectedIteration && await canWithdrawParticipation(selectedIteration.id);
@@ -161,21 +188,13 @@ export default async function TestResultTab({
 		<>
 			<div className="w-100 shrink-0 border-r flex flex-col">
 				<SidebarContent>
-					{selectedOrg && participantOrgs.length > 1 && (
-						<SidebarGroup>
-							<SidebarGroupLabel>Organization</SidebarGroupLabel>
-							<SidebarGroupContent className="px-2">
-								<ResultOrgPicker organizations={participantOrgs} selectedId={selectedOrg.id} />
-							</SidebarGroupContent>
-						</SidebarGroup>
-					)}
 					{iterations.length > 0 && (
 						<SidebarGroup>
 							<SidebarGroupLabel>Test Iterations</SidebarGroupLabel>
 							<SidebarGroupContent>
 								<SidebarMenu>
 									{
-										buildTree(iterations, sectionsByIteration, selectedIteration, sectionSlug).map((item, index) => (
+										buildTree(iterations, treeSections, selectedIteration, sectionSlug).map((item, index) => (
 											<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} />
 										))
 									}
@@ -194,9 +213,12 @@ export default async function TestResultTab({
 					sectionName={sectionName}
 					results={visibleResults}
 					iterationHasResults={iterationHasResults}
-					isLocked={isOwnOrgSubmitted}
+					isLocked={isSelectedOrgSubmitted}
 					canRemark={canRemark}
 					unsubmittedOrgs={unsubmittedParticipantOrgs(participants)}
+					participantOrgs={participantOrgs}
+					selectedOrgId={selectedOrg?.id ?? null}
+					participationStatus={participationStatus}
 					participation={showParticipation ? <ParticipationPanel participation={participants} selectedOrgId={selectedOrg?.id ?? null} /> : null}
 					submission={showSubmission && ownParticipation ? (
 						<SubmissionBar
@@ -229,7 +251,8 @@ export default async function TestResultTab({
 // Iteration → Section: each iteration is a folder, its sections are leaves
 // nested under it — mirrors the Test Cases tab's Suite → Section tree, just
 // with "iteration" standing in for "suite" as the folder level. Newest
-// iteration first.
+// iteration first. Ordered and badged like the Test Cases tab's iteration
+// tree: running round, then a planned one, then finished rounds newest first.
 function buildTree(
 	iterations: testIteration[],
 	sectionsByIteration: Map<string, iterationSection[]>,
@@ -237,10 +260,12 @@ function buildTree(
 	sectionSlug: string | undefined,
 ): TreeItem[] {
 	const isAllSections = !sectionSlug || sectionSlug === "all";
+	const statusRank = (status: testIteration["status"]) => status === "in_progress" ? 0 : status === "not_started" ? 1 : 2;
 	return [...iterations]
-		.sort((a, b) => b.iterationNumber - a.iterationNumber)
+		.sort((a, b) => statusRank(a.status) - statusRank(b.status) || b.iterationNumber - a.iterationNumber)
 		.map((iteration): TreeItem => {
 			const isSelected = selectedIteration?.id === iteration.id;
+			const isFinished = iteration.status === "completed" || iteration.status === "stopped";
 			const iterationNode: TreeNode = {
 				name: iteration.name,
 				id: iteration.id,
@@ -248,44 +273,47 @@ function buildTree(
 				itemtype: "iteration",
 				iterationNumber: iteration.iterationNumber,
 				active: isSelected && isAllSections,
+				statusLabel: ROUND_STATUS_LABELS[iteration.status],
+				collapsed: isFinished && !isSelected,
 			};
 			const sectionNodes: TreeNode[] = (sectionsByIteration.get(iteration.id) ?? []).map((section) => ({
 				name: section.name,
 				id: `${iteration.id}:${section.slug}`,
 				slug: section.slug,
-				itemtype: "section",
+				itemtype: "iteration-section",
 				iterationNumber: iteration.iterationNumber,
 				active: isSelected && sectionSlug === section.slug,
+				testedCount: section.testedCount,
+				includedCount: section.includedCount,
 			}));
 			return sectionNodes.length ? [iterationNode, ...sectionNodes] : iterationNode;
 		});
 }
 
 function Tree({ item, testSuiteSlug }: { item: TreeItem; testSuiteSlug: string }) {
-	const [{ name, id, slug, itemtype, iterationNumber, active }, ...items] = Array.isArray(item) ? item : [item]
+	const [{ name, id, slug, itemtype, iterationNumber, active, statusLabel, testedCount, includedCount, collapsed }, ...items] = Array.isArray(item) ? item : [item]
 
 	if (!items.length) {
 		return (
-			<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} />
+			<SidebarMenuItem>
+				<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} statusLabel={statusLabel} testCaseCount={testedCount} totalCount={includedCount} title={itemtype === "iteration-section" ? `${testedCount ?? 0} of ${includedCount ?? 0} tested` : undefined} />
+			</SidebarMenuItem>
 		)
 	}
 
 	return (
 		<SidebarMenuItem>
-			<Collapsible
-				className="w-full"
-				defaultOpen={itemtype === "iteration" && active}
-			>
+			<TreeCollapsible id={`${testSuiteSlug}:result-iteration:${id}`} className="w-full" defaultOpen={!collapsed}>
 				<div className="flex flex-row items-center">
 					<CollapsibleTrigger render={
 						<Button variant="ghost" size="icon" className="size-6 shrink-0 group/collapsible">
 							<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
 						</Button>
 					} />
-					<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} />
+					<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} statusLabel={statusLabel} />
 				</div>
 				<CollapsibleContent>
-					<SidebarMenuSub	>
+					<SidebarMenuSub className="ml-2.5">
 						{
 							items.map((item, index) => (
 								<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} />
@@ -293,7 +321,7 @@ function Tree({ item, testSuiteSlug }: { item: TreeItem; testSuiteSlug: string }
 						}
 					</SidebarMenuSub>
 				</CollapsibleContent>
-			</Collapsible>
+			</TreeCollapsible>
 		</SidebarMenuItem>
 	)
 }

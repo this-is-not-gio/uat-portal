@@ -22,9 +22,9 @@ import { cn } from "@/lib/utils";
 import { updateIterationDetails } from "@/lib/supabase/iteration-actions";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 
-// Edits an iteration's label/planned end date — its name and slug (what the
-// URL and iteration numbering depend on) are never touched here, unlike a
-// section's rename (which does regenerate its slug).
+// Renames an iteration and edits its planned end date. Its slug and number (what
+// the URL depends on) never change, unlike a section's rename (which does
+// regenerate its slug).
 export default function EditIterationDialog({
 	iteration,
 	trigger,
@@ -39,7 +39,7 @@ export default function EditIterationDialog({
 	const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
 	const open = controlledOpen ?? uncontrolledOpen;
 	const setOpen = onOpenChange ?? setUncontrolledOpen;
-	const [label, setLabel] = useState(iteration.label ?? "");
+	const [name, setName] = useState(iteration.name);
 	const [plannedEndDate, setPlannedEndDate] = useState(iteration.plannedEndDate ?? "");
 	const [datePickerOpen, setDatePickerOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export default function EditIterationDialog({
 	function onSave() {
 		setError(null);
 		startTransition(async () => {
-			const result = await updateIterationDetails({ iterationId: iteration.id, label: label.trim(), plannedEndDate });
+			const result = await updateIterationDetails({ iterationId: iteration.id, name: name.trim(), plannedEndDate });
 			if (!result.ok) {
 				setError(result.error);
 				return;
@@ -64,7 +64,7 @@ export default function EditIterationDialog({
 			onOpenChange={(next) => {
 				setOpen(next);
 				if (next) {
-					setLabel(iteration.label ?? "");
+					setName(iteration.name);
 					setPlannedEndDate(iteration.plannedEndDate ?? "");
 				}
 				setError(null);
@@ -78,20 +78,20 @@ export default function EditIterationDialog({
 						Edit {iteration.name}
 					</DialogTitle>
 					<DialogDescription className="text-xs text-muted-foreground">
-						The label and planned end date are the only things you can change here — renaming would break the round&apos;s existing links.
+						Rename the round or change its planned end date. Leave the name blank to use Untitled_Iteration_{iteration.iterationNumber}.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-4 px-2">
 					<div className="flex flex-col gap-1">
-						<Label htmlFor="edit-iteration-label" className="text-xs text-muted-foreground flex flex-row justify-between">
-							<span>Label</span>
+						<Label htmlFor="edit-iteration-name" className="text-xs text-muted-foreground flex flex-row justify-between">
+							<span>Name</span>
 							<span className="text-muted-foreground text-xs">(optional)</span>
 						</Label>
 						<Input
-							id="edit-iteration-label"
-							placeholder="e.g. Post-fix retest"
-							value={label}
-							onChange={(event) => setLabel(event.target.value)}
+							id="edit-iteration-name"
+							placeholder={`Untitled_Iteration_${iteration.iterationNumber}`}
+							value={name}
+							onChange={(event) => setName(event.target.value)}
 							disabled={isPending}
 						/>
 					</div>

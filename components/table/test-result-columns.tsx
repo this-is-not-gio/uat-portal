@@ -9,6 +9,7 @@ import { TestStatusMapping } from "./columns"
 import type { testResultRow } from "@/lib/supabase/test-iterations"
 import { Avatar, AvatarFallback } from "../ui/avatar"
 import { initials } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 
 export type { testResultRow }
 
@@ -57,6 +58,11 @@ export function ResultSummaryCell({ row }: { row: testResultRow }) {
 	const blocked = steps.filter((s) => s.status === "Blocked").length;
 	return (
 		<div className="flex flex-row gap-1">
+			{
+				passed === 0 && failed === 0 && skipped === 0 && blocked === 0 && (
+					<p className="text-xs text-muted-foreground">No results yet</p>
+				)
+			}
 			{passed > 0 && (
 				<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-green-600/20 w-fit">
 					<CircleCheck size={15} className="text-green-800" />
@@ -94,7 +100,6 @@ export const testResultColumns = columnHelper.columns([
 			<div>
 				<div className="flex flex-row flex-wrap items-center gap-1">
 					<p className="text-sm">{info.row.original.title}</p>
-					<Badge variant="secondary" className="text-xs">{info.row.original.stepsToExecute?.length ?? 0} steps</Badge>
 					<SyncBadges row={info.row.original} />
 				</div>
 				<p className="text-xs text-muted-foreground">{info.row.original.code}</p>
@@ -113,7 +118,7 @@ export const testResultColumns = columnHelper.columns([
 						<p className="text-xs font-semi-bold">{executor.full_name?.charAt(0) || 'U'}{executor.full_name?.charAt(1).toUpperCase() || 'U'}</p>
 					</div>
 					<div className="flex flex-col">
-						<p className="text-sm">{executor.full_name}</p>
+						<p className="text-xs font-semibold">{executor.full_name}</p>
 						<p className="text-xs text-muted-foreground">{executor.role}</p>
 					</div>
 				</div>
@@ -130,7 +135,19 @@ export const testResultColumns = columnHelper.columns([
 		cell: (info) => <ResultSummaryCell row={info.row.original} />,
 	}),
 	columnHelper.accessor("previousStatus", {
-		header: "Last Round",
+		header: () => (
+			<div className="flex flex-row items-center gap-1">
+				<p>Last Iteration Results</p>
+				<Tooltip>
+					<TooltipTrigger>
+						<Info size={15} className="text-muted-foreground" />
+					</TooltipTrigger>
+					<TooltipContent>
+						<p className="text-xs">The result from the last iteration of this test case, if any.</p>
+					</TooltipContent>
+				</Tooltip>
+			</div>
+		),
 		cell: (info) => {
 			const previous = info.getValue();
 			if (!previous) return <p className="text-xs text-muted-foreground">—</p>;

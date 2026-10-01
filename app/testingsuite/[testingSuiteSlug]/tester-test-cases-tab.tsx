@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, ClipboardList, File, FolderClock } from "lucide-react";
+import { ChevronRight, Clipboard, ClipboardList, File, FolderClock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -87,7 +87,10 @@ export default async function TesterTestCasesTab({
 			.filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults))
 			.map((change) => [change.testCaseResultId as string, change.change])
 	);
-	const results = rawResults.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
+	// Testers only see what the round runs; cases unticked while it was planned stay out.
+	const results = rawResults
+		.filter((row) => row.includedInRun)
+		.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
 
 	const isOwnOrgSubmitted = isOwnLens && !!ownParticipation?.submittedAt;
 	const suiteIsOpen = suiteStatus === "in_testing";
@@ -105,7 +108,7 @@ export default async function TesterTestCasesTab({
 	const selectedSections = [...new Map(results.filter((row) => row.sectionSlug).map((row) => [row.sectionSlug as string, row.sectionName ?? (row.sectionSlug as string)])).entries()];
 	const isAllSections = !sectionSlug || sectionSlug === "all" || !selectedSections.some(([slug]) => slug === sectionSlug);
 	const visibleResults = isAllSections ? results : results.filter((row) => row.sectionSlug === sectionSlug);
-	const sectionName = isAllSections ? "All sections" : selectedSections.find(([slug]) => slug === sectionSlug)?.[1] ?? sectionSlug ?? "";
+	const sectionName = isAllSections ? selectedIteration.name || "All sections" : selectedSections.find(([slug]) => slug === sectionSlug)?.[1] ?? sectionSlug ?? "";
 
 	const hrefFor = (iteration: testIteration, section: string) => {
 		const params = new URLSearchParams({ tab: "test-cases", iteration: String(iteration.iterationNumber) });
@@ -118,14 +121,6 @@ export default async function TesterTestCasesTab({
 		<>
 			<div className="w-100 shrink-0 border-r flex flex-col">
 				<SidebarContent>
-					{/* {lensOrg && lensOrgs.length > 1 && (
-						<SidebarGroup>
-							<SidebarGroupLabel>Viewing</SidebarGroupLabel>
-							<SidebarGroupContent className="px-2">
-								<ResultOrgPicker organizations={lensOrgs} selectedId={lensOrg.id} ownOrgId={ownOrgId} />
-							</SidebarGroupContent>
-						</SidebarGroup>
-					)} Lets remove because it is not needed*/} 
 					<SidebarGroup>
 						<SidebarGroupLabel>Testing Iterations</SidebarGroupLabel>
 						<SidebarGroupContent>
@@ -138,14 +133,14 @@ export default async function TesterTestCasesTab({
 											const rows = results.filter((row) => row.sectionSlug === slug);
 											return { slug, name, tested: rows.filter((row) => isTested(row.status)).length, total: rows.length };
 										})
-										: (sectionsByIteration.get(iteration.id) ?? []).map((section) => ({ slug: section.slug, name: section.name }));
+										: (sectionsByIteration.get(iteration.id) ?? []).filter((section) => section.includedCount > 0).map((section) => ({ slug: section.slug, name: section.name }));
 									return (
 										<SidebarMenuItem key={iteration.id}>
 											{/* Keyed on selection so a newly selected round remounts open; the running round starts open too. */}
 											<Collapsible
 												key={`${iteration.id}:${isSelected}`}
 												className="w-full"
-												defaultOpen={false}
+												defaultOpen={isSelected || iteration.status === "in_progress"}
 											>
 												<div className="flex flex-row items-center">
 													<CollapsibleTrigger render={
@@ -153,6 +148,7 @@ export default async function TesterTestCasesTab({
 															<ChevronRight className="transition-transform group-data-[panel-open]/collapsible:rotate-90" />
 														</Button>
 													} />
+													{/* The round row itself lists every test case in the round (no separate "All Test Cases" row). */}
 													<SidebarMenuButton isActive={isSelected && isAllSections} render={<Link href={hrefFor(iteration, "all")} />}>
 														<FolderClock />
 														<span className="truncate">{iteration.name}</span>
@@ -164,21 +160,13 @@ export default async function TesterTestCasesTab({
 													</SidebarMenuButton>
 												</div>
 												<CollapsibleContent>
-													<SidebarMenuSub>
-														<SidebarMenuSubItem>
-															<SidebarMenuSubButton isActive={isSelected && isAllSections} render={<Link href={hrefFor(iteration, "all")} />}>
-																<ClipboardList />
-																<span className="truncate">All Test Cases</span>
-																{isSelected && <span className="ml-auto font-mono text-xs text-muted-foreground">{results.length}</span>}
-															</SidebarMenuSubButton>
-														</SidebarMenuSubItem>
+													<SidebarMenuSub className="ml-2.5">
 														{sections.length > 0 && (
-															<SidebarGroup className="py-0">
-																<SidebarGroupLabel className="text-xs text-muted-foreground">Sections</SidebarGroupLabel>
+															<>
 																{sections.map((section) => (
 																	<SidebarMenuSubItem key={section.slug}>
 																		<SidebarMenuSubButton isActive={isSelected && !isAllSections && sectionSlug === section.slug} render={<Link href={hrefFor(iteration, section.slug)} />}>
-																			<File />
+																			<Clipboard />
 																			<span className="truncate text-xs">{section.name}</span>
 																			{section.total !== undefined && (
 																				<span className="ml-auto font-mono text-xs text-muted-foreground">{section.tested}/{section.total}</span>
@@ -186,7 +174,7 @@ export default async function TesterTestCasesTab({
 																		</SidebarMenuSubButton>
 																	</SidebarMenuSubItem>
 																))}
-															</SidebarGroup>
+															</>
 														)}
 													</SidebarMenuSub>
 												</CollapsibleContent>

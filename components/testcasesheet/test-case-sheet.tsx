@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import {
 	Sheet,
@@ -32,13 +32,14 @@ import {
 	User,
 	CircleCheck,
 	CircleX,
+	CircleOff,
 	Bug,
 	Computer,
 	History,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { cn } from "cn";
+import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
 	Accordion,
@@ -158,6 +159,9 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 		completedAt: testCase.completedAt ?? null,
 		executor: testCase.executor,
 	});
+	// One transition for every result button (steps + case result): while any save runs, all of
+	// them are disabled, so clicks can't race the case result the DB re-derives from the steps.
+	const [isSavingResult, startSavingResult] = useTransition();
 	const totalSteps = testCase.stepsToExecute?.length ?? 0;
 	const testedSteps = Object.keys(stepStatuses).filter((stepId) => stepStatuses[stepId]?.status !== "Untested").length;
 	const statusCounts = step_status_options.map((option) => ({
@@ -241,22 +245,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					{
 						showResults &&
 						<div className="flex flex-col items-end gap-1">
-							<p className="text-xs text-muted-foreground">Test Result</p>
-							{statusCounts.some((status) => status.count > 0) && (
-								<div className="flex flex-row items-center gap-1 flex-wrap pb-3">
-									{statusCounts
-										.filter((status) => status.count > 0)
-										.map((status) => (
-											<div className={cn(
-												"flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold",
-												status_count_classnames[status.value]
-											)} key={status.value}>
-												{status.count} {status.label}
-												<status.Icon className="h-3 w-3" />
-											</div>
-										))}
-								</div>
-							)}
+							<p className="text-xs text-muted-foreground"><span className="font-mono">{testedSteps}</span>/<span className="font-mono">{totalSteps}</span> Step Executed</p>
 						</div>
 					}
 				</div>
@@ -331,6 +320,8 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		emitChange(nextStatuses, stepRemarks, nextCaseState);
 																	}}
 																	options={step_status_options}
+																	isPending={isSavingResult}
+																	startTransition={startSavingResult}
 																/>)
 																: mode === "review" && stepStatuses[step.id]?.status === "Failed" ? (
 																	<Button>
@@ -471,7 +462,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 				</div>
 			)}
 			{/* Static placeholder until bug reports are real; only meaningful next to results. */}
-			{showResults && <div className="flex flex-col justify-between px-8 pb-10">
+			{/* {showResults && <div className="flex flex-col justify-between px-8 pb-10">
 				<div className="flex flex-row items-center gap-2 pb-3 ">
 					<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
 						<Bug />
@@ -567,16 +558,17 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						</div>
 					</div>
 				</div>
-			</div>}
+			</div>} */}
 			{mode === "execute" ? (
 				<SheetFooter className="flex flex-row justify-between sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					<div className="flex flex-row items-center gap-2 justify-between w-full">
 						<div className="flex flex-row items-center gap-2">
-							<div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
+							{/* <div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
 								{testedSteps} / {totalSteps} Tested Steps
 								<ListChecksIcon className="h-4 w-4" />
-							</div>
-							<Badge variant="outline" className="text-xs">Result: {caseState.status}</Badge>
+							</div> */}
+							<p className="text-xs font-medium">Test Summary:</p>
+							<ResultSummaryCell statusCounts={statusCounts} />
 						</div>
 						<TestCaseResult
 							caseResultId={testCase.id}
@@ -587,6 +579,8 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 								emitChange(stepStatuses, stepRemarks, nextCaseState);
 							}}
 							selected_test_case_status_classnames={selected_test_case_status_classnames}
+							isPending={isSavingResult}
+							startTransition={startSavingResult}
 						/>
 					</div>
 				</SheetFooter>
@@ -597,4 +591,44 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 			) : null}
 		</SheetContent>
 	)
+}
+
+// Chip colours per step status; Untested never gets a chip.
+const result_summary_classnames: Record<Exclude<testStepStatus, "Untested">, { Icon: LucideIcon; className: string }> = {
+	Passed: { Icon: CircleCheck, className: "bg-green-600/20 text-green-800" },
+	Failed: { Icon: CircleX, className: "bg-red-600/20 text-red-800" },
+	Skipped: { Icon: SkipForwardIcon, className: "bg-gray-600/20 text-gray-800" },
+	Blocked: { Icon: CircleOff, className: "bg-gray-600/20 text-gray-800" },
+};
+
+// Fed from the sheet's own stepStatuses, so it updates as soon as a step is marked.
+export function ResultSummaryCell({ statusCounts }: { statusCounts: { value: testStepStatus; count: number }[] }) {
+	const counted = statusCounts.filter((status) => status.value !== "Untested" && status.count > 0);
+	if (counted.length === 0) return <p className="text-xs text-muted-foreground">No results yet</p>;
+	return (
+		<Tooltip>
+			<TooltipTrigger render={
+				<div className="flex flex-row gap-1">
+					{counted.map((status) => {
+						const { Icon, className } = result_summary_classnames[status.value as Exclude<testStepStatus, "Untested">];
+						return (
+							<div key={status.value} className={cn("flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit", className)}>
+								<Icon size={15} />
+								<p className="font-mono text-xs">{status.count}</p>
+							</div>
+						);
+					})}
+				</div>
+			}/>
+			<TooltipContent>
+				<p className="text-xs">
+					{counted.map((status) => (
+						<span key={status.value}>
+							{status.value}: {status.count}
+						</span>
+					))}
+				</p>
+			</TooltipContent>
+		</Tooltip>
+	);
 }
