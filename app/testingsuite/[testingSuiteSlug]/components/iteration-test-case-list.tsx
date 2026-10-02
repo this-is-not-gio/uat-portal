@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardIcon, ClipboardList, Plus, UserGroup, UsersRound } from "lucide-react";
+import { ChevronDown, CircleCheck, ClipboardIcon, ClipboardList, ListCheck, Plus, TestTubes, TriangleAlert, UserGroup, UsersRound, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { type filterToken } from "./search-filter-combox";
 import type { testCase } from "@/lib/supabase/test-cases";
 import type { iterationParticipant, testIteration, testResultRow } from "@/lib/supabase/test-iterations";
@@ -11,11 +12,26 @@ import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import IterationParticipantsTable from "./iteration-participants-table";
 import { setCaseResultInclusion } from "@/lib/supabase/iteration-actions";
 import { useIterationSelection } from "./iteration-selection-context";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import SectionDialog, { type notIncludedSection } from "./section-dialog";
 import AddParticipantDialog from "./add-participant-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import type { roundCaseFlag, roundFlag } from "@/lib/supabase/case-states";
+
+// Stable default so groupByCase's memo doesn't rerun every render.
+const EMPTY_FLAGS: Record<string, roundCaseFlag[]> = {};
+
+// Section page filter buttons, grouped like the planning flags (same look as the tester table's).
+type flagFilter = "all" | "needs_testing" | "tested" | "needs_fixing";
+const hasFlag = (row: iterationCaseRow, flags: roundFlag[]) => row.roundFlags.some((f) => flags.includes(f.flag));
+const FLAG_FILTERS: { value: flagFilter; label: string; icon: LucideIcon; match: (row: iterationCaseRow) => boolean }[] = [
+	{ value: "all", label: "All", icon: ListCheck, match: () => true },
+	{ value: "needs_testing", label: "Needs testing", icon: TestTubes, match: (row) => hasFlag(row, ["failed", "blocked", "skipped", "changed_since", "not_tested"]) },
+	{ value: "tested", label: "Tested", icon: CircleCheck, match: (row) => hasFlag(row, ["tested"]) },
+	{ value: "needs_fixing", label: "Needs fixing", icon: TriangleAlert, match: (row) => hasFlag(row, ["incomplete", "removed", "update_pending", "changed_after_testing"]) },
+];
 
 function matchesFilter(testCase: testCase, filter: filterToken): boolean {
 	if (filter.field === "search") {
@@ -28,11 +44,11 @@ function matchesFilter(testCase: testCase, filter: filterToken): boolean {
 }
 
 // Collapse the round's one-row-per-case-per-org results into one row per case.
-function groupByCase(rows: testResultRow[], orgNames: Map<string, string>): iterationCaseRow[] {
+function groupByCase(rows: testResultRow[], orgNames: Map<string, string>, caseFlags: Record<string, roundCaseFlag[]>): iterationCaseRow[] {
 	const byCase = new Map<string, iterationCaseRow>();
 	for (const row of rows) {
 		const key = row.testCaseId ?? row.id;
-		const group = byCase.get(key) ?? { ...row, id: key, orgResults: [] };
+		const group: iterationCaseRow = byCase.get(key) ?? { ...row, id: key, orgResults: [], roundFlags: caseFlags[key] ?? [] };
 		group.orgResults.push({
 			resultId: row.id,
 			organizationId: row.organizationId,
@@ -54,6 +70,7 @@ export function IterationTestCaseList({
 	roundActions,
 	participants = [],
 	testerCounts = {},
+	caseFlags = EMPTY_FLAGS,
 }: {
 	testCases: testResultRow[];
 	iteration?: testIteration | null;
@@ -68,9 +85,14 @@ export function IterationTestCaseList({
 	// Orgs taking part in this round (Participants tab).
 	participants?: iterationParticipant[];
 	testerCounts?: Record<string, number>;
+	// Per-case flags for this round (getRoundCaseFlags), keyed by testCaseId ?? result id.
+	caseFlags?: Record<string, roundCaseFlag[]>;
 }) {
 	const [addSectionOpen, setAddSectionOpen] = useState(false);
 	const [addParticipantOpen, setAddParticipantOpen] = useState(false);
+	// Read once at mount: Base UI warns if an uncontrolled Collapsible's defaultOpen changes later
+	// (e.g. after adding a participant refreshes the list).
+	const [participantsDefaultOpen] = useState(participants.length > 0);
 	// A started round's case set is locked (apply_iteration_sync, 0023); new orgs can still join it.
 	const canAddSection = !!roundActions && iteration?.status === "not_started";
 
@@ -78,7 +100,6 @@ export function IterationTestCaseList({
 	const [filters] = useState<filterToken[]>([]);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(testCases.filter((tc) => tc.includedInRun).map((tc) => tc.id)));
 	const [inclusionError, setInclusionError] = useState<string | null>(null);
-	const [tab, setTab] = useState<"test-cases" | "issues">("test-cases");
 	const orgNames = useMemo(
 		() => new Map(participants.map(({ organization }) => [organization.id, organization.name])),
 		[participants]
@@ -101,11 +122,16 @@ export function IterationTestCaseList({
 	// The round-wide "All" list shows only what will run; a section view keeps every case so
 	// its checkboxes can show (and, while planned, change) what's left out.
 	const caseRows = useMemo(
-		() => groupByCase(sectionSlug ? visibleTestCases : visibleTestCases.filter((tc) => tc.includedInRun), orgNames),
-		[visibleTestCases, orgNames, sectionSlug]
+		() => groupByCase(sectionSlug ? visibleTestCases : visibleTestCases.filter((tc) => tc.includedInRun), orgNames, caseFlags),
+		[visibleTestCases, orgNames, sectionSlug, caseFlags]
 	);
 
-	const visibleIds = useMemo(() => visibleTestCases.map((tc) => tc.id), [visibleTestCases]);
+	const [flagFilter, setFlagFilter] = useState<flagFilter>("all");
+	const activeFlagFilter = FLAG_FILTERS.find((f) => f.value === flagFilter) ?? FLAG_FILTERS[0];
+	const shownRows = useMemo(() => caseRows.filter(activeFlagFilter.match), [caseRows, activeFlagFilter]);
+
+	// Select-all only covers what the filter shows (every org's copy of each shown case).
+	const visibleIds = useMemo(() => shownRows.flatMap((row) => row.orgResults.map((result) => result.resultId)), [shownRows]);
 	const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
 	const someSelected = visibleIds.some((id) => selectedIds.has(id));
 
@@ -140,9 +166,10 @@ export function IterationTestCaseList({
 	}
 
 	const columns = useMemo(
-		() => (selectable ? createIterationTestCaseColumns({ selectedIds, onToggle: handleToggle, allSelected, someSelected, onToggleAll: handleToggleAll, disabled: locked }) : createIterationTestCaseColumns({})),
+		// Flags only show on a section page within the round, not the round-wide list.
+		() => (selectable ? createIterationTestCaseColumns({ selectedIds, onToggle: handleToggle, allSelected, someSelected, onToggleAll: handleToggleAll, disabled: locked, showFlags: !!sectionSlug }) : createIterationTestCaseColumns({ showFlags: !!sectionSlug })),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[selectable, locked, selectedIds, allSelected, someSelected]
+		[selectable, locked, selectedIds, allSelected, someSelected, sectionSlug]
 	);
 
 	return (
@@ -155,97 +182,125 @@ export function IterationTestCaseList({
 				</Badge>
 			</div> */}
 			{/* <DataTable columns={columns} data={visibleTestCases} /> */}
-			{/* A single section only needs its case table; the tabs are for the round overview. */}
-			{!sectionSlug && <div className="flex flex-row items-center justify-between gap-2">
-				<Tabs defaultValue="test-cases" value={tab} onValueChange={(value) => setTab(value as "test-cases" | "issues")} className="w-full">
-					<TabsList>
-						<TabsTrigger value="test-cases" className="flex flex-row items-center gap-2">
-							<ClipboardIcon className="size-4" />
-							<p className="text-xs font-medium">Test Cases</p>
-						</TabsTrigger>
-						<TabsTrigger value="issues" className="flex flex-row items-center gap-2">
-							<UserGroup className="size-4" />
-							<p className="text-xs font-medium">Participants</p>
-						</TabsTrigger>
-					</TabsList>
-				</Tabs>
-					{tab === "test-cases" ? (
-						<div className="flex flex-row items-center justify-between gap-2">
-							<p className="text-xs text-muted-foreground whitespace-nowrap">
-								<span className="font-medium font-mono">{caseRows.length}</span> test {caseRows.length === 1 ? "case" : "cases"} in this iteration
-							</p>
-							{canAddSection && caseRows.length > 0 && (
-								<Button onClick={() => setAddSectionOpen(true)}>
-									<Plus className="h-3.5 w-3.5" />
-									<p className="text-xs">Add Section</p>
-								</Button>
-							)}
+			{/* A single section only needs its case table; participants are a round-wide concern. */}
+			{/* Start open when empty so the "Add Participant" action is visible. */}
+			{!sectionSlug && <Collapsible defaultOpen={participantsDefaultOpen}>
+				<div className="border rounded-md overflow-hidden">
+					<div className="p-4 bg-gray-200/10 flex flex-row items-center justify-between gap-2">
+						<div className="flex flex-row items-center gap-2">
+							<UserGroup className="size-5" />
+							<div className="flex flex-row items-center gap-2">
+								<p className="text-xs font-medium">Participants</p>
+								<Badge variant="secondary" className="text-xs">{participants.length} {participants.length === 1 ? "Organization" : "Organizations"}</Badge>
+							</div>
 						</div>
-					) : (
-						<div className="flex flex-row items-center justify-between gap-2">
-							<p className="text-xs text-muted-foreground whitespace-nowrap">
-								<span className="font-medium font-mono">{participants.length}</span> {participants.length === 1 ? "organization" : "organizations"} participating 
-							</p>
-							{roundActions && participants.length > 0 && (
+						<div className="flex flex-row items-center gap-1">
+							{/* The dialog only mounts with roundActions (editable planned/running round). */}
+							{roundActions && (
 								<Button onClick={() => setAddParticipantOpen(true)}>
 									<Plus className="h-3.5 w-3.5" />
 									<p className="text-xs">Add Participant</p>
 								</Button>
 							)}
+							<CollapsibleTrigger
+								render={<Button variant="ghost" size="icon-sm" className="group" aria-label="Toggle participants" />}
+							>
+								<ChevronDown className="size-4 transition-transform duration-200 group-data-[panel-open]:rotate-180" />
+							</CollapsibleTrigger>
 						</div>
-					)}
-			</div>}
+					</div>
+					<CollapsibleContent className="border-t">
+						{participants.length === 0 ? (
+							<IterationEmptyState
+								icon={<UsersRound size={45} className="text-muted-foreground" />}
+								title="No participants yet"
+								description="Add the organizations that will record results in this round."
+							/>
+						) : (
+							<IterationParticipantsTable participants={participants} testCases={testCases} testerCounts={testerCounts} iterationId={roundActions ? iteration?.id : undefined} iterationNumber={iteration?.iterationNumber} bordered={false} />
+						)}
+					</CollapsibleContent>
+				</div>
+			</Collapsible>}
+			{sectionSlug && (
+				<div className="flex flex-row flex-wrap items-center gap-2">
+					{FLAG_FILTERS.map((filter) => {
+						const Icon = filter.icon;
+						return (
+							<Button
+								key={filter.value}
+								size="sm"
+								variant={flagFilter === filter.value ? "default" : "outline"}
+								onClick={() => setFlagFilter(filter.value)}
+							>
+								<Icon size={15} className="mr-1" />
+								<p className="text-xs">{filter.label}</p>
+								<span className={cn("font-mono text-xs", flagFilter === filter.value ? "" : "text-muted-foreground")}>{caseRows.filter(filter.match).length}</span>
+							</Button>
+						);
+					})}
+				</div>
+			)}
 			{inclusionError && (
 				<p role="alert" className="text-xs text-destructive bg-red-50 border border-red-600/30 rounded-md px-3 py-2">{inclusionError}</p>
 			)}
-			{/*  */}
-			{ !sectionSlug && tab === "test-cases" && caseRows.length === 0 ? (
-				// Rows are copied per participant, so a section can only be added once an org takes part.
-				<IterationEmptyState
-					icon={<ClipboardList size={45} className="text-muted-foreground" />}
-					title="No sections yet"
-					description={participants.length === 0
-						? "Add a participant first, then add the sections this round will test."
-						: `Add the sections ${iteration?.name ?? "this iteration"} will test.`}
-					action={canAddSection && (participants.length === 0 ? (
-						// A disabled button gets no pointer events, so the span carries the tooltip.
-						<Tooltip>
-							<TooltipTrigger render={<span className="inline-flex" />}>
-								<Button disabled>
+			<div className="border rounded-md overflow-hidden">
+				{/* A section page already names the section, so it shows just the table. */}
+				{!sectionSlug && (
+					<div className="p-4 bg-gray-200/10 flex flex-row items-center justify-between gap-1">
+						<div className="flex flex-row items-center gap-2">
+							<ClipboardIcon className="size-5" />
+							<div className="flex flex-row items-center gap-2">
+								<p className="text-xs font-medium">Test Cases</p>
+								{/* caseRows is one row per case; testCases has a copy per org. */}
+								<Badge variant="secondary" className="text-xs">{caseRows.length} {caseRows.length === 1 ? "test case" : "test cases"}</Badge>
+							</div>
+						</div>
+						{canAddSection && caseRows.length > 0 && (
+							<Button onClick={() => setAddSectionOpen(true)}>
+								<Plus className="h-3.5 w-3.5" />
+								<p className="text-xs">Add Section</p>
+							</Button>
+						)}
+					</div>
+				)}
+				<div className={sectionSlug ? undefined : "border-t"}>
+					{!sectionSlug && caseRows.length === 0 ? (
+						// Rows are copied per participant, so a section can only be added once an org takes part.
+						<IterationEmptyState
+							icon={<ClipboardList size={45} className="text-muted-foreground" />}
+							title="No sections yet"
+							description={participants.length === 0
+								? "Add a participant first, then add the sections this round will test."
+								: `Add the sections ${iteration?.name ?? "this iteration"} will test.`}
+							action={canAddSection && (participants.length === 0 ? (
+								// A disabled button gets no pointer events, so the span carries the tooltip.
+								<Tooltip>
+									<TooltipTrigger render={<span className="inline-flex" />}>
+										<Button disabled>
+											<Plus className="h-3.5 w-3.5" />
+											<p className="text-xs">Add Section</p>
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>Add a participant organization first</TooltipContent>
+								</Tooltip>
+							) : (
+								<Button onClick={() => setAddSectionOpen(true)}>
 									<Plus className="h-3.5 w-3.5" />
 									<p className="text-xs">Add Section</p>
 								</Button>
-							</TooltipTrigger>
-							<TooltipContent>Add a participant organization first</TooltipContent>
-						</Tooltip>
+							))}
+						/>
 					) : (
-						<Button onClick={() => setAddSectionOpen(true)}>
-							<Plus className="h-3.5 w-3.5" />
-							<p className="text-xs">Add Section</p>
-						</Button>
-					))}
-				/>
-			) : !sectionSlug && tab !== "test-cases" && participants.length === 0 ? (
-				<IterationEmptyState
-					icon={<UsersRound size={45} className="text-muted-foreground" />}
-					title="No participants yet"
-					description="Add the organizations that will record results in this round."
-					action={roundActions && (
-						<Button onClick={() => setAddParticipantOpen(true)}>
-							<Plus className="h-3.5 w-3.5" />
-							<p className="text-xs">Add Participant</p>
-						</Button>
+						<DataTable
+							columns={columns}
+							data={shownRows}
+							renderRowDetail={(row) => <TestCaseSheet testCase={row} onChangeTestCase={() => { }} />}
+							bordered={false}
+						/>
 					)}
-				/>
-			) : sectionSlug || tab === "test-cases" ? (
-				<DataTable
-					columns={columns}
-					data={caseRows}
-					renderRowDetail={(row) => <TestCaseSheet testCase={row} onChangeTestCase={() => {}} />}
-				/>
-			) : (
-				<IterationParticipantsTable participants={participants} testCases={testCases} testerCounts={testerCounts} iterationId={roundActions ? iteration?.id : undefined} />
-			)}
+				</div>
+			</div>
 			{roundActions && iteration && (
 				<>
 					{canAddSection && <SectionDialog

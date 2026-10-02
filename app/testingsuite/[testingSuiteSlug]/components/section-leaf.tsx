@@ -16,6 +16,7 @@ export default function SectionLeaf({
 	dragAttributes,
 	dragListeners,
 	rowHighlighted,
+	notTestedYet = false,
 	...rest
 }: {
 	name: string;
@@ -29,7 +30,9 @@ export default function SectionLeaf({
 	// switches to a drag handle whenever the whole row is highlighted, not
 	// only when the mouse is precisely over the small icon itself.
 	rowHighlighted?: boolean;
-} & React.ComponentProps<typeof SidebarMenuButton>) {
+	// The suite has had rounds but none included this section (0033 rule 3).
+	notTestedYet?: boolean;
+} &React.ComponentProps<typeof SidebarMenuButton>) {
 	const router = useRouter();
 	const pathname = usePathname();
 
@@ -73,7 +76,12 @@ export default function SectionLeaf({
 			) : (
 				<IconComponent />
 			)}
-			{name}
+			<span className="truncate">{name}</span>
+			{notTestedYet && (
+				<span className="ml-auto shrink-0 rounded-md border border-gray-600/40 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-800">
+					Not tested yet
+				</span>
+			)}
 		</SidebarMenuButton>
 	)
 }

@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Combobox, ComboboxInput, ComboboxContent, ComboboxList, ComboboxItem } from "@/components/ui/combobox";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ChevronRight, FolderOpen, IterationCw, Plus, Upload } from "lucide-react";
-import { ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
+import { ROUND_STATUS_LABELS, untestedSectionSlugs } from "@/lib/supabase/case-states";
 import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { Board } from "@/components/board/board";
@@ -71,11 +71,12 @@ export default async function TestCasesTab({
 	const sectionSlug = isIterationView ? sectionPath?.[1] : sectionPath?.[0];
 
 	// While a round runs, edits only reach testers through the vendor's Sync.
-	// Once it has started its case set is locked (0023), so only content changes can be synced.
+	// Once it has started its case set is locked (0023): nothing new is added, but content changes
+	// sync and removals are flagged for testers (0036).
 	const allIterationChanges = activeIteration && editable ? await getIterationChanges(activeIteration.id) : [];
 	const iterationChanges = activeIteration?.status === "not_started"
 		? allIterationChanges
-		: allIterationChanges.filter((change) => change.change === "changed");
+		: allIterationChanges.filter((change) => change.change !== "added");
 	// Mirrors start_iteration's guard: only one round can run at a time, and
 	// Draft/Ready suites start theirs from the Test Results tab's own CTA.
 	const canStartIteration = !activeIteration && (suiteStatus === "ready" || suiteStatus === "in_testing" || suiteStatus === "sign_off_issued" || suiteStatus === "signed_off");
@@ -87,6 +88,8 @@ export default async function TestCasesTab({
 		readinessIssues: readinessIssues.map((issue) => ({ testCaseId: issue.testCaseId, code: null, issue: issue.issue })),
 	};
 	const testCaseCounts = new Map(suite.sections.map((section) => [section.id, section.testCases.length]));
+	// Sections no round has included yet (0033 rule 3): badged here instead of flagging each case.
+	const notTestedSlugs = untestedSectionSlugs(suite.sections.map((section) => section.slug), iterations, sectionsByIteration);
 	const addSectionTrigger = (
 		<Button>
 			<Plus className="h-4 w-4" />
@@ -182,7 +185,7 @@ export default async function TestCasesTab({
 										<SidebarMenu>
 											{
 												data.map((item, index) => (
-													<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} menu={editable ? { suiteId: testSuiteId, testCaseCounts } : undefined} />
+													<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} menu={editable ? { suiteId: testSuiteId, testCaseCounts } : undefined} notTestedSlugs={notTestedSlugs} />
 												))
 											}
 										</SidebarMenu>
@@ -194,12 +197,12 @@ export default async function TestCasesTab({
 			</div>
 			{isIterationView ? (
 				sectionSlug ? (
-					<TestIterationSection suiteName={suiteName} iteration={matchedIteration} sectionSlug={sectionSlug} />
+					<TestIterationSection testSuiteId={testSuiteId} suiteName={suiteName} iteration={matchedIteration} sectionSlug={sectionSlug} />
 				) : (
 					<TestIterationComponent testSuiteId={testSuiteId} testSuiteSlug={testSuiteSlug} suiteName={suiteName} iteration={matchedIteration} sectionsNotIncluded={matchedSectionsNotIncluded} />
 				)
 			) : (
-				<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} suiteStatus={suiteStatus} />
+				<SectionContent testSuiteId={testSuiteId} sectionSlug={sectionSlug} hasSections={suite.sections.length > 0} authoring={authoring} suiteStatus={suiteStatus} sectionNotTestedYet={!!sectionSlug && notTestedSlugs.has(sectionSlug)} />
 			)}
 		</IterationSelectionProvider>
 	)
@@ -295,10 +298,11 @@ type TreeItem = TreeNode | [TreeNode, ...TreeItem[]];
 
 type sectionMenuContext = { suiteId: string; testCaseCounts: Map<string, number> };
 
-function Tree({ item, testSuiteSlug, menu }: { item: TreeItem; testSuiteSlug: string; menu?: sectionMenuContext }) {
+function Tree({ item, testSuiteSlug, menu, notTestedSlugs }: { item: TreeItem; testSuiteSlug: string; menu?: sectionMenuContext; notTestedSlugs: Set<string> }) {
 	const [{ name, id, slug, itemtype }, ...items] = Array.isArray(item) ? item : [item]
 
 	if (!items.length) {
+		const notTestedYet = itemtype === "section" && notTestedSlugs.has(slug);
 		if (itemtype === "section" && menu) {
 			return (
 				<SectionRow
@@ -308,11 +312,12 @@ function Tree({ item, testSuiteSlug, menu }: { item: TreeItem; testSuiteSlug: st
 					testSuiteSlug={testSuiteSlug}
 					suiteId={menu.suiteId}
 					testCaseCount={menu.testCaseCounts.get(id) ?? 0}
+					notTestedYet={notTestedYet}
 				/>
 			)
 		}
 		return (
-			<SectionLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} />
+			<SectionLeaf name={name} id={id} slug={slug} itemtype={itemtype} testSuiteSlug={testSuiteSlug} notTestedYet={notTestedYet} />
 		)
 	}
 
@@ -340,10 +345,11 @@ function Tree({ item, testSuiteSlug, menu }: { item: TreeItem; testSuiteSlug: st
 									testSuiteSlug={testSuiteSlug}
 									suiteId={menu.suiteId}
 									testCaseCounts={menu.testCaseCounts}
+									notTestedSlugs={notTestedSlugs}
 								/>
 							) : (
 								items.map((item, index) => (
-									<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} menu={menu} />
+									<Tree key={index} item={item} testSuiteSlug={testSuiteSlug} menu={menu} notTestedSlugs={notTestedSlugs} />
 								))
 							)
 						}
@@ -440,7 +446,7 @@ function IterationTree({ item, testSuiteSlug, iterationsSlug, activeIterationSlu
 }
 
 
-async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring, suiteStatus }: { testSuiteId: string; sectionSlug?: string; hasSections: boolean; authoring: authoringContext; suiteStatus: suiteStatus }) {
+async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring, suiteStatus, sectionNotTestedYet }: { testSuiteId: string; sectionSlug?: string; hasSections: boolean; authoring: authoringContext; suiteStatus: suiteStatus; sectionNotTestedYet: boolean }) {
 	let section;
 	if (sectionSlug === "all") {
 		section = await getAllTestCasesBySuiteId(testSuiteId);
@@ -452,5 +458,5 @@ async function SectionContent({ testSuiteId, sectionSlug, hasSections, authoring
 			if ((error as { code?: string })?.code !== "PGRST116") throw error;
 		}
 	}
-	return <TestCasesComponents testCases={section?.testCases || []} section={section} hasSections={hasSections} authoring={authoring} suiteStatus={suiteStatus} />;
+	return <TestCasesComponents testCases={section?.testCases || []} section={section} hasSections={hasSections} authoring={authoring} suiteStatus={suiteStatus} sectionNotTestedYet={sectionNotTestedYet} />;
 }

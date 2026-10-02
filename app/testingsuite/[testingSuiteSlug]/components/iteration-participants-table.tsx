@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { DataTable } from "@/components/table/data-table";
 import { iterationParticipantColumns, type iterationParticipantRow } from "@/components/table/iteration-participant-columns";
 import type { iterationParticipant, testResultRow } from "@/lib/supabase/test-iterations";
@@ -14,6 +15,8 @@ export default function IterationParticipantsTable({
 	testCases,
 	testerCounts,
 	iterationId,
+	iterationNumber,
+	bordered,
 }: {
 	participants: iterationParticipant[];
 	// Every result row of the round (one per case per org).
@@ -21,14 +24,24 @@ export default function IterationParticipantsTable({
 	testerCounts: Record<string, number>;
 	// Set only while the round is planned/running: enables Withdraw organization.
 	iterationId?: string;
+	// Row click opens this org's results for the round in the Test Results tab.
+	iterationNumber?: number;
+	bordered?: boolean;
 }) {
+	const router = useRouter();
+	const { testingSuiteSlug } = useParams<{ testingSuiteSlug: string }>();
+
 	const rows = useMemo<iterationParticipantRow[]>(() => {
-		const progress = new Map<string, { tested: number; total: number }>();
+		const empty = { tested: 0, total: 0, passed: 0, failed: 0, blocked: 0 };
+		const progress = new Map<string, typeof empty>();
 		for (const row of testCases) {
 			if (!row.includedInRun) continue;
-			const entry = progress.get(row.organizationId) ?? { tested: 0, total: 0 };
+			const entry = progress.get(row.organizationId) ?? { ...empty };
 			entry.total += 1;
 			if (row.status !== "Untested" && row.status !== "In Progress") entry.tested += 1;
+			if (row.status === "Passed") entry.passed += 1;
+			else if (row.status === "Failed") entry.failed += 1;
+			else if (row.status === "Blocked") entry.blocked += 1;
 			progress.set(row.organizationId, entry);
 		}
 		return participants.map(({ organization, submittedAt }) => ({
@@ -36,7 +49,7 @@ export default function IterationParticipantsTable({
 			name: organization.name,
 			typeLabel: ORG_TYPE_LABELS[organization.type],
 			testerCount: testerCounts[organization.id] ?? 0,
-			...(progress.get(organization.id) ?? { tested: 0, total: 0 }),
+			...(progress.get(organization.id) ?? empty),
 			submittedAt,
 			iterationId,
 		}));
@@ -47,5 +60,10 @@ export default function IterationParticipantsTable({
 		return <p className="text-xs text-muted-foreground py-6 text-center">No organizations are taking part in this round yet.</p>;
 	}
 
-	return <DataTable columns={iterationParticipantColumns} data={rows} />;
+	function openResults(row: iterationParticipantRow) {
+		const iteration = iterationNumber ? `&iteration=${iterationNumber}` : "";
+		router.push(`/testingsuite/${testingSuiteSlug}/all?tab=test-results${iteration}&org=${row.id}`);
+	}
+
+	return <DataTable columns={iterationParticipantColumns} data={rows} onRowClick={openResults} bordered={bordered} />;
 }

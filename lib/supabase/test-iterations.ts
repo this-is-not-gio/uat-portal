@@ -20,7 +20,8 @@ export type testIteration = {
 };
 
 // How a row got into (or was changed within) a running iteration by vendor sync.
-export type syncKind = "added" | "updated" | "force_reset";
+// removed / audience_changed: taken out mid-round by Sync, see isRemovedFromRound (0036).
+export type syncKind = "added" | "updated" | "force_reset" | "removed" | "audience_changed";
 
 // An org taking part in a round. Each participant gets its own result rows, filtered by the
 // cases' audience. Every query below takes an optional `orgId`: omit it to get all
@@ -45,6 +46,8 @@ export type resultArchive = {
 // removed: copied case no longer exists live, or its audience no longer
 // includes that org. One row per case per org. hasResults rows are never
 // refreshed/removed by sync (only a vendor force refresh resets them).
+// incomplete (changed rows only): the live case has test_case_issues, so
+// neither sync nor force refresh will copy it until it's fixed.
 export type iterationChange = {
     change: "added" | "changed" | "removed";
     testCaseId: string | null;
@@ -52,6 +55,9 @@ export type iterationChange = {
     code: string | null;
     title: string;
     hasResults: boolean;
+    incomplete: boolean;
+    // removed rows only: the case still exists but its audience no longer includes this org.
+    audienceChanged: boolean;
     organizationId: string;
     organizationName: string;
 };
@@ -402,6 +408,8 @@ export async function getIterationChanges(iterationId: string, orgId?: string): 
         code: row.code,
         title: row.title,
         hasResults: row.has_results,
+        incomplete: row.incomplete,
+        audienceChanged: row.audience_changed,
         organizationId: row.organization_id,
         organizationName: row.organization_name,
     }));

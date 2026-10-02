@@ -17,6 +17,7 @@ export default function SectionRow({
 	testSuiteSlug,
 	suiteId,
 	testCaseCount,
+	notTestedYet = false,
 	dragRef,
 	dragStyle,
 	dragAttributes,
@@ -29,6 +30,7 @@ export default function SectionRow({
 	testSuiteSlug: string;
 	suiteId: string;
 	testCaseCount: number;
+	notTestedYet?: boolean;
 	dragRef?: (node: HTMLLIElement | null) => void;
 	dragStyle?: React.CSSProperties;
 	dragAttributes?: DraggableAttributes;
@@ -55,6 +57,8 @@ export default function SectionRow({
 				dragAttributes={dragAttributes}
 				dragListeners={dragListeners}
 				rowHighlighted={hovered}
+				// The row's Edit/Delete menu takes the badge's spot while hovered.
+				notTestedYet={notTestedYet && !hovered}
 			/>
 			<SectionMenu
 				suiteId={suiteId}

@@ -2,16 +2,32 @@
 
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { CircleCheck, CircleOffIcon, CircleX, History, Info, MessageSquare, SkipForward } from "lucide-react"
+import { CircleCheck, CircleOffIcon, CircleX, GitPullRequest, History, Info, MessageSquare, RefreshCw, RotateCcw, SkipForward, SquarePlus, Trash2, UserX, type LucideIcon } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { TestStatusMapping } from "./columns"
 // Type-only import: test-iterations.ts uses the server Supabase client.
 import type { testResultRow } from "@/lib/supabase/test-iterations"
 import { Avatar, AvatarFallback } from "../ui/avatar"
-import { initials } from "@/lib/utils"
+import { cn, initials } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 
 export type { testResultRow }
+
+// A row's change flags: what vendor sync did to it this round (syncKind) or what's waiting
+// for the next round (pendingChange). Same palette as the iteration table's ROUND_FLAG_STYLES.
+export type resultChangeFlag = NonNullable<testResultRow["syncKind"]> | NonNullable<testResultRow["pendingChange"]>
+
+// Highest priority first, for picking the one to show when a row has several.
+export const RESULT_CHANGE_FLAG_ORDER: resultChangeFlag[] = ["removed", "audience_changed", "force_reset", "changed", "updated", "added"]
+
+export const RESULT_CHANGE_FLAG_STYLES: Record<resultChangeFlag, { label: string; description: string; className: string; icon: LucideIcon }> = {
+	removed: { label: "Removed", description: "The test case was deleted from the suite. It's out of this round; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: Trash2 },
+	audience_changed: { label: "Audience changed", description: "The test case is no longer meant for this organization. It's out of this round; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: UserX },
+	force_reset: { label: "Reset by vendor", description: "The vendor reset this case's results mid-round.", className: "bg-red-50 text-red-800 border-red-600/40", icon: RotateCcw },
+	changed: { label: "Outdated · retest next round", description: "The test case was edited after it was tested; the new version comes in the next iteration.", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitPullRequest },
+	updated: { label: "Updated", description: "The vendor synced a newer version of this case into the round.", className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: RefreshCw },
+	added: { label: "Added mid-round", description: "The case was added to the round after it started.", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: SquarePlus },
+}
 
 // How vendor sync touched this row mid-round (syncKind) or what's pending for it (pendingChange).
 function SyncBadges({ row }: { row: testResultRow }) {
@@ -35,6 +51,36 @@ function SyncBadges({ row }: { row: testResultRow }) {
 			)}
 		</>
 	);
+}
+
+// Every change flag on the row as an icon chip, highest priority first; the tooltip says what happened.
+// Also used by the tester table, whose rows carry syncKind only (no pendingChange).
+export function ChangeFlagsCell({ row }: { row: testResultRow }) {
+	const flags = RESULT_CHANGE_FLAG_ORDER.filter((flag) => flag === row.syncKind || flag === row.pendingChange)
+	if (flags.length === 0) return null
+	const resetReason = row.archives[0]?.reason
+	return (
+		<div className="flex flex-row items-center justify-end gap-1">
+			{flags.map((flag) => {
+				const style = RESULT_CHANGE_FLAG_STYLES[flag]
+				const Icon = style.icon
+				return (
+					<Tooltip key={flag}>
+						<TooltipTrigger render={
+							<div className={cn("rounded-md p-1", style.className)} aria-label={style.label}>
+								<Icon size={15} />
+							</div>
+						} />
+						<TooltipContent className="flex flex-col items-start gap-0.5 max-w-64">
+							<p className="font-semibold">{style.label}</p>
+							<p>{style.description}</p>
+							{flag === "force_reset" && resetReason && <p>Reason: {resetReason}</p>}
+						</TooltipContent>
+					</Tooltip>
+				)
+			})}
+		</div>
+	)
 }
 
 // Remarks across every step of the case.
@@ -100,9 +146,8 @@ export const testResultColumns = columnHelper.columns([
 			<div>
 				<div className="flex flex-row flex-wrap items-center gap-1">
 					<p className="text-sm">{info.row.original.title}</p>
-					<SyncBadges row={info.row.original} />
 				</div>
-				<p className="text-xs text-muted-foreground">{info.row.original.code}</p>
+				<p className="text-xs text-muted-foreground font-mono">{info.row.original.code}</p>
 			</div>
 		),
 	}),
@@ -150,33 +195,37 @@ export const testResultColumns = columnHelper.columns([
 		),
 		cell: (info) => {
 			const previous = info.getValue();
-			if (!previous) return <p className="text-xs text-muted-foreground">—</p>;
+			if (!previous) return <p className="text-xs text-muted-foreground">Not Tested Before</p>;
 			const status = TestStatusMapping[previous];
 			const Icon = status?.icon || Info;
 			return (
-				<Badge variant="outline" className={`text-xs ${status?.className ?? ""}`}>
-					<History data-icon="inline-start" size={13} />
-					<Icon data-icon="inline-start" size={13} />
-					{previous}
-				</Badge>
+				<div className={cn("rounded-md py-1 px-1.5 w-fit flex flex-row items-center gap-1.5", status?.className ?? "bg-gray-100 text-gray-800")}>
+					<Icon size={12} />
+					<p className="text-xs font-semibold whitespace-nowrap">{info.getValue()}</p>
+				</div>
 			);
 		},
 	}),
 	columnHelper.accessor("status", {
-		header: "Status",
+		header: "",
 		cell: (info) => {
+			// Same chip as the Test Cases tab's Result column (columns.tsx CaseResultCell), followed by the change flags.
 			const status = TestStatusMapping[info.getValue() as keyof typeof TestStatusMapping];
 			const Icon = status?.icon || Info;
-			const variant = status?.variant || "outline";
 			return (
-				<div className="flex items-end justify-end gap-2">
+				<div className="flex items-center justify-end gap-2">
 					{info.row.original.statusOverridden && (
 						<Badge variant="outline" className="text-xs">Overridden</Badge>
 					)}
-					<Badge className={`text-xs ${info.getValue() === "Passed" ? "bg-green-100 text-green-800" : ""}`} variant={variant || "outline"}>
-						<Icon data-icon="inline-start" size={15} className={`text-${info.getValue() === "Passed" ? "green-800" : "gray-500"}`} />
-						{info.getValue()}
-					</Badge>
+					{
+					    info.getValue() !== "Untested" ? (
+							<div className={cn("rounded-md py-1 px-1.5 w-fit flex flex-row items-center gap-1.5", status?.className ?? "bg-gray-100 text-gray-800")}>
+								<Icon size={12} />
+								<p className="text-xs font-semibold whitespace-nowrap">{info.getValue()}</p>
+							</div>
+						) : null
+					}
+					<ChangeFlagsCell row={info.row.original} />
 				</div>
 			)
 		},

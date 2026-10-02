@@ -88,7 +88,7 @@ function TestCaseRowActions({ testCase, sections }: { testCase: testCase; sectio
 	);
 }
 
-export default function TestCasesComponents({ testCases, section, hasSections, authoring, suiteStatus }: { testCases: testCase[], section?: testSection; hasSections: boolean; authoring: authoringContext; suiteStatus: suiteStatus }) {
+export default function TestCasesComponents({ testCases, section, hasSections, authoring, suiteStatus, sectionNotTestedYet = false }: { testCases: testCase[], section?: testSection; hasSections: boolean; authoring: authoringContext; suiteStatus: suiteStatus; sectionNotTestedYet?: boolean }) {
 	// Local order, reordered optimistically via drag-and-drop then persisted.
 	// Reset from `testCases` whenever the server gives us a genuinely new set
 	// (section/filter change, save, etc.) — adjusting state during render per
@@ -239,6 +239,10 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 									<Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge>
 								)
 							}
+							{/* No round has included this section yet; its cases aren't flagged one by one (0033). */}
+							{sectionNotTestedYet && (
+								<Badge variant="outline" className="text-xs bg-gray-50 text-gray-800 border-gray-600/40">Not tested yet</Badge>
+							)}
 						</div>
 						{authoring.editable && (
 							<TestCaseEditor sections={authoring.sections} defaultSectionId={defaultSectionId} trigger={newTestCaseTrigger("New test case")} />

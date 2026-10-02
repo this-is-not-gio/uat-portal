@@ -10,9 +10,10 @@ import {
 	CircleCheckBig,
 	CircleDashed,
 	Stamp,
-		Circle,
-		CircleCheck,
-	} from "lucide-react";
+	Circle,
+	CircleCheck,
+	FolderClock,
+} from "lucide-react";
 import { EpicWorkspace } from "@/components/epic-workspace";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +36,7 @@ import OverviewTabSkeleton from "../overview-tab-skeleton";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import SubmitResultsDialog from "../components/submit-results-dialog";
 import { can } from "@/lib/auth/permissions";
+import ImportUATTestCases from "../components/import-uat-test-cases";
 
 
 
@@ -54,8 +56,8 @@ const statusMapping: Record<testingsuiteLifeCycle, { Icon: LucideIcon, label: st
 // enforces (READINESS_ISSUES) — every draft suite needs these before it can
 // go Ready.
 const READINESS_REQUIREMENTS: { key: keyof typeof READINESS_ISSUES; title: string; description: string }[] = [
-		{ key: "no_complete_test_cases", title: "At least one complete test case", description: "Complete = has steps, every step has an expected result, and a role assignee is set. Only complete test cases can be picked when starting an iteration." },
-	];
+	{ key: "no_complete_test_cases", title: "At least one complete test case", description: "Complete = has steps, every step has an expected result, and a role assignee is set. Only complete test cases can be picked when starting an iteration." },
+];
 
 
 
@@ -96,6 +98,11 @@ export default async function TestsuitePage({
 	const canMarkReady = draftIssues.length === 0;
 	// Submit Result: the viewer's org in the open round, until it submits (the Test Cases notice takes over from there).
 	const currentRound = signOffContext?.currentIteration ?? null;
+	// Header state of the open round: still being planned, running and waiting on submissions, or every testing org submitted.
+	const roundState = !currentRound || currentRound.isFallback ? null
+		: currentRound.iteration.status === "not_started" ? { label: "Planning", dot: "bg-gray-400" }
+			: currentRound.pendingSubmissions > 0 ? { label: `${currentRound.pendingSubmissions} submission${currentRound.pendingSubmissions === 1 ? "" : "s"} pending`, dot: "bg-amber-500" }
+				: { label: "All submissions in", dot: "bg-green-600" };
 	const ownParticipation = currentRound?.ownParticipation ?? null;
 	const showSubmit = can(currentUser, "submit") && !!ownParticipation && !currentRound?.isFallback && !ownParticipation.submittedAt;
 	const Icon = statusMapping[testSuite.status].Icon;
@@ -111,9 +118,9 @@ export default async function TestsuitePage({
 	const testCasesTabSlot =
 		tab === "test-cases" && isTester && currentUser ?
 			<TesterTestCasesTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionSlug={sectionSlug} iterationNumber={iteration} orgId={org} currentUser={currentUser} />
-		: tab === "test-cases" ?
-			<TestCasesTab  testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionPath={section} />
-			: null
+			: tab === "test-cases" ?
+				<TestCasesTab testSuiteId={testSuite.id} testSuiteSlug={testingSuiteSlug} suiteName={testSuite.name} suiteStatus={testSuite.status} sectionPath={section} />
+				: null
 
 	const testResultsTabSlot =
 		tab === "test-results" && !isTester ?
@@ -136,62 +143,63 @@ export default async function TestsuitePage({
 				<div className="">
 					{
 						testSuite.status === "draft" ? (
-							<div className=" ">
-								{/* Mark as Ready is rendered after the checklist hover card below. */}
-								<div className="flex flex-row items-end gap-2">
+							// <div className=" ">
+							// 	{/* Mark as Ready is rendered after the checklist hover card below. */}
+							// 	<div className="flex flex-row items-end gap-2">
 
 
-									<HoverCard>
-										<HoverCardTrigger render={
-											<div className="flex flex-row items-center gap-2">
-												<div className="flex flex-col items-end">
-													<p className="font-semibold text-sm">{canMarkReady ? "Ready to hand over" : "Test suite is not Ready"}</p>
-													<p className="text-xs text-muted-foreground">
-														{canMarkReady ? "At least one test case is complete" : "This suite is still a draft and cannot be mark as ready"}
-													</p>
-												</div>
-												<div className="flex flex-row items-center justify-center size-10 bg-gray-500/10 border border-gray-800/50 rounded-md">
-													<CircleDashed className="size-4 text-gray-500" />
-												</div>
-											</div>
-										} />
-										<HoverCardContent className="w-80 mt-2 px-4 py-3" side="bottom">
-											<div className="flex flex-col gap-2">
-												<div className="flex flex-col">
-													<p className="font-semibold text-sm">Test Suite is not ready</p>
-													<p className="text-xs text-muted-foreground">
-														This suite is still a Draft — testers can&apos;t see it yet. Here&apos;s what&apos;s left before you can mark it Ready:
-													</p>
-												</div>
-												<div className="flex flex-col gap-1">
-													{READINESS_REQUIREMENTS.map((requirement) => (
-														<div key={requirement.key} className="flex flex-row items-start gap-2 p-2">
-															{draftIssues.some((issue) => issue.issue === requirement.key)
-																? <Circle className="size-4 shrink-0 text-gray-500 mt-0.5" />
-																: <CircleCheck className="size-4 shrink-0 text-green-700 mt-0.5" />}
-															<div className="">
-																<p className="font-medium text-sm">{requirement.title}</p>
-																<p className="text-xs text-muted-foreground">{requirement.description}</p>
-															</div>
-														</div>
-													))}
-												</div>
-												<div className="flex items-center gap-2">
-													<p className="text-xs text-muted-foreground">
-														Once every test case clears these, hit Mark as Ready to unlock the suite for testing.
-													</p>
-												</div>
-											</div>
-										</HoverCardContent>
-										</HoverCard>
-										{canMarkReady && (
-											<SuiteStatusButton suiteId={testSuite.id} targetStatus="ready">
-												{NextIcon && <NextIcon className="h-4 w-4" />}
-												<p className="text-xs">Mark as Ready</p>
-											</SuiteStatusButton>
-										)}
-									</div>
-							</div>
+							// 		<HoverCard>
+							// 			<HoverCardTrigger render={
+							// 				<div className="flex flex-row items-center gap-2">
+							// 					<div className="flex flex-col items-end">
+							// 						<p className="font-semibold text-sm">{canMarkReady ? "Ready to hand over" : "Test suite is not Ready"}</p>
+							// 						<p className="text-xs text-muted-foreground">
+							// 							{canMarkReady ? "At least one test case is complete" : "This suite is still a draft and cannot be mark as ready"}
+							// 						</p>
+							// 					</div>
+							// 					<div className="flex flex-row items-center justify-center size-10 bg-gray-500/10 border border-gray-800/50 rounded-md">
+							// 						<CircleDashed className="size-4 text-gray-500" />
+							// 					</div>
+							// 				</div>
+							// 			} />
+							// 			<HoverCardContent className="w-80 mt-2 px-4 py-3" side="bottom">
+							// 				<div className="flex flex-col gap-2">
+							// 					<div className="flex flex-col">
+							// 						<p className="font-semibold text-sm">Test Suite is not ready</p>
+							// 						<p className="text-xs text-muted-foreground">
+							// 							This suite is still a Draft — testers can&apos;t see it yet. Here&apos;s what&apos;s left before you can mark it Ready:
+							// 						</p>
+							// 					</div>
+							// 					<div className="flex flex-col gap-1">
+							// 						{READINESS_REQUIREMENTS.map((requirement) => (
+							// 							<div key={requirement.key} className="flex flex-row items-start gap-2 p-2">
+							// 								{draftIssues.some((issue) => issue.issue === requirement.key)
+							// 									? <Circle className="size-4 shrink-0 text-gray-500 mt-0.5" />
+							// 									: <CircleCheck className="size-4 shrink-0 text-green-700 mt-0.5" />}
+							// 								<div className="">
+							// 									<p className="font-medium text-sm">{requirement.title}</p>
+							// 									<p className="text-xs text-muted-foreground">{requirement.description}</p>
+							// 								</div>
+							// 							</div>
+							// 						))}
+							// 					</div>
+							// 					<div className="flex items-center gap-2">
+							// 						<p className="text-xs text-muted-foreground">
+							// 							Once every test case clears these, hit Mark as Ready to unlock the suite for testing.
+							// 						</p>
+							// 					</div>
+							// 				</div>
+							// 			</HoverCardContent>
+							// 		</HoverCard>
+							// 		{canMarkReady && (
+							// 			<SuiteStatusButton suiteId={testSuite.id} targetStatus="ready">
+							// 				{NextIcon && <NextIcon className="h-4 w-4" />}
+							// 				<p className="text-xs">Mark as Ready</p>
+							// 			</SuiteStatusButton>
+							// 		)}
+							// 	</div>
+							// </div>
+							<ImportUATTestCases/>
 						) : testSuite.status === "ready" ? (
 							<div className="flex flex-row items-center gap-2">
 								{/* <SuiteStatusButton suiteId={testSuite.id} targetStatus="draft" variant="outline">
@@ -212,31 +220,20 @@ export default async function TestsuitePage({
 								{/* Open round, else the newest one (isFallback). Counts the viewer's own org's cases (Admin: each case once). */}
 								{signOffContext.currentIteration && (
 									<div className="flex flex-col items-end gap-1">
-										<div className="flex flex-row items-center gap-2">
-											<p className="font-semibold text-sm">{signOffContext.currentIteration.iteration.name}</p>
+										<div className="flex flex-col items-end">
 											<p className="text-xs text-muted-foreground">
-												{signOffContext.currentIteration.isFallback ? "Last round" : "Current round"}
+												{signOffContext.currentIteration.isFallback ? "Last Iteration" : "Current Iteration"}
 											</p>
+											<p className="font-semibold text-sm">{signOffContext.currentIteration.iteration.name}</p>
 										</div>
-										<div className="flex flex-row items-center gap-2">
-											<div className="h-1.5 w-32 overflow-hidden rounded-full bg-muted">
-												<div className="h-full bg-primary" style={{ width: `${signOffContext.currentIteration.percent}%` }} />
+										{/* Planning / waiting on submissions / all submitted (roundState). */}
+										{roundState && (
+											<div className="flex flex-row items-center gap-1.5 text-xs">
+												<span className={`size-1 rounded-full ${roundState.dot}`} />
+												<p className="text-xs text-muted-foreground font-mono">{roundState.label}</p>
 											</div>
-											<p className="font-mono text-xs text-muted-foreground">
-												{signOffContext.currentIteration.tested}/{signOffContext.currentIteration.counts.total} · {signOffContext.currentIteration.percent}%
-											</p>
-										</div>
+										)}
 									</div>
-								)}
-								{/* Testing orgs submit first; Internal's Sign Off only appears once its own org has submitted. Admin only sees progress. */}
-								{showSubmit && currentRound && ownParticipation && (
-									<SubmitResultsDialog
-										iteration={currentRound.iteration}
-										organizationName={ownParticipation.organization.name}
-										counts={currentRound.counts}
-										tested={currentRound.tested}
-										othersPending={currentRound.othersPending}
-									/>
 								)}
 								{/* Step 1: the vendor issues the sign-off once every test case the rounds need has a finished result. An open round still blocks it inside the dialog. */}
 								{can(currentUser, "issue_sign_off") && signOffContext.openUntestedCases === 0 ? (

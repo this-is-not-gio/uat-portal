@@ -5,7 +5,9 @@ import { type DataTableFeatures } from "./data-table-features"
 import { Badge } from "../ui/badge"
 import { Checkbox } from "../ui/checkbox"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "../ui/hover-card"
-import { ClipboardCheck, Info, MoreHorizontal, Waypoints } from "lucide-react"
+import { Ban, CircleCheck, CircleX, ClipboardCheck, GitBranchPlus, GitCompare, GitPullRequest, Info, MoreHorizontal, Scissors, TestTubes, Trash2, TriangleAlert, Waypoints, type LucideIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { roundFlagLabel, type roundCaseFlag, type roundFlag } from "@/lib/supabase/case-states"
 import { TestStatusMapping } from "./columns"
 // Type-only import: test-iterations.ts uses the server Supabase client.
 import type { testResultRow } from "@/lib/supabase/test-iterations"
@@ -19,9 +21,49 @@ import { Button } from "../ui/button"
 export type iterationOrgResult = { resultId: string; organizationId: string; organizationName: string; status: testCaseStatus; includedInRun: boolean }
 // A round has one result row per case per org; the table shows one row per case
 // (the first org's row as the base) with every org's result alongside.
-export type iterationCaseRow = testResultRow & { orgResults: iterationOrgResult[] }
+export type iterationCaseRow = testResultRow & { orgResults: iterationOrgResult[]; roundFlags: roundCaseFlag[] }
 
 const columnHelper = createColumnHelper<DataTableFeatures, iterationCaseRow>()
+
+// Same palette as the Test Cases tab's flags (columns.tsx TestCaseFlags).
+const ROUND_FLAG_STYLES: Record<roundFlag, { className: string; icon: LucideIcon }> = {
+	incomplete: { className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: TriangleAlert },
+	removed: { className: "bg-red-50 text-red-800 border-red-600/40", icon: Trash2 },
+	update_pending: { className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitCompare },
+	changed_after_testing: { className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitPullRequest },
+	failed: { className: "bg-red-50 text-red-800 border-red-600/40", icon: CircleX },
+	blocked: { className: "bg-gray-100 text-gray-800 border-gray-600/40", icon: Ban },
+	skipped: { className: "bg-gray-50 text-gray-800 border-gray-600/40", icon: Scissors },
+	tested: { className: "bg-green-50 text-green-800 border-green-600/40", icon: CircleCheck },
+	changed_since: { className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitBranchPlus },
+	not_tested: { className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: TestTubes },
+}
+
+function RoundFlagsCell({ flags }: { flags: roundCaseFlag[] }) {
+	if (flags.length === 0) return null
+	return (
+		<div className="flex flex-row flex-wrap items-center gap-1">
+			{flags.map((flag) => {
+				const style = ROUND_FLAG_STYLES[flag.flag]
+				const Icon = style.icon
+				// <div key={flag.flag} className={cn("w-fit rounded-md border py-0.5 px-1.5 flex flex-row items-center gap-1", style.className)}>
+				// 	<style.icon size={12} />
+				// 	<p className="text-xs font-semibold whitespace-nowrap">{roundFlagLabel(flag)}</p>
+				// </div>
+				return (
+					<Tooltip key={flag.flag}>
+						<TooltipTrigger render={<div className={cn("rounded-md p-1", style.className)}>
+							<Icon size={15} />
+						</div>} />
+						<TooltipContent>
+							{roundFlagLabel(flag)}
+						</TooltipContent>
+					</Tooltip>
+				)
+			})}
+		</div>
+	)
+}
 
 function TestCaseTitleCell({
 	row,
@@ -34,10 +76,10 @@ function TestCaseTitleCell({
 	selected?: boolean;
 	indeterminate?: boolean;
 	onToggle?: (checked: boolean) => void;
-	// Checkbox shown read-only (round already started: its case set is locked).
+	// Round already started (case set locked): no checkbox, unticked cases just stay faded.
 	disabled?: boolean;
 }) {
-	// Only meaningful where the checkbox shows: an unticked case isn't part of the round.
+	// Only meaningful in a selectable table: an unticked case isn't part of the round.
 	const isExcluded = !!onToggle && !selected && !indeterminate;
 	const status = TestStatusMapping[row.status as keyof typeof TestStatusMapping];
 	const Icon = status?.icon || Info;
@@ -48,13 +90,12 @@ function TestCaseTitleCell({
 				<div className="flex flex-row gap-2">
 					<div className="flex flex-row items-center gap-4">
 						{
-							onToggle && (
+							onToggle && !disabled && (
 								<Checkbox
 									checked={selected}
 									indeterminate={indeterminate}
 									onCheckedChange={(checked) => onToggle(checked === true)}
 									onClick={(event) => event.stopPropagation()}
-									disabled={disabled}
 									aria-label={`Select ${row.title} for testing`}
 								/>
 							)
@@ -67,7 +108,6 @@ function TestCaseTitleCell({
 								)}
 								<p className="text-xs text-muted-foreground font-mono">{row.code}</p>
 							</div>
-							{isExcluded && <Badge variant="outline" className="text-xs">Excluded</Badge>}
 							{/* <div className="flex flex-row items-center gap-2">
 								<Tooltip>
 									<TooltipTrigger render={
@@ -138,9 +178,12 @@ export function createIterationTestCaseColumns({
 	someSelected,
 	onToggleAll,
 	disabled,
+	showFlags = false,
 }: {
-	// Checkboxes shown but read-only (the round's case set is locked once it starts).
+	// The round's case set is locked once it starts: checkboxes hide, unticked rows stay faded.
 	disabled?: boolean;
+	// Flags column (a round's section page only).
+	showFlags?: boolean;
 	selectedIds?: Set<string>;
 	onToggle?: (row: iterationCaseRow, checked: boolean) => void;
 	allSelected?: boolean;
@@ -151,13 +194,12 @@ export function createIterationTestCaseColumns({
 		columnHelper.display({
 			id: "testCase",
 			header: () => (
-				onToggleAll ? (
+				onToggleAll && !disabled ? (
 					<div className="flex flex-row items-center gap-4">
 						<Checkbox
 							checked={allSelected}
 							indeterminate={someSelected && !allSelected}
 							onCheckedChange={(checked) => onToggleAll(checked === true)}
-							disabled={disabled}
 							aria-label="Select all test cases"
 						/>
 						<p>Test Case</p>
@@ -248,5 +290,12 @@ export function createIterationTestCaseColumns({
 				<p className="text-xs font-medium text-muted-foreground">{info.getValue()}</p>
 			)
 		}),
+		...(showFlags ? [columnHelper.accessor("roundFlags", {
+			header: "",
+			cell: (info) => 
+				<div className="flex flex-row justify-end">
+					<RoundFlagsCell flags={info.getValue()} />
+				</div>
+		})] : []),
 	])
 }

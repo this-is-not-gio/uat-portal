@@ -173,6 +173,8 @@ export type currentIterationProgress = {
     ownParticipation: iterationParticipant | null;
     // Other testing orgs in this round still to submit; 0 means the viewer's submit finishes the round.
     othersPending: number;
+    // Every testing org in this round still to submit (the viewer's included), shown in the suite header.
+    pendingSubmissions: number;
 };
 
 export type signOffContext = {
@@ -218,6 +220,7 @@ export async function getSignOffContext(suiteId: string, orgId?: string): Promis
         }
         const currentCounts = countStatuses(statuses);
         const tested = currentCounts.passed + currentCounts.failed + currentCounts.blocked;
+        const pending = unsubmittedParticipantOrgs(currentParticipants);
         currentIteration = {
             iteration: current,
             isFallback: !openIteration,
@@ -225,7 +228,8 @@ export async function getSignOffContext(suiteId: string, orgId?: string): Promis
             tested,
             percent: currentCounts.total ? Math.round((tested / currentCounts.total) * 100) : 0,
             ownParticipation: currentParticipants.find((p) => p.organization.id === orgId) ?? null,
-            othersPending: unsubmittedParticipantOrgs(currentParticipants).filter((o) => o.id !== orgId).length,
+            othersPending: pending.filter((o) => o.id !== orgId).length,
+            pendingSubmissions: pending.length,
         };
     }
     const latestCompleted = iterations.find((i) => i.status === "completed") ?? null;

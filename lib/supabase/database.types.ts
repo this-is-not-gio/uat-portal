@@ -936,14 +936,25 @@ export type Database = {
       get_iteration_changes: {
         Args: { p_iteration_id: string }
         Returns: {
+          audience_changed: boolean
           change: string
           code: string
           has_results: boolean
+          incomplete: boolean
           organization_id: string
           organization_name: string
           test_case_id: string
           test_case_result_id: string
           title: string
+        }[]
+      }
+      get_round_case_history: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          changed_since: boolean
+          last_result: string
+          last_round_name: string
+          test_case_id: string
         }[]
       }
       get_sidebar_suites: {

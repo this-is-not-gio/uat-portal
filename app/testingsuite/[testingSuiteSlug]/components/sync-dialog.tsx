@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Lock, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,8 +27,10 @@ function changeKey(change: iterationChange): string {
 
 // Banner + dialog on the vendor's Test Cases tab while a round is running.
 export default function SyncBanner({ iteration, changes }: { iteration: { id: string; name: string }; changes: iterationChange[] }) {
+	const router = useRouter();
 	const [open, setOpen] = useState(false);
-	const selectable = changes.filter((c) => !c.hasResults);
+	// Removals are always selectable: a running round flags the row and keeps its results (0036).
+	const selectable = changes.filter((c) => !(c.change === "changed" && c.hasResults) && !c.incomplete);
 	const [selected, setSelected] = useState<Set<string>>(() => new Set(selectable.map(changeKey)));
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -36,10 +39,11 @@ export default function SyncBanner({ iteration, changes }: { iteration: { id: st
 
 	const groups: { title: string; hint?: string; rows: iterationChange[]; locked: boolean }[] = [
 		{ title: "Added", hint: "New test cases, added to the round as Untested", rows: changes.filter((c) => c.change === "added"), locked: false },
-		{ title: "Changed — not tested yet", hint: "Refreshed in place, nothing is lost", rows: changes.filter((c) => c.change === "changed" && !c.hasResults), locked: false },
-		{ title: "Changed — already tested", hint: "Results are kept; the new version is tested next round", rows: changes.filter((c) => c.change === "changed" && c.hasResults), locked: true },
-		{ title: "Removed — not tested yet", hint: "Dropped from the round", rows: changes.filter((c) => c.change === "removed" && !c.hasResults), locked: false },
-		{ title: "Removed — already tested", hint: "Stays in this round's results", rows: changes.filter((c) => c.change === "removed" && c.hasResults), locked: true },
+		{ title: "Changed — not tested yet", hint: "Refreshed in place, nothing is lost", rows: changes.filter((c) => c.change === "changed" && !c.hasResults && !c.incomplete), locked: false },
+		{ title: "Changed — already tested", hint: "Results are kept; the new version is tested next round", rows: changes.filter((c) => c.change === "changed" && c.hasResults && !c.incomplete), locked: true },
+		{ title: "Changed — incomplete", hint: "Fix the test case before it can be synced", rows: changes.filter((c) => c.change === "changed" && c.incomplete), locked: true },
+		{ title: "Removed", hint: "Deleted from the suite; taken out of the round and flagged for testers, results kept", rows: changes.filter((c) => c.change === "removed" && !c.audienceChanged), locked: false },
+		{ title: "Audience changed", hint: "No longer for that organization; taken out of its round and flagged, results kept", rows: changes.filter((c) => c.change === "removed" && c.audienceChanged), locked: false },
 	];
 
 	function toggle(key: string) {
@@ -65,6 +69,8 @@ export default function SyncBanner({ iteration, changes }: { iteration: { id: st
 				return;
 			}
 			setOpen(false);
+			// The sync action doesn't revalidate; refetch so the banner and the rows' flags update.
+			router.refresh();
 		});
 	}
 
@@ -136,13 +142,18 @@ function ChangeRow({ change, locked, checked, onToggle, disabled }: { change: it
 				)}
 				<span className="font-mono text-xs">{change.code}</span>
 				<span className="text-sm truncate flex-1">{change.title}</span>
-				{locked && <Badge variant="outline" className="text-xs">{change.change === "changed" ? "Retest next round" : "Kept in round"}</Badge>}
+				{change.audienceChanged && <span className="text-xs text-muted-foreground">{change.organizationName}</span>}
+				{locked && (
+					<Badge variant="outline" className={cn("text-xs", change.incomplete && "border-amber-600/40 text-amber-900")}>
+						{change.incomplete ? "Incomplete · can't sync" : change.change === "changed" ? "Retest next round" : "Kept in round"}
+					</Badge>
+				)}
 				{canDiff && (
 					<Button size="sm" variant="ghost" onClick={() => setShowDiff((v) => !v)}>
 						{showDiff ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />} View changes
 					</Button>
 				)}
-				{locked && change.change === "changed" && change.testCaseResultId && (
+				{locked && change.change === "changed" && !change.incomplete && change.testCaseResultId && (
 					<ForceRefreshButton caseResultId={change.testCaseResultId} label={change.code ?? change.title} />
 				)}
 			</div>

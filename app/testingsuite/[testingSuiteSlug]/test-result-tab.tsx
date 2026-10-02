@@ -3,7 +3,7 @@ import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, S
 import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./components/result-leaf";
 import TreeCollapsible from "./components/tree-collapsible";
-import { ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
+import { isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 import TestResultComponents, { type participationStatus } from "./test-result-components";
 import StartIterationDialog from "./components/start-iteration-dialog";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -11,8 +11,9 @@ import { can } from "@/lib/auth/permissions";
 import { canWithdrawParticipation, getParticipationProgress, unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
 import ParticipationPanel from "./components/participation-panel";
 import SubmissionBar from "./components/submission-bar";
+import SyncBanner from "./components/sync-dialog";
 import type { suiteStatus } from "@/lib/supabase/Init";
-import { ChevronRight, ClipboardList, Play } from "lucide-react";
+import { CalendarClock, ChevronRight, ClipboardList, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type TreeNode = {
@@ -32,6 +33,8 @@ type TreeNode = {
 	includedCount?: number;
 	// Only set on "iteration" nodes: finished rounds start collapsed unless selected.
 	collapsed?: boolean;
+	// Section nodes of a round that hasn't started: nothing to show until it does.
+	disabled?: boolean;
 };
 type TreeItem = TreeNode | [TreeNode, ...TreeItem[]];
 
@@ -127,13 +130,18 @@ export default async function TestResultTab({
 		participantOrgs[0] ??
 		null;
 
-	const [rawResults, changes, orgSectionsByIteration] = selectedIteration
+	// The vendor's Sync banner: same changes as the Test Cases tab's (every org; nothing is added
+	// once a round starts, 0023, but edits and removals still sync, 0036).
+	const showSyncBanner = selectedIteration?.status === "in_progress" && can(currentUser, "sync");
+	const [rawResults, changes, orgSectionsByIteration, allChanges] = selectedIteration
 		? await Promise.all([
 			getIterationResults(selectedIteration.id, selectedOrg?.id),
 			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id, selectedOrg?.id) : Promise.resolve([]),
 			selectedOrg ? getSectionsByIteration(testSuiteId, selectedOrg.id) : Promise.resolve(null),
+			showSyncBanner ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
 		])
-		: [[], [], null];
+		: [[], [], null, []];
+	const syncChanges = allChanges.filter((change) => change.change !== "added");
 	// Tree counts follow the picked participant (its links keep ?org=); rounds it
 	// isn't part of keep the all-participants counts.
 	const treeSections = new Map(
@@ -147,8 +155,9 @@ export default async function TestResultTab({
 			.map((change) => [change.testCaseResultId as string, change.change])
 	);
 	// Only the cases planned into the round; left-out rows stay out of the table and scorecards.
+	// Rows removed mid-round stay listed (flagged, kept out of the scorecards).
 	const results = rawResults
-		.filter((row) => row.includedInRun)
+		.filter((row) => row.includedInRun || isRemovedFromRound(row))
 		.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
 	const iterationHasResults = results.some((row) =>
 		row.status !== "Untested" || (row.stepsToExecute ?? []).some((step) => step.status !== "Untested" || (step.remarks?.length ?? 0) > 0)
@@ -204,7 +213,20 @@ export default async function TestResultTab({
 					)}
 				</SidebarContent>
 			</div>
-			{selectedIteration ? (
+			{selectedIteration?.status === "not_started" ? (
+				// A planned round has no results yet: no table or overview until it starts.
+				<div className="flex-1 flex items-center justify-center h-full">
+					<div className="flex flex-col items-center justify-center text-center gap-5 py-12">
+						<div className="justify-center bg-muted/50 rounded-xl size-20 flex flex-col items-center gap-2">
+							<CalendarClock size={45} className="text-muted-foreground" />
+						</div>
+						<div className="flex flex-col items-center justify-center gap-1">
+							<p className="font-semibold text-muted-foreground text-lg">{selectedIteration.name} hasn&apos;t started yet</p>
+							<p className="text-xs text-muted-foreground">Results appear here once the iteration starts.</p>
+						</div>
+					</div>
+				</div>
+			) : selectedIteration ? (
 				<TestResultComponents
 					// Remount on iteration/section/org switch so client state reseeds from the new rows.
 					key={`${selectedIteration.id}:${selectedIteration.status}:${sectionSlug ?? "all"}:${selectedOrg?.id ?? ""}`}
@@ -219,6 +241,10 @@ export default async function TestResultTab({
 					participantOrgs={participantOrgs}
 					selectedOrgId={selectedOrg?.id ?? null}
 					participationStatus={participationStatus}
+					syncBanner={showSyncBanner && syncChanges.length > 0 ? (
+						// Keyed: a server-created element rendered among a client component's static children trips React's dev key check.
+						<SyncBanner key="sync-banner" iteration={{ id: selectedIteration.id, name: selectedIteration.name }} changes={syncChanges} />
+					) : null}
 					participation={showParticipation ? <ParticipationPanel participation={participants} selectedOrgId={selectedOrg?.id ?? null} /> : null}
 					submission={showSubmission && ownParticipation ? (
 						<SubmissionBar
@@ -285,18 +311,19 @@ function buildTree(
 				active: isSelected && sectionSlug === section.slug,
 				testedCount: section.testedCount,
 				includedCount: section.includedCount,
+				disabled: iteration.status === "not_started",
 			}));
 			return sectionNodes.length ? [iterationNode, ...sectionNodes] : iterationNode;
 		});
 }
 
 function Tree({ item, testSuiteSlug }: { item: TreeItem; testSuiteSlug: string }) {
-	const [{ name, id, slug, itemtype, iterationNumber, active, statusLabel, testedCount, includedCount, collapsed }, ...items] = Array.isArray(item) ? item : [item]
+	const [{ name, id, slug, itemtype, iterationNumber, active, statusLabel, testedCount, includedCount, collapsed, disabled }, ...items] = Array.isArray(item) ? item : [item]
 
 	if (!items.length) {
 		return (
 			<SidebarMenuItem>
-				<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} statusLabel={statusLabel} testCaseCount={testedCount} totalCount={includedCount} title={itemtype === "iteration-section" ? `${testedCount ?? 0} of ${includedCount ?? 0} tested` : undefined} />
+				<ResultLeaf name={name} id={id} slug={slug} itemtype={itemtype} iterationNumber={iterationNumber} active={active} testSuiteSlug={testSuiteSlug} statusLabel={statusLabel} testCaseCount={testedCount} totalCount={includedCount} disabled={disabled} title={disabled ? "Available once the iteration starts" : itemtype === "iteration-section" ? `${testedCount ?? 0} of ${includedCount ?? 0} tested` : undefined} />
 			</SidebarMenuItem>
 		)
 	}

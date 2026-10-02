@@ -7,15 +7,18 @@ import type { testIteration } from "@/lib/supabase/test-iterations";
 import { IterationTestCaseList } from "./components/iteration-test-case-list";
 import IterationSectionHeaderMenu from "./components/iteration-section-header-menu";
 import IterationSectionCaseCount from "./components/iteration-section-case-count";
+import { getRoundCaseFlags } from "@/lib/supabase/round-flags";
 
 // One section's view within a test iteration — the iteration-scoped
 // counterpart of SectionContent/TestCasesComponents. Scaffolded to match
 // TestIterationComponent's layout; refine as needed.
 export async function TestIterationSection({
+	testSuiteId,
 	suiteName,
 	iteration,
 	sectionSlug,
 }: {
+	testSuiteId: string;
 	suiteName: string;
 	iteration: testIteration | null;
 	sectionSlug?: string;
@@ -28,6 +31,7 @@ export async function TestIterationSection({
 	// Rows are one per case per org, so count distinct cases (as the list and sidebar do).
 	const allCaseIds = new Set(testCases.map((tc) => tc.testCaseId ?? tc.id));
 	const includedCaseIds = new Set(testCases.filter((tc) => tc.includedInRun).map((tc) => tc.testCaseId ?? tc.id));
+	const caseFlags = iteration ? await getRoundCaseFlags(iteration, testCases, testSuiteId) : {};
 
 	return (
 		<ScrollArea className="flex-1 shrink-0 flex flex-col px-2">
@@ -93,7 +97,7 @@ export async function TestIterationSection({
 						</div>
 					</div>
 				) : (
-					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} testerCounts={testerCounts} />
+					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} testerCounts={testerCounts} caseFlags={caseFlags} />
 				)}
 			</div>
 		</ScrollArea>

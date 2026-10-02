@@ -57,7 +57,7 @@ const TestCaseFlags: Record<caseFlag, { label: string; className: string; icon: 
 	"update_pending": { label: "Update Pending", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitCompare },
 	"skipped": { label: "Skipped", className: "bg-gray-50 text-gray-800 border-gray-600/40", icon: Scissors },
 	"changed_since": { label: "Changed Since Last Test", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitBranchPlus },
-	"new": { label: "New", className: "bg-green-50 text-green-800 border-green-600/40", icon: Stars },
+	"not_tested": { label: "Not Tested Yet", className: "bg-gray-50 text-gray-800 border-gray-600/40", icon: TestTubes },
 }
 
 const columnHelper = createColumnHelper<DataTableFeatures, testCase>()
@@ -82,7 +82,6 @@ function TestCaseTitleCell({ row }: { row: testCase; suiteStatus: suiteStatus })
 function flagText(flag: caseFlag, state: caseState) {
 	const label = TestCaseFlags[flag].label;
 	if (flag === "skipped" || flag === "changed_since") return `${label} · ${shortRoundName(state.resultRoundName)}`;
-	if (flag === "new") return `${label} · not in ${shortRoundName(state.openRoundName)}`;
 	return label;
 }
 

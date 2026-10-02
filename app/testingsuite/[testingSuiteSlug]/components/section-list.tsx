@@ -24,11 +24,14 @@ export default function SectionList({
 	testSuiteSlug,
 	suiteId,
 	testCaseCounts,
+	notTestedSlugs,
 }: {
 	sections: SectionItem[];
 	testSuiteSlug: string;
 	suiteId: string;
 	testCaseCounts: Map<string, number>;
+	// Sections no round has included yet: shown with a "Not tested yet" badge.
+	notTestedSlugs?: Set<string>;
 }) {
 	const [order, setOrder] = useState(sections);
 	// Tracks the last `sections` prop we've synced from, so a genuine
@@ -74,6 +77,7 @@ export default function SectionList({
 						testSuiteSlug={testSuiteSlug}
 						suiteId={suiteId}
 						testCaseCount={testCaseCounts.get(section.id) ?? 0}
+						notTestedYet={notTestedSlugs?.has(section.slug) ?? false}
 					/>
 				))}
 			</SortableContext>
@@ -86,11 +90,13 @@ function SortableSectionRow({
 	testSuiteSlug,
 	suiteId,
 	testCaseCount,
+	notTestedYet,
 }: {
 	section: SectionItem;
 	testSuiteSlug: string;
 	suiteId: string;
 	testCaseCount: number;
+	notTestedYet: boolean;
 }) {
 	const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: section.id });
 
@@ -102,6 +108,7 @@ function SortableSectionRow({
 			testSuiteSlug={testSuiteSlug}
 			suiteId={suiteId}
 			testCaseCount={testCaseCount}
+			notTestedYet={notTestedYet}
 			dragRef={setNodeRef}
 			dragStyle={{ transform: CSS.Transform.toString(transform), transition }}
 			dragAttributes={attributes}

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { CheckCircle, CircleDashed, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, Users } from "lucide-react"
+import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import ConfirmDialog from "@/app/testingsuite/[testingSuiteSlug]/components/confirm-dialog"
@@ -17,12 +17,23 @@ export type iterationParticipantRow = {
 	testerCount: number
 	tested: number
 	total: number
+	// Included cases by result, for the Iteration Summary chips (same buckets as the Test Results summary).
+	passed: number
+	failed: number
+	blocked: number
 	submittedAt: string | null
 	// Set only while the round is planned/running — shows the Withdraw action.
 	iterationId?: string
 }
 
 const columnHelper = createColumnHelper<DataTableFeatures, iterationParticipantRow>()
+
+// Mirrors the Test Results tab's Passed / Failed / Blocked summary cards.
+const SUMMARY_CHIPS = [
+	{ key: "passed", label: "Passed", icon: CircleCheck, className: "bg-green-200/10 text-green-800" },
+	{ key: "failed", label: "Failed", icon: CircleX, className: "bg-red-200/10 text-red-800" },
+	{ key: "blocked", label: "Blocked", icon: Ban, className: "bg-gray-600/5 text-gray-800" },
+] as const
 
 // Where an org is in the round: submitted, started testing, or not started.
 const PARTICIPATION_STATES = {
@@ -69,6 +80,22 @@ export const iterationParticipantColumns = columnHelper.columns([
 		},
 	}),
 	columnHelper.display({
+		id: "Iteration Summary",
+		header: "Iteration Summary",
+		cell: (info) => (
+			<div className="flex flex-row items-center gap-1">
+				{SUMMARY_CHIPS.map(({ key, label, icon: Icon, className }) => (
+					<div key={key} className={`flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit ${className}`}>
+						<Icon size={15} />
+						<div className="flex flex-row items-center gap-0.5">
+							<p className="font-mono text-xs">{info.row.original[key]}</p>
+						</div>
+					</div>
+				))}
+			</div>
+		),
+	}),
+	columnHelper.display({
 		id: "Submitted",
 		cell: (info) => {
 			const { submittedAt, tested, id, name, iterationId } = info.row.original
@@ -85,7 +112,8 @@ export const iterationParticipantColumns = columnHelper.columns([
 						</div>
 					</div>
 					{
-						iterationId ? <ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} /> : null
+						// Rows navigate on click; React bubbles through portals, so keep menu/dialog clicks here.
+						iterationId ? <div onClick={(event) => event.stopPropagation()}><ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} /></div> : null
 					}
 				</div>
 			)

@@ -47,9 +47,15 @@ interface DataTableProps<TData extends RowData & { id: string }> {
 	renderRowDetail?: (row: TData) => React.ReactNode
 	// Called when a row's detail sheet closes (e.g. to refresh server data it may have changed).
 	onDetailClose?: () => void
+	// Plain click handler for rows that navigate instead of opening a detail sheet.
+	onRowClick?: (row: TData) => void
 	// When set, rows get a drag handle and can be reordered; called with the
 	// dragged row's id and the id it was dropped onto.
 	onReorder?: (activeId: string, overId: string) => void
+	// Off when the table sits inside a container that already draws the frame.
+	bordered?: boolean
+	// Rows shown faded and inert: no click, no detail sheet (e.g. a case removed from the suite).
+	isRowDisabled?: (row: TData) => boolean
 }
 
 
@@ -58,7 +64,10 @@ export function DataTable<TData extends RowData & { id: string }>({
 	data,
 	renderRowDetail,
 	onDetailClose,
+	onRowClick,
 	onReorder,
+	bordered = true,
+	isRowDisabled,
 }: DataTableProps<TData>) {
 	const table = useTable<DataTableFeatures, TData>({
 		data,
@@ -103,6 +112,8 @@ export function DataTable<TData extends RowData & { id: string }>({
 			setOpenRowId={setOpenRowId}
 			renderRowDetail={renderRowDetail ? () => renderRowDetail(row.original) : undefined}
 			onDetailClose={onDetailClose}
+			onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+			disabled={isRowDisabled?.(row.original) ?? false}
 		/>
 	))
 
@@ -153,7 +164,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 
 	return (
 		<div className="flex flex-col gap-3 h-full min-h-0">
-			<div className="overflow-hidden rounded-md border">
+			<div className={bordered ? "overflow-hidden rounded-md border" : "overflow-hidden"}>
 				{
 					// DndContext renders a11y-only <div>s (HiddenText/LiveRegion) as
 					// siblings of its children, not wrapped in any DOM node — placing it
@@ -182,6 +193,8 @@ function DataRow({
 	openRowId,
 	setOpenRowId,
 	onDetailClose,
+	onClick,
+	disabled,
 }: {
 	rowId: string
 	cells: React.ReactNode[]
@@ -190,6 +203,8 @@ function DataRow({
 	openRowId: string | null
 	setOpenRowId: (id: string | null) => void
 	onDetailClose?: () => void
+	onClick?: () => void
+	disabled: boolean
 }) {
 	const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: rowId, disabled: !sortable })
 	const style = sortable ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : undefined } : undefined
@@ -201,8 +216,20 @@ function DataRow({
 		</DragHandleContext.Provider>
 	)
 
+	if (disabled) {
+		return (
+			<TableRow ref={sortable ? setNodeRef : undefined} style={style} className="group/row opacity-50 cursor-not-allowed bg-muted/30 hover:bg-muted/30" aria-disabled>
+				{providedCells}
+			</TableRow>
+		)
+	}
+
 	if (!renderRowDetail) {
-		return <TableRow ref={sortable ? setNodeRef : undefined} style={style} className="group/row">{providedCells}</TableRow>
+		return (
+			<TableRow ref={sortable ? setNodeRef : undefined} style={style} className={onClick ? "group/row cursor-pointer" : "group/row"} onClick={onClick}>
+				{providedCells}
+			</TableRow>
+		)
 	}
 
 	return (

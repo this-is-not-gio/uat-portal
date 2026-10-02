@@ -48,7 +48,7 @@ export default function SubmissionBar({
 				<div className="flex flex-row items-center gap-3">
 					<CircleCheck className="size-5 text-green-800" />
 					<div>
-						<p className="text-sm font-medium">{organizationName} submitted its results on {format(parseISO(submittedAt), "MMM d yyyy, h:mm a")}</p>
+						<p className="text-sm font-medium">{organizationName} submitted its results on <span className="font-mono">{format(parseISO(submittedAt), "MMM d yyyy, h:mm a")}</span></p>
 						<p className="text-xs text-muted-foreground">
 							{canWithdraw ? "Results are read-only. Withdraw the submission to make changes until the round is completed." : "Results are read-only."}
 						</p>
@@ -75,7 +75,8 @@ export default function SubmissionBar({
 	);
 }
 
-function SubmitDialog({ iteration, organizationName, untestedCases }: { iteration: testIteration; organizationName: string; untestedCases: untestedCase[] }) {
+// trigger: a custom button to open it (the tester header's "Submit Result"); defaults to the bar's own.
+export function SubmitDialog({ iteration, organizationName, untestedCases, trigger }: { iteration: testIteration; organizationName: string; untestedCases: untestedCase[]; trigger?: React.ReactElement }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -101,12 +102,12 @@ function SubmitDialog({ iteration, organizationName, untestedCases }: { iteratio
 
 	return (
 		<Dialog open={open} onOpenChange={(next) => { setOpen(next); setError(null); }}>
-			<DialogTrigger render={
+			<DialogTrigger render={trigger ?? (
 				<Button size="lg">
 					<Send className="h-4 w-4" />
 					<p className="text-xs">Submit our results</p>
 				</Button>
-			} />
+			)} />
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Submit {organizationName}&apos;s results for {iteration.name}?</DialogTitle>
@@ -159,7 +160,7 @@ export function WithdrawButton({ iterationId }: { iterationId: string }) {
 
 	return (
 		<div className="flex flex-col items-end gap-1">
-			<Button size="lg" variant="outline" onClick={onWithdraw} disabled={isPending}>
+			<Button size="lg" variant="outline" className="text-foreground" onClick={onWithdraw} disabled={isPending}>
 				<Undo2 className="h-4 w-4" />
 				<p className="text-xs">{isPending ? "Withdrawing…" : "Withdraw submission"}</p>
 			</Button>

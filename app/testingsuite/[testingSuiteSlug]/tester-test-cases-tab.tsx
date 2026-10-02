@@ -4,15 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem } from "@/components/ui/sidebar";
-import { getIterationChanges, getIterationParticipants, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type testIteration } from "@/lib/supabase/test-iterations";
+import { getIterationParticipants, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type testIteration } from "@/lib/supabase/test-iterations";
 import { canWithdrawParticipation, getParticipationProgress } from "@/lib/supabase/overview";
 import type { currentUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/auth/permissions";
 import type { suiteStatus } from "@/lib/supabase/Init";
 import ResultOrgPicker from "./components/result-org-picker";
-import SubmissionBar from "./components/submission-bar";
 import TesterTestCasesComponents from "./tester-test-cases-components";
-import { ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
+import { isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 
 // Internal/External "Test Cases": the viewer's own round rows (test_case_results), never the
 // live template. Everything here — rounds, sections, counts — comes from the lens org's rows.
@@ -75,22 +74,15 @@ export default async function TesterTestCasesTab({
 	const isOwnLens = lensOrg?.id === ownOrgId;
 
 	const isRunning = selectedIteration.status === "in_progress";
-	const [rawResults, changes, sectionsByIteration] = await Promise.all([
+	const [rawResults, sectionsByIteration] = await Promise.all([
 		getIterationResults(selectedIteration.id, lensOrg?.id),
-		isRunning ? getIterationChanges(selectedIteration.id, lensOrg?.id) : Promise.resolve([]),
 		// Own-org sections for every round, so template-only (e.g. internal) section names never leak.
 		getSectionsByIteration(testSuiteId, ownOrgId),
 	]);
-	// Same rule as Test Results: only tested rows the vendor can't sync ("Outdated"/"Removed").
-	const pendingByResultId = new Map(
-		changes
-			.filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults))
-			.map((change) => [change.testCaseResultId as string, change.change])
-	);
 	// Testers only see what the round runs; cases unticked while it was planned stay out.
-	const results = rawResults
-		.filter((row) => row.includedInRun)
-		.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
+	// No live-template diff here: edits reach testers only once the vendor syncs them (syncKind).
+	// Rows removed mid-round stay listed, flagged and view only (0036).
+	const results = rawResults.filter((row) => row.includedInRun || isRemovedFromRound(row));
 
 	const isOwnOrgSubmitted = isOwnLens && !!ownParticipation?.submittedAt;
 	const suiteIsOpen = suiteStatus === "in_testing";
@@ -125,12 +117,12 @@ export default async function TesterTestCasesTab({
 						<SidebarGroupLabel>Testing Iterations</SidebarGroupLabel>
 						<SidebarGroupContent>
 							<SidebarMenu>
-								{/* Oldest round first; the query returns newest first. */}
-								{[...iterations].reverse().map((iteration) => {
+								{/* Latest round first, as the query returns them. */}
+								{iterations.map((iteration) => {
 									const isSelected = iteration.id === selectedIteration.id;
 									const sections: { slug: string; name: string; tested?: number; total?: number }[] = isSelected
 										? selectedSections.map(([slug, name]) => {
-											const rows = results.filter((row) => row.sectionSlug === slug);
+											const rows = results.filter((row) => row.sectionSlug === slug && !isRemovedFromRound(row));
 											return { slug, name, tested: rows.filter((row) => isTested(row.status)).length, total: rows.length };
 										})
 										: (sectionsByIteration.get(iteration.id) ?? []).filter((section) => section.includedCount > 0).map((section) => ({ slug: section.slug, name: section.name }));
@@ -200,17 +192,14 @@ export default async function TesterTestCasesTab({
 				canRemark={canRemark}
 				submittedAt={lensSubmittedAt}
 				canWithdraw={canWithdraw}
-				submission={showSubmission && ownParticipation ? (
-					<SubmissionBar
-						iteration={selectedIteration}
-						organizationName={ownParticipation.organization.name}
-						counts={ownParticipation.counts}
-						submittedAt={ownParticipation.submittedAt}
-						untestedCases={results
-							.filter((row) => !isTested(row.status))
-							.map((row) => ({ id: row.id, code: row.code ?? null, title: row.title, sectionName: row.sectionName }))}
-					/>
-				) : null}
+				// Header's Submit Result: only while the own org can still submit. Untested cases span
+				// the whole round, not just the visible section.
+				submit={showSubmission && ownParticipation && !ownParticipation.submittedAt ? {
+					organizationName: ownParticipation.organization.name,
+					untestedCases: results
+						.filter((row) => !isTested(row.status) && !isRemovedFromRound(row))
+						.map((row) => ({ id: row.id, code: row.code ?? null, title: row.title, sectionName: row.sectionName })),
+				} : null}
 			/>
 		</>
 	);

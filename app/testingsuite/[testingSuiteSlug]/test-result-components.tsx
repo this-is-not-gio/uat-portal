@@ -9,6 +9,7 @@ import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
+import { isRemovedFromRound } from "@/lib/supabase/case-states";
 import { cn, formatIterationTimestamp } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
@@ -86,6 +87,7 @@ export default function TestResultComponents({
 	participantOrgs = [],
 	selectedOrgId = null,
 	participationStatus = null,
+	syncBanner = null,
 }: {
 	iteration: testIteration;
 	testSuiteSlug: string;
@@ -107,6 +109,8 @@ export default function TestResultComponents({
 	selectedOrgId?: string | null;
 	// null for a planned round (nothing to report yet).
 	participationStatus?: participationStatus | null;
+	// Vendor only, while the round runs: edits to tested cases waiting for Sync (server tab renders it).
+	syncBanner?: React.ReactNode;
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -125,10 +129,12 @@ export default function TestResultComponents({
 
 	const isRunning = iteration.status === "in_progress";
 	const isOpen = isRunning || iteration.status === "not_started";
-	const passed = testResultRows.filter((row) => row.status === "Passed").length;
-	const failed = testResultRows.filter((row) => row.status === "Failed").length;
-	const blocked = testResultRows.filter((row) => row.status === "Blocked").length;
-	const notTested = testResultRows.length - passed - failed - blocked;
+	// Rows removed mid-round (0036) are listed but out of the run, so out of the scorecards.
+	const inRunRows = testResultRows.filter((row) => !isRemovedFromRound(row));
+	const passed = inRunRows.filter((row) => row.status === "Passed").length;
+	const failed = inRunRows.filter((row) => row.status === "Failed").length;
+	const blocked = inRunRows.filter((row) => row.status === "Blocked").length;
+	const notTested = inRunRows.length - passed - failed - blocked;
 
 	const hasPreviousRound = testResultRows.some((row) => row.previousStatus !== null);
 	const isChangedMidRound = (row: testResultRow) => row.syncKind !== null || row.pendingChange !== undefined;
@@ -147,7 +153,7 @@ export default function TestResultComponents({
 						<FolderClock size={30} className="" />
 						<div className="flex flex-col">
 							<p className="font-semibold text-md">{iteration.name} Results</p>
-							<p className="font-mono text-xs text-muted-foreground">{format(iteration.startedAt, "MMM d yyyy")} to {format(parseISO(iteration?.plannedEndDate || ""), "MMM d yyyy")}</p>
+							<p className="font-mono text-xs text-muted-foreground">{iteration.startedAt ? format(parseISO(iteration.startedAt), "MMM d yyyy") : "Not started"} to {iteration.plannedEndDate ? format(parseISO(iteration.plannedEndDate), "MMM d yyyy") : "no end date"}</p>
 						</div>
 					</div>
 					<div className="flex flex-row items-end justify-end gap-1">
@@ -166,7 +172,7 @@ export default function TestResultComponents({
 								{participantOrgs.map((org) => (
 									<SelectItem key={org.id} value={org.id}>
 										<div className="flex flex-col">
-											<p className="text-sm">{org.name}</p>
+											<p className="text-xs">{org.name}</p>
 											<p className="text-xs text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</p>
 										</div>
 									</SelectItem>
@@ -214,6 +220,7 @@ export default function TestResultComponents({
 						)}
 					</div>
 				)} */}
+				{syncBanner}
 				<div className="min-h-0 flex-1 flex flex-col gap-2">
 					<div className="flex flex-row justify-between py-1">
 						<p className="text-xs">{`${selectedOrg?.name ?? "Organization"}'s Test Results`}</p>
@@ -222,6 +229,8 @@ export default function TestResultComponents({
 					<DataTable
 						columns={testResultColumns}
 						data={visibleRows}
+						// Removed from the suite: its results stay in this round, but there's nothing left to execute.
+						isRowDisabled={(row) => row.pendingChange === "removed" || isRemovedFromRound(row)}
 						// Result writes don't revalidate and the root layout doesn't re-render on
 						// navigation, so refresh once on close to keep the sidebar's "N left" current.
 						onDetailClose={() => router.refresh()}
