@@ -31,6 +31,14 @@ export type testSection = {
     testCases: testCase[];
 };
 
+// Names of a suite's existing sections, for spotting new sections in an import.
+export async function getSectionNames(testSuiteId: string): Promise<string[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("sections").select("name").eq("test_suite_id", testSuiteId);
+    if (error) throw error;
+    return data.map((section) => section.name);
+}
+
 export async function getTestSectionsByTestSuiteId(testSuiteId: string) {
     const supabase = await createClient();
     const { data, error } = await supabase

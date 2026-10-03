@@ -51,6 +51,9 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from 
 import { Board } from "@/components/board/board";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { clearTreeState } from "./components/tree-collapsible";
+import { useImportStaging } from "./components/import-staging";
+import ImportReview from "./components/import-review";
+import type { suiteStatus } from "@/lib/supabase/Init";
 
 
 
@@ -59,11 +62,14 @@ import { clearTreeState } from "./components/tree-collapsible";
 
 
 // showTestResults is false for testers (Internal/External): their results live in the Test Cases tab.
-export default function PageTab({ overviewTab, testCasesTab, testResultsTab, showTestResults = true }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode; showTestResults?: boolean }) {
+// existingSectionNames: the suite's current sections, so a staged import can mark new ones.
+// importSuite: the suite a staged import is saved into.
+export default function PageTab({ overviewTab, testCasesTab, testResultsTab, showTestResults = true, existingSectionNames = [], importSuite }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode; showTestResults?: boolean; existingSectionNames?: string[]; importSuite?: { id: string; status: suiteStatus } }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
 	const tab = searchParams.get("tab") ?? "overview";
+	const { staged } = useImportStaging();
 	
 	const [,testSuiteSlug, sectionPath] = pathname.split("/").filter(Boolean);
 
@@ -114,7 +120,8 @@ export default function PageTab({ overviewTab, testCasesTab, testResultsTab, sho
 					{overviewTab}
 				</TabsContent>
 				<TabsContent value="test-cases" className="w-full h-full min-h-0 flex flex-row">
-					{testCasesTab}
+					{/* A staged import takes over the tab until it's saved or discarded. */}
+					{staged && importSuite ? <ImportReview existingSectionNames={existingSectionNames} suite={importSuite} /> : testCasesTab}
 				</TabsContent>
 				{showTestResults && (
 					<TabsContent value="test-results" className="w-full h-full min-h-0 flex flex-row">

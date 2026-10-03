@@ -987,6 +987,10 @@ export type Database = {
           test_case_id: string
         }[]
       }
+      import_test_cases: {
+        Args: { p_cases: Json; p_suite_id: string }
+        Returns: Json
+      }
       is_admin: { Args: never; Returns: boolean }
       is_internal: { Args: never; Returns: boolean }
       issue_sign_off: {

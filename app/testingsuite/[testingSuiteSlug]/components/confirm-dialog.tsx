@@ -28,7 +28,7 @@ export default function ConfirmDialog({
 	body
 }: {
 	title: string;
-	description: string;
+	description: React.ReactNode;
 	confirmLabel: string;
 	onConfirm: () => Promise<actionResult<unknown>>;
 	onDone?: () => void;
@@ -65,13 +65,16 @@ export default function ConfirmDialog({
 						<TriangleAlert className="size-4 text-destructive" />
 						{title}
 					</DialogTitle>
-					<DialogDescription className="text-xs text-muted-foreground">
+					<DialogDescription className="text-sm text-muted-foreground">
 						{description}
 					</DialogDescription>
 				</DialogHeader>
-				<div className="flex flex-col gap-4 px-2">
-					{body ? <>{body}</> : error ? <p className="text-sm text-destructive">{error}</p> : null}
-				</div>
+				{(body || error) && (
+					<div className="flex flex-col gap-4 px-2">
+						{body}
+						{error && <p className="text-sm text-destructive">{error}</p>}
+					</div>
+				)}
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
 					<Button variant="destructive" onClick={confirm} disabled={isPending}>

@@ -25,6 +25,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { SearchFilterCombobox, type filterToken } from "./components/search-filter-combox";
 import { AUDIENCE_LABELS } from "@/components/audience-badge";
 import { TestingSuites, type suiteStatus } from "@/lib/supabase/Init";
+import ImportUATTestCases from "./components/import-uat-test-cases";
 
 
 
@@ -163,8 +164,9 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 				</div>
 				<div className="flex flex-col items-center justify-center gap-1">
 					<p className="font-semibold text-muted-foreground text-lg">Nothing to show yet</p>
-					<p className="text-xs text-muted-foreground">Create a section and add test cases to start testing.</p>
+					<p className="text-xs text-muted-foreground">Create a section and add test cases to start testing or or import existing test cases.</p>
 				</div>
+				<ImportUATTestCases />
 			</div>
 		)
 	} else if (testCases.length === 0 && section?.name === "All Sections" && hasSections) {

@@ -31,6 +31,10 @@ export default function SectionMenu({
 	const [renameOpen, setRenameOpen] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
 
+	const confirmationDeleteStatement = testCaseCount > 0
+					? `Its ${testCaseCount} test case${testCaseCount === 1 ? "" : "s"} will be deleted too. Rounds that already copied them keep their results.`
+					: "This section has no test cases."
+
 	return (
 		<>
 			<div
@@ -62,9 +66,11 @@ export default function SectionMenu({
 				open={deleteOpen}
 				onOpenChange={setDeleteOpen}
 				title={`Delete "${section.name}"?`}
-				description={testCaseCount > 0
-					? `Its ${testCaseCount} test case${testCaseCount === 1 ? "" : "s"} will be deleted too. Rounds that already copied them keep their results.`
-					: "This section has no test cases."}
+				description={
+					<>
+						<p>Are you sure you want to delete <span className="font-mono">"{section.name}"</span> section? {confirmationDeleteStatement}</p>
+					</>
+				}
 				confirmLabel="Delete section"
 				onConfirm={() => deleteSection({ sectionId: section.id })}
 				onDone={() => router.push(`/testingsuite/${testSuiteSlug}/all?tab=test-cases`)}

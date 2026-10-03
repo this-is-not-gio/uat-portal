@@ -117,7 +117,7 @@ export default function SectionDialog({
 		>
 			{trigger && <DialogTrigger render={trigger} />}
 			<DialogContent className="sm:max-w-lg">
-				<DialogHeader className="flex flex-col px-2 py-3">
+				<DialogHeader className="flex flex-col px-2 pt-3">
 					<DialogTitle className="font-heading font-semibold flex flex-row items-center gap-1">
 						{isRename ? <Pencil className="size-4" /> : <FolderPlus className="size-4" />}
 						{isRename ? "Rename Testing Section" : "Add a Section"}
@@ -130,6 +130,14 @@ export default function SectionDialog({
 								: "Sections group related test cases, e.g. \"Login and Authentication\"."}
 					</DialogDescription>
 				</DialogHeader>
+				<form
+					className="flex flex-col gap-2 px-2 py-1"
+					onSubmit={(event) => { event.preventDefault(); if (name.trim()) onSave(); }}
+				>
+					<Label htmlFor="section-name" className="text-xs text-muted-foreground">Section name</Label>
+					<Input id="section-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} disabled={isPending} />
+					{error && <p className="text-xs text-destructive">{error}</p>}
+				</form>
 				{sectionsNotIncluded && (
 					<div className="flex flex-col gap-2 px-2 py-1">
 						<p className="text-xs text-muted-foreground">Existing sections not yet in this iteration</p>

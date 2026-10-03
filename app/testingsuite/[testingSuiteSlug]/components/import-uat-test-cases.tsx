@@ -1,10 +1,15 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { FilePlus, FileSpreadsheet, Upload } from "lucide-react";
+import { parseTestCaseRows } from "@/lib/import/parse-test-cases";
+import { useImportStaging } from "./import-staging";
+
+type parsedImport = ReturnType<typeof parseTestCaseRows>;
 
 // SheetJS is only fetched once the dialog opens, so it stays out of the page bundle.
 let sheetJsPromise: Promise<typeof import("xlsx")> | null = null;
@@ -29,10 +34,15 @@ async function readFirstSheet(file: File): Promise<unknown[][]> {
 
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx"];
 
-export default function ImportUATTestCases() {
+// `trigger` replaces the default "Import Test Cases" button (e.g. "Change File" in the review).
+export default function ImportUATTestCases({ trigger }: { trigger?: React.ReactElement }) {
+	const router = useRouter();
+	const { testingSuiteSlug } = useParams<{ testingSuiteSlug: string }>();
+	const { stage } = useImportStaging();
+	const [open, setOpen] = useState(false);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const [file, setFile] = useState<File | null>(null);
-	const [rows, setRows] = useState<unknown[][] | null>(null);
+	const [parsed, setParsed] = useState<parsedImport | null>(null);
 	const [isDragging, setIsDragging] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isReading, startReading] = useTransition();
@@ -40,7 +50,7 @@ export default function ImportUATTestCases() {
 	function pickFile(picked: File | undefined) {
 		if (!picked) return;
 		setFile(null);
-		setRows(null);
+		setParsed(null);
 		if (!ACCEPTED_EXTENSIONS.some((extension) => picked.name.toLowerCase().endsWith(extension))) {
 			setError("Only .csv or .xlsx files are supported.");
 			return;
@@ -49,9 +59,7 @@ export default function ImportUATTestCases() {
 		setFile(picked);
 		startReading(async () => {
 			try {
-				const sheetRows = await readFirstSheet(picked);
-				//console.log("[import] rows", sheetRows); // TEMP: Phase 1 check — remove before committing
-				setRows(sheetRows);
+				setParsed(parseTestCaseRows(await readFirstSheet(picked)));
 			} catch {
 				setFile(null);
 				setError("Couldn't read that file. Check that it's a valid .csv or .xlsx file.");
@@ -59,20 +67,32 @@ export default function ImportUATTestCases() {
 		});
 	}
 
+	const hasErrors = parsed?.issues.some((issue) => issue.severity === "error") ?? false;
+
+	// Hands the parsed cases to the Test Cases tab for review; nothing is saved yet.
+	function reviewImport() {
+		if (!file || !parsed || hasErrors) return;
+		stage({ fileName: file.name, cases: parsed.cases, issues: parsed.issues });
+		setOpen(false);
+		router.push(`/testingsuite/${testingSuiteSlug}/all?tab=test-cases`);
+	}
+
 	return (
 		<Dialog
-			onOpenChange={(open) => {
+			open={open}
+			onOpenChange={(nextOpen) => {
+				setOpen(nextOpen);
 				// Start fresh each time the dialog opens.
-				if (open) {
+				if (nextOpen) {
 					setFile(null);
-					setRows(null);
+					setParsed(null);
 					setError(null);
 					// Start fetching SheetJS now so it's ready by the time a file is picked.
 					void loadSheetJs();
 				}
 			}}
 		>
-			<DialogTrigger render={<Button className="flex flex-row items-center gap-2 text-xs">
+			<DialogTrigger render={trigger ?? <Button className="flex flex-row items-center gap-2 text-xs">
 				<FilePlus className="h-4 w-4" />
 				Import Test Cases
 			</Button>} />
@@ -124,20 +144,60 @@ export default function ImportUATTestCases() {
 						<p className="text-xs text-muted-foreground">
 							{isReading
 								? "Reading…"
-								: rows
-									? `${rows.length} ${rows.length === 1 ? "row" : "rows"} read · Click to choose a different file.`
+								: parsed
+									? "Click to choose a different file."
 									: "Drag and drop your CSV or XLSX file here, or click to select a file."}
 						</p>
 					</div>
 				</button>
 				{error && <p className="text-xs text-destructive px-2">{error}</p>}
+				{parsed && !isReading && <ImportSummary parsed={parsed} />}
 			<DialogFooter className="flex flex-row items-center justify-end gap-2">
 				<DialogClose render={<Button variant="outline" size="lg">Cancel</Button>}/>
-				<Button variant="default" size="lg" disabled={!rows || isReading}>
-					Import Test Cases
+				<Button variant="default" size="lg" disabled={!parsed || !parsed.cases.length || hasErrors || isReading} onClick={reviewImport}>
+					Review import
 				</Button>
 			</DialogFooter>
 			</DialogContent>
 		</Dialog>
 	)
+}
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+// Under the drop zone: what the file holds, then each error by row so the user
+// knows what to fix in the spreadsheet. Warnings are listed in the review instead.
+function ImportSummary({ parsed }: { parsed: parsedImport }) {
+	const sectionCount = new Set(parsed.cases.map((testCase) => testCase.sectionName)).size;
+	const errors = parsed.issues.filter((issue) => issue.severity === "error");
+	const errorCount = errors.length;
+	const warningCount = parsed.issues.length - errorCount;
+
+	return (
+		<div className="flex flex-col gap-1 px-2">
+			<p className="font-semibold text-xs">Possible Test Cases:</p>
+			<p className="flex flex-row flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+				<span>{plural(parsed.cases.length, "case")}</span>
+				<span>·</span>
+				<span>{plural(sectionCount, "section")}</span>
+				<span>·</span>
+				<span className={cn(errorCount && "text-destructive font-medium")}>{plural(errorCount, "error")}</span>
+				<span>·</span>
+				<span className={cn(warningCount && "text-amber-600 font-medium")}>{plural(warningCount, "warning")}</span>
+			</p>
+			{errorCount > 0 && (
+				<div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto rounded-md bg-destructive/5 p-3">
+					<p className="text-xs font-semibold text-destructive">Fix these in the file, then choose it again:</p>
+					<ul className="flex flex-col gap-1 text-xs">
+						{errors.map((issue, i) => (
+							<li key={i} className="flex flex-row gap-2">
+								<span className="shrink-0 font-mono text-muted-foreground">{issue.row === 1 && !issue.column ? "File" : `Row ${issue.row}`}</span>
+								<span>{issue.column ? `${issue.column}: ` : ""}{issue.message}</span>
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+		</div>
+	);
 }

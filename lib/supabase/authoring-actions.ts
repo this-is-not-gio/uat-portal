@@ -6,6 +6,7 @@ import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
 import type { Database } from "./database.types";
+import type { importCase } from "@/lib/import/parse-test-cases";
 
 // Vendor authoring of suites, sections and test cases. Locks (signed off /
 // archived) and the Ready re-check are enforced by the RPCs; their messages
@@ -122,6 +123,34 @@ export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{
     if (error) return fail(error);
     refresh();
     return { ok: true, data: { id: data } };
+}
+
+// Creates every case from an import file in one transaction (all or nothing).
+// Sections are matched by name or created; codes are always generated.
+export async function importTestCases({ suiteId, cases }: { suiteId: string; cases: importCase[] }): Promise<actionResult<{ created: number; sectionsCreated: number }>> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("import_test_cases", {
+        p_suite_id: suiteId,
+        p_cases: cases.map((importCase) => ({
+            section_name: importCase.sectionName,
+            title: importCase.title,
+            description: importCase.description,
+            priority: importCase.priority,
+            role_assignee: importCase.roleAssignee,
+            audience: importCase.audience,
+            created_by: user.id,
+            preconditions: importCase.preconditions,
+            steps: importCase.steps.map((step) => ({
+                step: step.step,
+                expected_results: step.expectedResults,
+            })),
+        })),
+    });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: data as { created: number; sectionsCreated: number } };
 }
 
 export async function deleteTestCase({ testCaseId }: { testCaseId: string }): Promise<actionResult> {

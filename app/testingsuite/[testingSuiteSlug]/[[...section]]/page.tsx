@@ -18,6 +18,7 @@ import { EpicWorkspace } from "@/components/epic-workspace";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSuiteReadinessIssues, getTestSuite } from "@/lib/supabase/test-suite";
+import { getSectionNames } from "@/lib/supabase/test-sections";
 import PageTab from "../page-tab";
 import TestCasesTab from "../test-cases-tab";
 import TestResultTab from "../test-result-tab";
@@ -84,6 +85,8 @@ export default async function TestsuitePage({
 	// Testers (Internal/External) never see a suite before it's handed over for testing.
 	const isTester = currentUser?.role === "Internal" || currentUser?.role === "External";
 	if (isTester && (testSuite.status === "draft" || testSuite.status === "ready")) notFound();
+	// Only staff can import, so testers skip the lookup (used to mark new sections in a staged import).
+	const existingSectionNames = isTester ? [] : await getSectionNames(testSuite.id);
 	// Testers have no Test Results tab; their round results are in Test Cases, so send old links there.
 	if (isTester && tab === "test-results") {
 		const query = new URLSearchParams({ tab: "test-cases", ...(iteration ? { iteration } : {}), ...(org ? { org } : {}) });
@@ -199,7 +202,8 @@ export default async function TestsuitePage({
 							// 		)}
 							// 	</div>
 							// </div>
-							<ImportUATTestCases/>
+							// <ImportUATTestCases/>
+							<></>
 						) : testSuite.status === "ready" ? (
 							<div className="flex flex-row items-center gap-2">
 								{/* <SuiteStatusButton suiteId={testSuite.id} targetStatus="draft" variant="outline">
@@ -293,7 +297,7 @@ export default async function TestsuitePage({
 				</div>
 			</div>
 			<div className="flex min-h-0 flex-1 flex-col">
-				<PageTab overviewTab={overviewTabSlot} testCasesTab={testCasesTabSlot} testResultsTab={testResultsTabSlot} showTestResults={!isTester} />
+				<PageTab overviewTab={overviewTabSlot} testCasesTab={testCasesTabSlot} testResultsTab={testResultsTabSlot} showTestResults={!isTester} existingSectionNames={existingSectionNames} importSuite={isTester ? undefined : { id: testSuite.id, status: testSuite.status }} />
 			</div>
 		</div>
 	)
