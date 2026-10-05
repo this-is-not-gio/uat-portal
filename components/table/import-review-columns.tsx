@@ -149,8 +149,11 @@ export function getImportReviewColumns() {
 		}),
 		columnHelper.accessor("roleAssignee", {
 			header: "Assigned Role",
-			cell: (info) => info.getValue() ??
-				<div className="flex flex-row items-center gap-1">
+			cell: (info) => info.getValue() ?
+				 <div className="flex flex-row items-center gap-1">
+					<p className="text-xs">{info.getValue()}</p>
+				 </div>
+				: <div className="flex flex-row items-center gap-1">
 					<p className="text-xs text-muted-foreground">No Role Assigned</p>
 				</div>,
 		}),

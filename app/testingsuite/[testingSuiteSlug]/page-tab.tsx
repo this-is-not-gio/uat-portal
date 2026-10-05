@@ -64,7 +64,8 @@ import type { suiteStatus } from "@/lib/supabase/Init";
 // showTestResults is false for testers (Internal/External): their results live in the Test Cases tab.
 // existingSectionNames: the suite's current sections, so a staged import can mark new ones.
 // importSuite: the suite a staged import is saved into.
-export default function PageTab({ overviewTab, testCasesTab, testResultsTab, showTestResults = true, existingSectionNames = [], importSuite }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode; showTestResults?: boolean; existingSectionNames?: string[]; importSuite?: { id: string; status: suiteStatus } }) {
+// showSignOffTab: staff only, once the suite has a sign-off with a frozen report.
+export default function PageTab({ overviewTab, testCasesTab, testResultsTab, signOffTab, showTestResults = true, showSignOffTab = false, existingSectionNames = [], importSuite }: { overviewTab: React.ReactNode; testCasesTab: React.ReactNode; testResultsTab: React.ReactNode; signOffTab?: React.ReactNode; showTestResults?: boolean; showSignOffTab?: boolean; existingSectionNames?: string[]; importSuite?: { id: string; status: suiteStatus } }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -105,6 +106,12 @@ export default function PageTab({ overviewTab, testCasesTab, testResultsTab, sho
 							Test Results
 						</TabsTrigger>
 					)}
+					{showSignOffTab && (
+						<TabsTrigger value="sign-off" className="w-full">
+							<ClipboardCheck data-icon="inline-start" />
+							Sign-off
+						</TabsTrigger>
+					)}
 					{/* <TabsTrigger value="activity" className="w-full">
 					<Activity data-icon="inline-start" />
 					Activity
@@ -126,6 +133,11 @@ export default function PageTab({ overviewTab, testCasesTab, testResultsTab, sho
 				{showTestResults && (
 					<TabsContent value="test-results" className="w-full h-full min-h-0 flex flex-row">
 						{testResultsTab}
+					</TabsContent>
+				)}
+				{showSignOffTab && (
+					<TabsContent value="sign-off" className="w-full h-full min-h-0 flex flex-col">
+						{signOffTab}
 					</TabsContent>
 				)}
 			</Tabs>

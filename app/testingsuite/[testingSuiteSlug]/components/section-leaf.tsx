@@ -5,6 +5,7 @@ import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { File, Folder, ClipboardList, GripVertical } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import { TruncatedText } from "@/components/nav-secondary";
 
 export default function SectionLeaf({
 	name,
@@ -76,12 +77,7 @@ export default function SectionLeaf({
 			) : (
 				<IconComponent />
 			)}
-			<span className="truncate">{name}</span>
-			{notTestedYet && (
-				<span className="ml-auto shrink-0 rounded-md border border-gray-600/40 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-800">
-					Not tested yet
-				</span>
-			)}
+			<TruncatedText className="" text={name} />
 		</SidebarMenuButton>
 	)
 }

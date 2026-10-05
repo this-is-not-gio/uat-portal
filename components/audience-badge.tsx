@@ -16,10 +16,17 @@ export const AUDIENCE_DESCRIPTIONS: Record<audience, string> = {
 	both: "Tested by the client's staff and external companies",
 };
 
+// Same icon wherever an audience shows (badge, scope chips).
+export const AUDIENCE_ICONS: Record<audience, typeof Users> = {
+	internal: Building2,
+	external: Globe,
+	both: Users,
+};
+
 const AUDIENCE_STYLES: Record<audience, { icon: typeof Users; className: string }> = {
-	internal: { icon: Building2, className: "border-sky-600/30 bg-sky-50 text-sky-800 dark:border-sky-400/30 dark:bg-sky-950/40 dark:text-sky-300" },
-	external: { icon: Globe, className: "border-violet-600/30 bg-violet-50 text-violet-800 dark:border-violet-400/30 dark:bg-violet-950/40 dark:text-violet-300" },
-	both: { icon: Users, className: "border-slate-400/40 bg-slate-50 text-slate-700 dark:border-slate-500/40 dark:bg-slate-800 dark:text-slate-300" },
+	internal: { icon: AUDIENCE_ICONS.internal, className: "border-sky-600/30 bg-sky-50 text-sky-800 dark:border-sky-400/30 dark:bg-sky-950/40 dark:text-sky-300" },
+	external: { icon: AUDIENCE_ICONS.external, className: "border-violet-600/30 bg-violet-50 text-violet-800 dark:border-violet-400/30 dark:bg-violet-950/40 dark:text-violet-300" },
+	both: { icon: AUDIENCE_ICONS.both, className: "border-slate-400/40 bg-slate-50 text-slate-700 dark:border-slate-500/40 dark:bg-slate-800 dark:text-slate-300" },
 };
 
 export function AudienceBadge({ audience, className }: { audience: audience; className?: string }) {

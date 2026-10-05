@@ -144,3 +144,28 @@
     @apply font-heading;
   }
 }
+
+/* Sign-off report PDF (window.print): drop the app chrome and let the page flow across sheets. */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  html,
+  body,
+  [data-slot="sidebar-wrapper"],
+  [data-slot="sidebar-inset"],
+  [data-slot="sidebar-inset"] > div {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  [data-slot="sidebar"],
+  [data-slot="site-header"] {
+    display: none !important;
+  }
+}

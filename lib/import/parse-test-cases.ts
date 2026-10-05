@@ -1,4 +1,5 @@
 import type { Database } from "@/lib/supabase/database.types";
+import { detectRoleAssignee } from "@/lib/import/detect-role";
 
 type priority = Database["public"]["Enums"]["priority_level"];
 type roleAssignee = Database["public"]["Enums"]["role_assignee_type"];
@@ -116,7 +117,10 @@ function toItems(text: string): string[] {
 // - New case: Test Case and Step filled. Precondition is optional.
 // - Next step: Test Case blank, Step filled. Precondition must be blank.
 // - Blank: skipped.
-export function parseTestCaseRows(rows: unknown[][]): {
+//
+// `intoSection` imports every case into that one section (opened from a
+// section's page): the file needs no section rows, and any it has are skipped.
+export function parseTestCaseRows(rows: unknown[][], intoSection?: string): {
 	cases: importCase[];
 	issues: importIssue[];
 } {
@@ -124,7 +128,8 @@ export function parseTestCaseRows(rows: unknown[][]): {
 	if (!columns) return { cases: [], issues };
 
 	const cases: importCase[] = [];
-	let sectionName: string | null = null;
+	let sectionName: string | null = intoSection ?? null;
+	const skippedSections: string[] = [];
 	let current: importCase | null = null;
 	// True after a case row was rejected: its steps are dropped without piling
 	// more errors onto the one already reported for the case row.
@@ -152,7 +157,8 @@ export function parseTestCaseRows(rows: unknown[][]): {
 		};
 
 		if (title && !precondition && !step && !expected) {
-			sectionName = title;
+			if (intoSection) skippedSections.push(title);
+			else sectionName = title;
 			current = null;
 			skipping = false;
 			return;
@@ -171,21 +177,28 @@ export function parseTestCaseRows(rows: unknown[][]): {
 				skipping = true;
 				return;
 			}
+			const preconditions = toItems(precondition);
+			// The file has no role column, so the role is guessed from role names
+			// in the title or preconditions.
+			const role = detectRoleAssignee(title, preconditions);
 			current = {
 				row,
 				sectionName,
 				title,
 				description: "",
 				priority: "medium",
-				roleAssignee: null,
+				roleAssignee: role.kind === "found" ? role.role : null,
 				audience: "internal",
-				preconditions: toItems(precondition).map((condition) => ({ condition })),
+				preconditions: preconditions.map((condition) => ({ condition })),
 				steps: [nextStep],
 			};
 			cases.push(current);
 			skipping = false;
-			// The file has no role column, so every case starts without a role assignee.
-			warn(row, null, 'No role assignee; the case will show "Not ready" until one is set.');
+			if (role.kind === "ambiguous") {
+				warn(row, null, `No role assignee; could be ${role.candidates.join(" or ")}. The case will show "Not ready" until one is set.`);
+			} else if (role.kind === "none") {
+				warn(row, null, 'No role assignee; the case will show "Not ready" until one is set.');
+			}
 			warnIfNoExpected();
 			return;
 		}
@@ -204,6 +217,11 @@ export function parseTestCaseRows(rows: unknown[][]): {
 		current.steps.push(nextStep);
 		warnIfNoExpected();
 	});
+
+	// One file-level note instead of one per row, so it isn't listed under a case.
+	if (skippedSections.length) {
+		warn(1, null, `Section rows skipped (${skippedSections.join(", ")}); every case goes into ${intoSection}.`);
+	}
 
 	// Reading order for the preview: by row, errors before warnings on a row.
 	issues.sort((a, b) => a.row - b.row || (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));

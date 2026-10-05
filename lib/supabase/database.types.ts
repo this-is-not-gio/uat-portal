@@ -215,6 +215,7 @@ export type Database = {
           note: string | null
           revoked_at: string | null
           revoked_by: string | null
+          report: Json | null
           signed_off_at: string
           signed_off_by: string | null
           testing_suite_id: string
@@ -228,6 +229,7 @@ export type Database = {
           note?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
+          report?: Json | null
           signed_off_at?: string
           signed_off_by?: string | null
           testing_suite_id: string
@@ -241,6 +243,7 @@ export type Database = {
           note?: string | null
           revoked_at?: string | null
           revoked_by?: string | null
+          report?: Json | null
           signed_off_at?: string
           signed_off_by?: string | null
           testing_suite_id?: string
@@ -276,6 +279,117 @@ export type Database = {
           },
           {
             foreignKeyName: "suite_sign_offs_testing_suite_id_fkey"
+            columns: ["testing_suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suite_endpoints: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          testing_suite_id: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          testing_suite_id: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          testing_suite_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suite_endpoints_testing_suite_id_fkey"
+            columns: ["testing_suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suite_overview_sections: {
+        Row: {
+          content: string
+          created_at: string
+          icon: string | null
+          id: string
+          sort_order: number
+          testing_suite_id: string
+          title: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          sort_order?: number
+          testing_suite_id: string
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          icon?: string | null
+          id?: string
+          sort_order?: number
+          testing_suite_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suite_overview_sections_testing_suite_id_fkey"
+            columns: ["testing_suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suite_test_accounts: {
+        Row: {
+          created_at: string
+          id: string
+          password: string
+          role: Database["public"]["Enums"]["role_assignee_type"] | null
+          sort_order: number
+          testing_suite_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          password: string
+          role?: Database["public"]["Enums"]["role_assignee_type"] | null
+          sort_order?: number
+          testing_suite_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          password?: string
+          role?: Database["public"]["Enums"]["role_assignee_type"] | null
+          sort_order?: number
+          testing_suite_id?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suite_test_accounts_testing_suite_id_fkey"
             columns: ["testing_suite_id"]
             isOneToOne: false
             referencedRelation: "testing_suites"
@@ -767,6 +881,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string
+          exit_criteria: Json
           id: string
           name: string
           slug: string
@@ -777,6 +892,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string
+          exit_criteria?: Json
           id?: string
           name: string
           slug: string
@@ -787,6 +903,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string
+          exit_criteria?: Json
           id?: string
           name?: string
           slug?: string
@@ -818,6 +935,7 @@ export type Database = {
           note: string | null
           revoked_at: string | null
           revoked_by: string | null
+          report: Json | null
           signed_off_at: string
           signed_off_by: string | null
           testing_suite_id: string
@@ -994,7 +1112,12 @@ export type Database = {
       is_admin: { Args: never; Returns: boolean }
       is_internal: { Args: never; Returns: boolean }
       issue_sign_off: {
-        Args: { p_by?: string; p_note?: string; p_suite_id: string }
+        Args: {
+          p_by?: string
+          p_note?: string
+          p_report?: Json
+          p_suite_id: string
+        }
         Returns: {
           acknowledged_at: string | null
           acknowledged_by: string | null
@@ -1004,6 +1127,7 @@ export type Database = {
           note: string | null
           revoked_at: string | null
           revoked_by: string | null
+          report: Json | null
           signed_off_at: string
           signed_off_by: string | null
           testing_suite_id: string
@@ -1073,6 +1197,59 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      save_suite_endpoints: {
+        Args: { p_endpoints: Json; p_suite_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          testing_suite_id: string
+          url: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "suite_endpoints"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      save_suite_overview_sections: {
+        Args: { p_sections: Json; p_suite_id: string }
+        Returns: {
+          content: string
+          created_at: string
+          icon: string | null
+          id: string
+          sort_order: number
+          testing_suite_id: string
+          title: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "suite_overview_sections"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      save_suite_test_accounts: {
+        Args: { p_accounts: Json; p_suite_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          password: string
+          role: Database["public"]["Enums"]["role_assignee_type"] | null
+          sort_order: number
+          testing_suite_id: string
+          username: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "suite_test_accounts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       save_test_case: { Args: { p_payload: Json }; Returns: string }
       set_case_inclusion: {
         Args: { p_case_result_ids: string[]; p_included: boolean }
@@ -1088,6 +1265,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string
+          exit_criteria: Json
           id: string
           name: string
           slug: string
@@ -1266,6 +1444,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string
+          exit_criteria: Json
           id: string
           name: string
           slug: string
@@ -1301,7 +1480,7 @@ export type Database = {
       org_type: "vendor" | "client" | "external"
       priority_level: "low" | "medium" | "high"
       role_assignee_type:
-        | "Kora-Admin"
+        | "IC Admin"
         | "Kora-Workflow"
         | "Action-Officer"
         | "Supervisor"
@@ -1458,7 +1637,7 @@ export const Constants = {
       org_type: ["vendor", "client", "external"],
       priority_level: ["low", "medium", "high"],
       role_assignee_type: [
-        "Kora-Admin",
+        "IC Admin",
         "Kora-Workflow",
         "Action-Officer",
         "Supervisor",

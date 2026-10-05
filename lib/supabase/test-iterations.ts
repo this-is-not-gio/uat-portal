@@ -99,6 +99,7 @@ const RESULT_SELECT = `
   section_order,
   order_index,
   role_assignee,
+  priority,
   preconditions,
   status,
   status_overridden,
@@ -360,6 +361,7 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
         title: row.title,
         status: row.status,
         roleAssignee: row.role_assignee ?? undefined,
+        priority: row.priority ?? undefined,
         // Audience isn't snapshotted, so read it off the live case (null if it was deleted).
         audience: row.live_case?.audience ?? undefined,
         sectionName: row.section_name,

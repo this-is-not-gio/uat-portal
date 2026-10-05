@@ -5,9 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
-import type { Database } from "./database.types";
+import type { Database, Json } from "./database.types";
 import { getOrganizations, getTesterCountsByOrg, type organization } from "./organizations";
 import { getIterationParticipants } from "./test-iterations";
+import { buildSignOffReport, type SignOffReport } from "./sign-off-report";
+import { validateThemes, type ThemeInput } from "@/lib/report/sign-off-remarks";
+import { draftThemes, type ThemeDraft } from "@/lib/report/remark-themes";
 
 // Lifecycle rules live in Postgres (see the suite lifecycle RPCs), so their
 // messages are what the user needs to see. Server Action errors are masked in
@@ -58,13 +61,61 @@ export async function setSuiteStatus({ suiteId, status }: { suiteId: string; sta
     return { ok: true, data: undefined };
 }
 
-// Vendor issues the sign-off on the latest completed iteration (every round must be finished).
-// Untested cases are only warned about in the dialog; the note is optional.
-export async function issueSignOff({ suiteId, note }: { suiteId: string; note: string }): Promise<actionResult> {
+// What the sign-off dialog shows before issuing. issueSignOff rebuilds it rather than taking
+// this copy back from the client, so the frozen report is always computed on the server.
+export async function previewSignOffReport({ suiteId }: { suiteId: string }): Promise<actionResult<SignOffReport>> {
     const user = await requireUser();
     if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    try {
+        return { ok: true, data: await buildSignOffReport(suiteId) };
+    } catch (error) {
+        return fail(error as { message: string });
+    }
+}
+
+// AI-drafted observations for the theme editor. Drafts only: the admin edits them and
+// issueSignOff validates them like hand-written ones. Fails soft, so issuing never depends on it.
+export async function draftSignOffThemes({ suiteId }: { suiteId: string }): Promise<actionResult<ThemeDraft>> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    if (!process.env.GROQ_API_KEY) return { ok: false, error: "AI drafting isn't set up. Write observations by hand." };
+    let report: SignOffReport;
+    try {
+        report = await buildSignOffReport(suiteId);
+    } catch (error) {
+        return fail(error as { message: string });
+    }
+    const remarks = report.remarks ?? [];
+    if (remarks.length === 0) return { ok: false, error: "There are no tester remarks to draft from." };
+    try {
+        const draft = await draftThemes(remarks);
+        if (draft.themes.length === 0) return { ok: false, error: "The AI didn't return usable observations. Write them by hand or try again." };
+        return { ok: true, data: draft };
+    } catch (error) {
+        // Provider errors are noisy and may echo request details; log them, show a plain message.
+        console.error("AI theme draft failed:", (error as Error).message);
+        return { ok: false, error: "AI drafting failed. Write observations by hand or try again." };
+    }
+}
+
+// Vendor issues the sign-off on the latest completed iteration (every round must be finished).
+// Untested cases are only warned about in the dialog; the note is optional. The report is
+// frozen into suite_sign_offs.report (0040). Themes are optional vendor observations; each one
+// must cite remarks from the catalog rebuilt here, never the client's copy.
+export async function issueSignOff({ suiteId, note, themes = [] }: { suiteId: string; note: string; themes?: ThemeInput[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    let report: SignOffReport;
+    try {
+        report = await buildSignOffReport(suiteId);
+    } catch (error) {
+        return fail(error as { message: string });
+    }
+    const checked = validateThemes(themes, report.remarks ?? []);
+    if (!checked.ok) return { ok: false, error: checked.error };
+    report.themes = checked.themes.length > 0 ? { source: "manual", items: checked.themes } : null;
     const supabase = await createClient();
-    const { error } = await supabase.rpc("issue_sign_off", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined });
+    const { error } = await supabase.rpc("issue_sign_off", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined, p_report: report as unknown as Json });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };

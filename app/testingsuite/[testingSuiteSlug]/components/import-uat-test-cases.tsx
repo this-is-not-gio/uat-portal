@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -35,8 +35,10 @@ async function readFirstSheet(file: File): Promise<unknown[][]> {
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx"];
 
 // `trigger` replaces the default "Import Test Cases" button (e.g. "Change File" in the review).
-export default function ImportUATTestCases({ trigger }: { trigger?: React.ReactElement }) {
+// `section` imports every case into that section instead of the file's section rows.
+export default function ImportUATTestCases({ trigger, section }: { trigger?: React.ReactElement; section?: string }) {
 	const router = useRouter();
+	const pathname = usePathname();
 	const { testingSuiteSlug } = useParams<{ testingSuiteSlug: string }>();
 	const { stage } = useImportStaging();
 	const [open, setOpen] = useState(false);
@@ -59,7 +61,7 @@ export default function ImportUATTestCases({ trigger }: { trigger?: React.ReactE
 		setFile(picked);
 		startReading(async () => {
 			try {
-				setParsed(parseTestCaseRows(await readFirstSheet(picked)));
+				setParsed(parseTestCaseRows(await readFirstSheet(picked), section));
 			} catch {
 				setFile(null);
 				setError("Couldn't read that file. Check that it's a valid .csv or .xlsx file.");
@@ -72,9 +74,10 @@ export default function ImportUATTestCases({ trigger }: { trigger?: React.ReactE
 	// Hands the parsed cases to the Test Cases tab for review; nothing is saved yet.
 	function reviewImport() {
 		if (!file || !parsed || hasErrors) return;
-		stage({ fileName: file.name, cases: parsed.cases, issues: parsed.issues });
+		stage({ fileName: file.name, section: section ?? null, cases: parsed.cases, issues: parsed.issues });
 		setOpen(false);
-		router.push(`/testingsuite/${testingSuiteSlug}/all?tab=test-cases`);
+		// A section import reviews on the section's own page; otherwise on All Sections.
+		router.push(section ? `${pathname}?tab=test-cases` : `/testingsuite/${testingSuiteSlug}/all?tab=test-cases`);
 	}
 
 	return (
@@ -100,10 +103,11 @@ export default function ImportUATTestCases({ trigger }: { trigger?: React.ReactE
 				<DialogHeader className="pt-2 px-2">
 					<DialogTitle className="flex flex-row items-center">
 						<FilePlus className="mr-2 h-4 w-4" />
-						Import UAT Test Cases
+						{section ? `Importing Test Cases for ${section}` : "Import UAT Test Cases"}
 					</DialogTitle>
 					<DialogDescription className="text-xs text-muted-foreground">
 						This feature allows you to import UAT test cases from a CSV or XLSX file. Please ensure that the file is formatted correctly and contains all the necessary information for the test cases you wish to import.
+						{section && ` Every test case in the file goes into ${section}; section rows aren't needed.`}
 					</DialogDescription>
 				</DialogHeader>
 				<input
@@ -151,7 +155,7 @@ export default function ImportUATTestCases({ trigger }: { trigger?: React.ReactE
 					</div>
 				</button>
 				{error && <p className="text-xs text-destructive px-2">{error}</p>}
-				{parsed && !isReading && <ImportSummary parsed={parsed} />}
+				{parsed && !isReading && <ImportSummary parsed={parsed} section={section} />}
 			<DialogFooter className="flex flex-row items-center justify-end gap-2">
 				<DialogClose render={<Button variant="outline" size="lg">Cancel</Button>}/>
 				<Button variant="default" size="lg" disabled={!parsed || !parsed.cases.length || hasErrors || isReading} onClick={reviewImport}>
@@ -167,7 +171,7 @@ const plural = (count: number, word: string) => `${count} ${word}${count === 1 ?
 
 // Under the drop zone: what the file holds, then each error by row so the user
 // knows what to fix in the spreadsheet. Warnings are listed in the review instead.
-function ImportSummary({ parsed }: { parsed: parsedImport }) {
+function ImportSummary({ parsed, section }: { parsed: parsedImport; section?: string }) {
 	const sectionCount = new Set(parsed.cases.map((testCase) => testCase.sectionName)).size;
 	const errors = parsed.issues.filter((issue) => issue.severity === "error");
 	const errorCount = errors.length;
@@ -179,7 +183,7 @@ function ImportSummary({ parsed }: { parsed: parsedImport }) {
 			<p className="flex flex-row flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
 				<span>{plural(parsed.cases.length, "case")}</span>
 				<span>·</span>
-				<span>{plural(sectionCount, "section")}</span>
+				<span>{section ? `into ${section}` : plural(sectionCount, "section")}</span>
 				<span>·</span>
 				<span className={cn(errorCount && "text-destructive font-medium")}>{plural(errorCount, "error")}</span>
 				<span>·</span>

@@ -99,12 +99,13 @@ export default function ImportReview({ existingSectionNames, suite }: { existing
 						<div className="flex flex-col gap-0.5">
 							<p className="text-sm font-semibold">Review import · {staged.fileName}</p>
 							<p className="text-xs text-muted-foreground">
-								{plural(staged.cases.length, "case")} · {plural(sectionCount, "section")}{newSectionCount ? ` (${newSectionCount} new)` : ""} · {plural(staged.issues.length, "warning")} · Not saved yet
+								{plural(staged.cases.length, "case")} · {staged.section ? `into ${staged.section}` : `${plural(sectionCount, "section")}${newSectionCount ? ` (${newSectionCount} new)` : ""}`} · {plural(staged.issues.length, "warning")} · Not saved yet
 							</p>
 						</div>
 					</div>
 					{/* Reopens the import dialog; the current file stays staged until a new one is reviewed. */}
 					<ImportUATTestCases
+						section={staged.section ?? undefined}
 						trigger={
 							<Button variant="outline" size="lg" className="text-xs">
 								<Undo2 className="size-4" />

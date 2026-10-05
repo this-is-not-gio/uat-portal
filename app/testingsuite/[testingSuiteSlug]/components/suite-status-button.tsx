@@ -17,6 +17,8 @@ import type { suiteStatus } from "@/lib/supabase/Init";
 export const READINESS_ISSUES: Record<string, string> = {
 	no_test_cases: "The suite has no test cases yet",
 	no_complete_test_cases: "No test case is complete yet",
+	no_test_accounts: "No test account added on the Overview",
+	no_endpoints: "No endpoint added on the Overview",
 	no_steps: "Has no steps",
 	step_without_expected_result: "A step has no expected result",
 	no_role_assignee: "No role assignee set",

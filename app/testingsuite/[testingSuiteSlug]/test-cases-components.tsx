@@ -1,6 +1,6 @@
 "use client"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Sheet, SquareKanban, ClipboardIcon, FolderOpen, Pencil, Plus, Trash2 } from "lucide-react";
+import { Sheet, SquareKanban, ClipboardIcon, FilePlus, FolderOpen, Pencil, Plus, Trash2 } from "lucide-react";
 import TestCaseEditor from "./components/test-case-editor";
 import ConfirmDialog from "./components/confirm-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -113,6 +113,15 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 			<p className="text-xs">{label}</p>
 		</Button>
 	);
+	const isAllSections = section?.name === "All Sections";
+	// On All Sections the file's section rows decide where cases go; on one section, every case goes into it.
+	const importSection = isAllSections ? undefined : section?.name;
+	const importTrigger = (
+		<Button variant="outline">
+			<FilePlus className="h-4 w-4" />
+			<p className="text-xs">Import Test Case</p>
+		</Button>
+	);
 	const [viewMode, setViewMode] = useState<"table" | "board">("table");
 	const [filters, setFilters] = useState<filterToken[]>([]);
 	const tableColumns = useMemo(() => getColumns(suiteStatus, {
@@ -179,6 +188,7 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 					<p className="font-semibold text-muted-foreground text-lg">No test cases yet</p>
 					<p className="text-xs text-muted-foreground">Add test cases to your sections to see them here.</p>
 				</div>
+				{authoring.editable && <ImportUATTestCases />}
 			</div>
 		)
 	} else if (testCases.length === 0 && section?.name !== "All Sections") {
@@ -210,7 +220,10 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 							</div>
 						</div>
 						{authoring.editable && (
-							<TestCaseEditor sections={authoring.sections} defaultSectionId={defaultSectionId} trigger={newTestCaseTrigger("Add a test case")} />
+							<div className="flex flex-row items-center gap-2">
+								<ImportUATTestCases trigger={importTrigger} section={importSection} />
+								<TestCaseEditor sections={authoring.sections} defaultSectionId={defaultSectionId} trigger={newTestCaseTrigger("Add a test case")} />
+							</div>
 						)}
 					</div>
 				</div>
@@ -247,7 +260,10 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 							)}
 						</div>
 						{authoring.editable && (
-							<TestCaseEditor sections={authoring.sections} defaultSectionId={defaultSectionId} trigger={newTestCaseTrigger("New test case")} />
+							<div className="flex flex-row items-center gap-2">
+								<ImportUATTestCases trigger={importTrigger} section={importSection} />
+								<TestCaseEditor sections={authoring.sections} defaultSectionId={defaultSectionId} trigger={newTestCaseTrigger("New test case")} />
+							</div>
 						)}
 					</div>
 				</Suspense>

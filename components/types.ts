@@ -6,7 +6,7 @@ export type Priority = "low" | "medium" | "high"
 
 export type TestStatus = "Untested" | "Passed" | "Failed" | "Skipped" | "Blocked"
 
-export type RoleAssignee = "Kora-Admin" | "Kora-Workflow" | "Action-Officer" | "Supervisor" | "Division-Manager" | "Deputy-Commissioner" | "Insurance Commissioner" | "Company Admin"
+export type RoleAssignee = "IC Admin" | "Kora-Workflow" | "Action-Officer" | "Supervisor" | "Division-Manager" | "Deputy-Commissioner" | "Insurance Commissioner" | "Company Admin"
 
 
 export type Precondition = {

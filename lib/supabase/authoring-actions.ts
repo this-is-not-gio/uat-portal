@@ -7,6 +7,8 @@ import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
 import type { Database } from "./database.types";
 import type { importCase } from "@/lib/import/parse-test-cases";
+import type { ExitCriteria } from "./sign-off-report";
+import { exitCriteriaError } from "@/lib/report/exit-criteria";
 
 // Vendor authoring of suites, sections and test cases. Locks (signed off /
 // archived) and the Ready re-check are enforced by the RPCs; their messages
@@ -38,6 +40,89 @@ export async function upsertSuite({ id, name, code, slug, description }: { id?: 
     if (error) return fail(error);
     refresh();
     return { ok: true, data: { id: data.id, slug: data.slug } };
+}
+
+// Overview "Description" card. upsert_suite overwrites name/code, so pass the
+// current ones back; it also refuses once the suite is signed off/archived.
+export async function updateSuiteDescription({ suiteId, description }: { suiteId: string; description: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
+    const supabase = await createClient();
+    const { data: suite, error: readError } = await supabase.from("testing_suites").select("name, code").eq("id", suiteId).single();
+    if (readError) return fail(readError);
+    const { error } = await supabase.rpc("upsert_suite", {
+        p_id: suiteId,
+        p_name: suite.name,
+        p_code: suite.code ?? undefined,
+        p_description: description.trim(),
+        p_by: user.id,
+    });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Overview "Test Accounts": replaces the suite's whole list (order = array order).
+export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: string; accounts: { role: roleAssignee | null; username: string; password: string }[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("save_suite_test_accounts", { p_suite_id: suiteId, p_accounts: accounts });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Overview edit state: saves only the parts that changed (omitted = untouched).
+// Not one transaction — if accounts fail after the description saved, the
+// refreshed description no longer differs, so a retry only re-sends accounts.
+export async function saveSuiteOverview({ suiteId, description, accounts, sections, endpoints }: { suiteId: string; description?: string; accounts?: { role: roleAssignee | null; username: string; password: string }[]; sections?: { title: string; icon: string | null; content: string }[]; endpoints?: { name: string; url: string }[] }): Promise<actionResult> {
+    if (description !== undefined) {
+        const result = await updateSuiteDescription({ suiteId, description });
+        if (!result.ok) return result;
+    }
+    if (accounts !== undefined) {
+        const result = await saveSuiteTestAccounts({ suiteId, accounts });
+        if (!result.ok) return result;
+    }
+    if (sections !== undefined) {
+        const user = await requireUser();
+        if (!can(user, "author")) return denied("author");
+        const supabase = await createClient();
+        const { error } = await supabase.rpc("save_suite_overview_sections", { p_suite_id: suiteId, p_sections: sections });
+        if (error) return fail(error);
+        refresh();
+    }
+    if (endpoints !== undefined) {
+        const user = await requireUser();
+        if (!can(user, "author")) return denied("author");
+        const supabase = await createClient();
+        const { error } = await supabase.rpc("save_suite_endpoints", { p_suite_id: suiteId, p_endpoints: endpoints });
+        if (error) return fail(error);
+        refresh();
+    }
+    return { ok: true, data: undefined };
+}
+
+// Overview "Exit criteria". A plain update (Admin RLS policy); the lock_exit_criteria trigger
+// rejects it once the suite is past ready, so the bar can't move mid-testing.
+export async function updateExitCriteria({ suiteId, criteria }: { suiteId: string; criteria: ExitCriteria }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
+    const invalid = exitCriteriaError(criteria);
+    if (invalid) return { ok: false, error: invalid };
+    const exitCriteria: ExitCriteria = {
+        minPassRate: criteria.minPassRate,
+        maxFailed: criteria.maxFailed,
+        maxBlocked: criteria.maxBlocked,
+        requireAllOrgsSubmitted: !!criteria.requireAllOrgsSubmitted,
+    };
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("testing_suites").update({ exit_criteria: exitCriteria }).eq("id", suiteId).select("id");
+    if (error) return fail(error);
+    if (data.length === 0) return { ok: false, error: "Testing suite not found." };
+    refresh();
+    return { ok: true, data: undefined };
 }
 
 export async function deleteSuite({ suiteId }: { suiteId: string }): Promise<actionResult> {

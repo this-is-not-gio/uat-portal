@@ -1,56 +1,95 @@
+
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { BadgeCheck, Calendar, ClipboardCheck, ClipboardList, IdCard, Info, Link, ListChecks, Notebook, RotateCwFadingClock, Signpost, TestTubeDiagonal, TriangleAlert, Users } from "lucide-react";
+import { BadgeCheck, Calendar, ClipboardCheck, ClipboardList, Folder, Link, ListChecks, Notebook, Pencil, RotateCwFadingClock, Signpost, TestTubeDiagonal, TriangleAlert, Users } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
 import type { suiteOverview, statusCounts } from "@/lib/supabase/overview";
+import type { suiteEndpoint, suiteOverviewSection, suiteTestAccount } from "@/lib/supabase/test-accounts";
+import { SuiteOverviewContent } from "./components/suite-overview-content";
+import { EditOverviewButton, OverviewEditProvider } from "./components/overview-edit-state";
+import { type testingsuiteLifeCycle } from "@/components/suite-status-badge";
+import { ScopeOfTesting } from "@/components/scope-of-testing";
+import type { suiteScope } from "@/lib/supabase/test-suite";
+import NextLink from "next/link";
+import type { ExitCriteria } from "@/lib/supabase/sign-off-report";
+import { SuiteEndpointsList } from "./components/suite-endpoints";
+import { ExitCriteriaCard } from "./components/exit-criteria-card";
+import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+// import { Seperator } from "@/components/ui/seperator";
 
-// Server-rendered. Name, description, test case count, timeline, roles,
+// Server-rendered (the Description card is a client island). Name, description, test case count, timeline, roles,
 // iterations and sign-offs are real; the guideline/account/endpoint sections
 // are still static copy until the suite has fields for them.
-export default function OverviewTab({ suite, overview }: { suite: { name: string; description: string }; overview: suiteOverview }) {
+export default function OverviewTab({ suite, scope, overview, testAccounts, overviewSections, endpoints, canEdit, exitCriteria, canEditCriteria }: { suite: { id: string; slug: string; name: string; description: string; status: testingsuiteLifeCycle }; scope: suiteScope; overview: suiteOverview; testAccounts: suiteTestAccount[]; overviewSections: suiteOverviewSection[]; endpoints: suiteEndpoint[]; canEdit: boolean; exitCriteria: ExitCriteria; canEditCriteria: boolean }) {
 	const firstIteration = overview.iterations[overview.iterations.length - 1];
 	const latestIteration = overview.iterations[0];
 	const currentSignOff = overview.signOffs.find((s) => !s.revokedAt);
 	const previousSignOffs = overview.signOffs.filter((s) => s.revokedAt);
+
 	return (
 
-		<ScrollArea className="h-full">
-			<div className="flex flex-col items-center py-10 w-300 mx-auto">
-				<div className="flex flex-row w-full border-b pb-4 justify-between items-center">
-					<div className="flex flex-row items-center gap-4">
-						<div className="flex items-center justify-center w-12 h-12 rounded-md bg-muted text-muted-foreground">
-							<ClipboardList data-icon="inline-start" size={24} />
+		<OverviewEditProvider alwaysEdit={canEdit && suite.status === "draft"}>
+			<ScrollArea className="h-full">
+				<div className="flex flex-col items-center py-5 w-7xl mx-auto gap-5">
+					<div className="w-full flex flex-row justify-between">
+						<div className="flex flex-row gap-2 items-center ">
+							<div className="size-10 bg-accent flex flex-row gap-2 items-center rounded-md justify-center p-2">
+								<Folder />
+							</div>
+							<div className="">
+								<p className="font-semibold"> {suite.name} </p>
+								<p className="text-xs text-muted-foreground">Testing Suite</p>
+							</div>
 						</div>
-						<div className="flex flex-col">
-							<p className="text-sm font-heading font-semibold">{suite.name}</p>
-							<p className="text-xs text-accent-foreground">Test Suite</p>
-						</div>
-					</div>
-					<div>
+						<div className="flex flex-row gap-4 items-end">
+							<div className={`flex flex-col gap-1 items-end`}>
+								<p className="text-xs text-muted-foreground">Exit Criteria</p>
+								<div className="flex flex-row gap-2">
+									<div className="flex flex-row items-center gap-1 rounded-md py-1.5 px-2 bg-gray-600/5 w-fit text-gray-800">
+										<div className="flex flex-row items-center gap-1">
+											<p className="font-mono text-xs">{exitCriteria.minPassRate}%</p>
+											<p className="text-xs font-semibold">Min. Pass Rate</p>
+										</div>
+									</div>
+									<div className="flex flex-row items-center gap-1 rounded-md py-1.5 px-2 bg-gray-600/5 w-fit text-gray-800">
+										<div className="flex flex-row items-center gap-1">
+											<p className="font-mono text-xs">{exitCriteria.maxFailed}</p>
+											<p className="text-xs font-semibold">Max Failed Cases</p>
+										</div>
+									</div>
+									<div className="flex flex-row items-center gap-1 rounded-md py-1.5 px-2 bg-gray-600/5 w-fit text-gray-800">
+										<div className="flex flex-row items-center gap-1">
+											<p className="font-mono text-xs">{exitCriteria.maxBlocked}</p>
+											<p className="text-xs font-semibold">Max Blocked Cases</p>
+										</div>
+									</div>
+								</div>
 
-					</div>
-				</div>
-				<div className="flex flex-row w-full h-full justify-center gap-6">
-					<div className="w-4xl flex flex-col gap-4 py-4">
-						<div className="flex flex-col gap-1 border rounded-md">
-							<div className="p-4 bg-accent border-b flex flex-row gap-2 items-center">
-								<Info className="text-accent-foreground size-4" />
-								<p className="font-semibold">Description</p>
 							</div>
-							<div className="p-4">
-								{suite.description
-									? <p className="whitespace-pre-wrap">{suite.description}</p>
-									: <p className="text-muted-foreground text-sm">No description yet. Add one from the edit suite dialog.</p>}
-							</div>
+							<ScopeOfTesting scope={scope} align="end" />
+							{canEdit && <EditOverviewButton />}
 						</div>
-						<div className="flex flex-col gap-1 border rounded-md">
+					</div>
+					<Separator />
+					<div className="flex flex-row w-full h-full justify-center gap-6">
+
+						<div className="w-5xl flex flex-col gap-4 pb-4">
+							<SuiteOverviewContent testSuite={suite} suiteId={suite.id} description={suite.description} accounts={testAccounts} sections={overviewSections} canEdit={canEdit} />
+							{/* <SuiteOverviewContent suiteId={suite.id} description={suite.description} accounts={testAccounts} canEdit={canEdit} />
+						<ExitCriteriaCard suiteId={suite.id} criteria={exitCriteria} canEdit={canEditCriteria} locked={suite.status !== "draft" && suite.status !== "ready"} /> */}
+							{/* {
+							canEdit && <Seperator />
+						} */}
+							{/* <div className="flex flex-col gap-1 border rounded-md">
 							<div className="p-4 bg-accent border-b flex flex-row gap-2 items-center">
 								<BadgeCheck className="text-accent-foreground size-4" />
 								<p className="font-semibold">Sign-off</p>
 							</div>
 							<div className="p-4 flex flex-col gap-3">
 								{currentSignOff ? (
-									<SignOffEntry signOff={currentSignOff} />
+									<SignOffEntry signOff={currentSignOff} suiteSlug={suite.slug} />
 								) : (
 									<p className="text-muted-foreground text-sm">Not signed off yet.</p>
 								)}
@@ -58,22 +97,13 @@ export default function OverviewTab({ suite, overview }: { suite: { name: string
 									<details className="text-sm">
 										<summary className="cursor-pointer text-xs text-muted-foreground">Previous sign-offs ({previousSignOffs.length})</summary>
 										<div className="flex flex-col gap-3 pt-3">
-											{previousSignOffs.map((signOff) => <SignOffEntry key={signOff.id} signOff={signOff} />)}
+											{previousSignOffs.map((signOff) => <SignOffEntry key={signOff.id} signOff={signOff} suiteSlug={suite.slug} />)}
 										</div>
 									</details>
 								)}
 							</div>
-						</div>
-						<div className="flex flex-col gap-1 border rounded-md">
-							<div className="p-4 bg-accent border-b flex flex-row gap-2 items-center">
-								<IdCard className="text-accent-foreground size-4" />
-								<p className="font-semibold">Test Accounts</p>
-							</div>
-							<div className="p-4">
-								<p>This suite validates the full company registration lifecycle: application intake, document validation, SEC endorsement routing, and final certificate issuance. Test cases confirm correct behavior for required fields, role-based approval steps, and edge cases such as rejected or resubmitted applications, ensuring the workflow holds up under real UAT conditions before go-live.</p>
-							</div>
-						</div>
-						<div className="flex flex-col gap-1 border rounded-md">
+						</div> */}
+							{/* <div className="flex flex-col gap-1 border rounded-md">
 							<div className="p-4 bg-accent border-b flex flex-row gap-2 items-center">
 								<TestTubeDiagonal className="text-accent-foreground size-4" />
 								<p className="font-semibold">Tester needs to do</p>
@@ -181,7 +211,7 @@ export default function OverviewTab({ suite, overview }: { suite: { name: string
 										requiring workarounds or manual intervention.
 									</li>
 									<li>
-										No critical issues remain open — all high-priority defects found
+										No critical issues remain open — all defects found
 										during testing have been resolved and verified, with no blockers
 										that would prevent real users from completing their work.
 									</li>
@@ -227,120 +257,73 @@ export default function OverviewTab({ suite, overview }: { suite: { name: string
 									</li>
 								</ul>
 							</div>
-						</div>
+						</div> */}
 
-					</div>
-					<div className="flex-1 h-full">
-						<div className="flex flex-col gap-4 py-6 border-b">
-							<div className="flex flex-row gap-2 items-center">
-								<Notebook className="size-4 text-accent-foreground" />
-								<p className="font-semibold">Testing Details</p>
-							</div>
-							<div className="flex flex-col gap-3">
-								<div className="flex flex-col gap-1">
-									<p className="font-mono bg-accent w-fit py-1 px-2 rounded-md">IC Licensing Project</p>
-									<p className="text-xs">Project Name</p>
-								</div>
-								<div className="flex flex-col gap-1">
-									<p className="font-semibold">Insurance Commissioner</p>
-									<p className="text-xs">Project Owner</p>
-								</div>
-								<div className="flex flex-col gap-1">
-									<p className="font-semibold">{overview.testCaseCount} Test Case{overview.testCaseCount === 1 ? "" : "s"}</p>
-									<p className="text-xs">Number of Test Cases</p>
-								</div>
-							</div>
 						</div>
-						<div className="flex flex-col gap-4 py-6 border-b">
-							<div className="flex flex-row gap-2 items-center">
-								<Calendar className="size-4 text-accent-foreground" />
-								<p className="font-semibold">Testing Timeline</p>
-							</div>
-							<div className="flex flex-col gap-3">
-								<div className="flex flex-col gap-1">
-									<p className="font-semibold">{firstIteration ? formatTimestamp(firstIteration.startedAt) : "Not started"}</p>
-									<p className="text-xs">Starting Timeline</p>
+						<div className="flex-1 h-full">
+							<div className="flex flex-col gap-4 pb-6 border-b">
+								<div className="flex flex-row gap-2 items-center">
+									<Notebook className="size-4 text-accent-foreground" />
+									<p className="font-semibold">Testing Details</p>
 								</div>
-								<div className="flex flex-col gap-1">
-									<p className="font-semibold">
-										{!latestIteration ? "—"
-											: latestIteration.completedAt ? formatTimestamp(latestIteration.completedAt)
-												: latestIteration.plannedEndDate ? `Planned ${latestIteration.plannedEndDate}` : "In progress"}
-									</p>
-									<p className="text-xs">Ending Timeline</p>
-								</div>
-							</div>
-						</div>
-						<div className="flex flex-col gap-4 py-6 border-b">
-							<div className="flex flex-row gap-2 items-center">
-								<Users className="size-4 text-accent-foreground" />
-								<p className="font-semibold">Roles to be Tested</p>
-							</div>
-							<div className="flex flex-wrap gap-1">
-								{overview.roles.length > 0
-									? overview.roles.map((role) => <Badge key={role}>{role}</Badge>)
-									: <p className="text-xs text-muted-foreground">No role assignees on the test cases yet.</p>}
-							</div>
-						</div>
-						<div className="flex flex-col gap-4 py-6 border-b">
-							<div className="flex flex-row gap-2 items-center">
-								<ListChecks className="size-4 text-accent-foreground" />
-								<p className="font-semibold">Test Iterations</p>
-							</div>
-							{overview.iterations.length === 0 ? (
-								<p className="text-xs text-muted-foreground">No iterations yet.</p>
-							) : (
 								<div className="flex flex-col gap-3">
-									{overview.iterations.map((iteration) => (
-										<div key={iteration.id} className="flex flex-col gap-1">
-											<div className="flex flex-row items-center gap-2">
-												<p className="font-semibold">{iteration.name}</p>
-												{iteration.status === "in_progress" && <Badge variant="secondary" className="text-xs bg-blue-600/20">In Progress</Badge>}
-												{iteration.status === "not_started" && <Badge variant="secondary" className="text-xs">Not Started</Badge>}
-												{iteration.status === "stopped" && <Badge variant="secondary" className="text-xs bg-red-600/15 text-red-800">Stopped</Badge>}
+									<div className="flex flex-col gap-1">
+										<p className="font-mono bg-accent w-fit py-1 px-2 rounded-md">IC Licensing Project</p>
+										<p className="text-xs">Project Name</p>
+									</div>
+									<div className="flex flex-col gap-1">
+										<p className="font-semibold">Insurance Commissioner</p>
+										<p className="text-xs">Project Owner</p>
+									</div>
+									<div className="flex flex-col gap-1">
+										<p className="font-semibold">{overview.testCaseCount} Test Case{overview.testCaseCount === 1 ? "" : "s"}</p>
+										<p className="text-xs">Number of Test Cases</p>
+									</div>
+								</div>
+							</div>
+							<div className="flex flex-col gap-4 py-6 border-b">
+								<div className="flex flex-row gap-2 items-center">
+									<ListChecks className="size-4 text-accent-foreground" />
+									<p className="font-semibold">Test Iterations</p>
+								</div>
+								{overview.iterations.length === 0 ? (
+									<p className="text-xs text-muted-foreground">No iterations yet.</p>
+								) : (
+									<div className="flex flex-col gap-3">
+										{overview.iterations.map((iteration) => (
+											<div key={iteration.id} className="flex flex-col gap-1">
+												<div className="flex flex-row items-center gap-2">
+													<p className="font-semibold">{iteration.name}</p>
+													{iteration.status === "in_progress" && <Badge variant="secondary" className="text-xs bg-blue-600/20">In Progress</Badge>}
+													{iteration.status === "not_started" && <Badge variant="secondary" className="text-xs">Not Started</Badge>}
+													{iteration.status === "stopped" && <Badge variant="secondary" className="text-xs bg-red-600/15 text-red-800">Stopped</Badge>}
+												</div>
+												<CountsLine counts={iteration.counts} />
+												<p className="text-xs text-muted-foreground font-mono">
+													{iteration.completedAt ? `Completed ${formatTimestamp(iteration.completedAt)}` : `Started ${formatTimestamp(iteration.startedAt)}`}
+												</p>
 											</div>
-											<CountsLine counts={iteration.counts} />
-											<p className="text-xs text-muted-foreground font-mono">
-												{iteration.completedAt ? `Completed ${formatTimestamp(iteration.completedAt)}` : `Started ${formatTimestamp(iteration.startedAt)}`}
-											</p>
-										</div>
-									))}
-								</div>
-							)}
-						</div>
-						<div className="flex flex-col gap-4 py-6 border-b">
-							<div className="flex flex-row gap-2 items-center">
-								<Link className="size-4 text-accent-foreground" />
-								<p className="font-semibold">Endpoints</p>
+										))}
+									</div>
+								)}
 							</div>
-							<div className="flex flex-wrap gap-1">
-								<div className="flex flex-col gap-1">
-									<div className="flex flex-row items-center gap-2">
-										<Link className="size-3 text-accent-foreground" />
-										<p className="font-semibold">Http: https://api.example.com</p>
-									</div>
-									<p className="text-xs">Testing Endpoint 1</p>
+							<div className="flex flex-col gap-4 py-6 border-b">
+								<div className="flex flex-row gap-2 items-center">
+									<Users className="size-4 text-accent-foreground" />
+									<p className="font-semibold">Roles to be Tested</p>
 								</div>
-								<div className="flex flex-col gap-1">
-									<div className="flex flex-row items-center gap-2">
-										<Link className="size-3 text-accent-foreground" />
-										<p className="font-semibold">Http: https://api.example.com</p>
-									</div>
-									<p className="text-xs">Testing Endpoint 1</p>
-								</div>
-								<div className="flex flex-col gap-1">
-									<div className="flex flex-row items-center gap-2">
-										<Link className="size-3 text-accent-foreground" />
-										<p className="font-semibold">Http: https://api.example.com</p>
-									</div>
-									<p className="text-xs">Testing Endpoint 1</p>
+								<div className="flex flex-wrap gap-1">
+									{overview.roles.length > 0
+										? overview.roles.map((role) => <Badge key={role}>{role}</Badge>)
+										: <p className="text-xs text-muted-foreground">No role assignees on the test cases yet.</p>}
 								</div>
 							</div>
+							<SuiteEndpointsList suiteId={suite.id} endpoints={endpoints} canEdit={canEdit} />
 						</div>
 					</div>
 				</div>
-			</div>
-		</ScrollArea>
+			</ScrollArea>
+		</OverviewEditProvider>
 	)
 }
 
@@ -355,7 +338,7 @@ function CountsLine({ counts }: { counts: statusCounts }) {
 	);
 }
 
-function SignOffEntry({ signOff }: { signOff: suiteOverview["signOffs"][number] }) {
+function SignOffEntry({ signOff, suiteSlug }: { signOff: suiteOverview["signOffs"][number]; suiteSlug: string }) {
 	return (
 		<div className="flex flex-col gap-1">
 			<div className="flex flex-row items-center gap-2">
@@ -370,6 +353,11 @@ function SignOffEntry({ signOff }: { signOff: suiteOverview["signOffs"][number] 
 			</p>
 			<CountsLine counts={signOff.exceptions} />
 			{signOff.note && <p className="text-sm">{signOff.note}</p>}
+			{signOff.hasReport && (
+				<NextLink href={`/testingsuite/${suiteSlug}/sign-off/${signOff.id}/report`} className="text-xs underline underline-offset-4 w-fit">
+					View sign-off report
+				</NextLink>
+			)}
 		</div>
 	);
 }

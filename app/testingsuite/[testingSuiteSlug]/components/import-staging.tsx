@@ -7,6 +7,8 @@ import type { importCase, importIssue } from "@/lib/import/parse-test-cases";
 // errors get staged, so `issues` holds warnings only.
 export type stagedImport = {
 	fileName: string;
+	// Set when imported from a section's page: every case goes into it.
+	section: string | null;
 	cases: importCase[];
 	issues: importIssue[];
 };

@@ -17,6 +17,8 @@ export type signOff = {
     // Null while the vendor's issued sign-off waits for the client (suite status sign_off_issued).
     acknowledgedAt: string | null;
     acknowledgedBy: string | null;
+    // Issued after sign-off reports existed (0040), so it has a report page.
+    hasReport: boolean;
 };
 
 export type suiteOverview = {
@@ -27,7 +29,7 @@ export type suiteOverview = {
     signOffs: signOff[];
 };
 
-function countStatuses(statuses: testCaseStatus[]): statusCounts {
+export function countStatuses(statuses: testCaseStatus[]): statusCounts {
     return {
         total: statuses.length,
         passed: statuses.filter((s) => s === "Passed").length,
@@ -46,20 +48,15 @@ function toCounts(raw: unknown): statusCounts {
 
 export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> {
     const supabase = await createClient();
-    const [iterations, casesResult, signOffsResult] = await Promise.all([
+    const [iterations, casesResult, signOffs] = await Promise.all([
         getIterationsBySuiteId(suiteId),
         supabase
             .from("test_cases")
             .select("role_assignee, sections!inner ( test_suite_id )")
             .eq("sections.test_suite_id", suiteId),
-        supabase
-            .from("suite_sign_offs")
-            .select(SIGN_OFF_SELECT)
-            .eq("testing_suite_id", suiteId)
-            .order("signed_off_at", { ascending: false }),
+        getSuiteSignOffs(suiteId),
     ]);
     if (casesResult.error) throw casesResult.error;
-    if (signOffsResult.error) throw signOffsResult.error;
 
     const statusesByIteration = new Map<string, testCaseStatus[]>();
     if (iterations.length > 0) {
@@ -78,12 +75,13 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
         testCaseCount: casesResult.data.length,
         roles: Array.from(new Set(casesResult.data.map((c) => c.role_assignee).filter((r): r is NonNullable<typeof r> => !!r))).sort(),
         iterations: iterations.map((iteration) => ({ ...iteration, counts: countStatuses(statusesByIteration.get(iteration.id) ?? []) })),
-        signOffs: signOffsResult.data.map(toSignOff),
+        signOffs,
     };
 }
 
 const SIGN_OFF_SELECT = `
     id, signed_off_at, note, exceptions, revoked_at, acknowledged_at,
+    report_generated_at:report->header->>generatedAt,
     iteration:test_iterations ( name ),
     signer:profiles!suite_sign_offs_signed_off_by_fkey ( full_name ),
     revoker:profiles!suite_sign_offs_revoked_by_fkey ( full_name ),
@@ -91,7 +89,7 @@ const SIGN_OFF_SELECT = `
 ` as const;
 
 function toSignOff(row: {
-    id: string; signed_off_at: string; note: string | null; exceptions: unknown; revoked_at: string | null; acknowledged_at: string | null;
+    id: string; signed_off_at: string; note: string | null; exceptions: unknown; revoked_at: string | null; acknowledged_at: string | null; report_generated_at: string | null;
     iteration: { name: string } | null; signer: { full_name: string | null } | null; revoker: { full_name: string | null } | null; acknowledger: { full_name: string | null } | null;
 }): signOff {
     return {
@@ -105,7 +103,20 @@ function toSignOff(row: {
         revokedBy: row.revoker?.full_name ?? null,
         acknowledgedAt: row.acknowledged_at,
         acknowledgedBy: row.acknowledger?.full_name ?? null,
+        hasReport: !!row.report_generated_at,
     };
+}
+
+// Every sign-off for the suite, newest first (withdrawn ones included). RLS: Admin and Internal only.
+export async function getSuiteSignOffs(suiteId: string): Promise<signOff[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("suite_sign_offs")
+        .select(SIGN_OFF_SELECT)
+        .eq("testing_suite_id", suiteId)
+        .order("signed_off_at", { ascending: false });
+    if (error) throw error;
+    return data.map(toSignOff);
 }
 
 // The vendor's issued sign-off still waiting for the client's acknowledgement, if any.

@@ -3,6 +3,8 @@
 import { TestCase } from "@/components/types";
 import { createClient } from "@/lib/supabase/server";
 import { getIterationsBySuiteId, type testIteration } from "@/lib/supabase/test-iterations";
+import type { audience } from "@/lib/supabase/test-cases";
+import { toExitCriteria } from "@/lib/report/exit-criteria";
 
 
 //CRUD for Test suite
@@ -21,7 +23,7 @@ import { getIterationsBySuiteId, type testIteration } from "@/lib/supabase/test-
 // }
 
 export type testCaseIssue = "no_steps" | "step_without_expected_result" | "no_role_assignee";
-export type readinessIssue = { testCaseId: string | null; code: string | null; issue: "no_complete_test_cases" | testCaseIssue };
+export type readinessIssue = { testCaseId: string | null; code: string | null; issue: "no_complete_test_cases" | "no_test_accounts" | "no_endpoints" | testCaseIssue };
 
 // Completeness of every test case in the suite: incomplete ones can't be picked for an iteration.
 export async function getSuiteTestCaseIssues(suiteId: string): Promise<{ testCaseId: string; issue: testCaseIssue }[]> {
@@ -39,17 +41,51 @@ export async function getSuiteReadinessIssues(suiteId: string): Promise<readines
     return data.map((row) => ({ testCaseId: row.test_case_id, code: row.code, issue: row.issue as readinessIssue["issue"] }));
 }
 
+export type suiteScope = {
+    sectionCount: number;
+    testCaseCount: number;
+    roleCount: number;
+    // Who the suite's cases are for, combined: a mix of internal and external is "both". Null with no cases.
+    audience: audience | null;
+};
+
+// The draft header's "Scope of Testing": what the suite will hand over for testing.
+export async function getSuiteScope(suiteId: string): Promise<suiteScope> {
+    const supabase = await createClient();
+    const [sectionsResult, casesResult] = await Promise.all([
+        supabase.from("sections").select("id", { count: "exact", head: true }).eq("test_suite_id", suiteId),
+        supabase
+            .from("test_cases")
+            .select("role_assignee, audience, sections!inner ( test_suite_id )")
+            .eq("sections.test_suite_id", suiteId),
+    ]);
+    if (sectionsResult.error) throw sectionsResult.error;
+    if (casesResult.error) throw casesResult.error;
+
+    const audiences = new Set(casesResult.data.map((c) => c.audience));
+    const audience = audiences.size === 0 ? null
+        : audiences.size === 1 ? [...audiences][0]
+            : "both";
+    return {
+        sectionCount: sectionsResult.count ?? 0,
+        testCaseCount: casesResult.data.length,
+        roleCount: new Set(casesResult.data.map((c) => c.role_assignee).filter(Boolean)).size,
+        audience,
+    };
+}
+
 export async function getTestSuite({ slug }: { slug: string }) {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("testing_suites")
-      .select("id, name, description, slug, code, status")
+      .select("id, name, description, slug, code, status, exit_criteria")
       .eq("slug", slug)
       .maybeSingle();
 
     if (error) throw error;
     if (!data) return null;
 
+    const { exit_criteria, ...suite } = data;
     const iterations: testIteration[] = await getIterationsBySuiteId(data.id);
-    return { ...data, iterations };
+    return { ...suite, exitCriteria: toExitCriteria(exit_criteria), iterations };
 }
