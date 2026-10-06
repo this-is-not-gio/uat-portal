@@ -31,6 +31,7 @@ import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
 import { createContext, useContext, useId, useState } from "react"
 import { EmptyState } from "../ui/empty-state"
+import { cn } from "@/lib/utils"
 
 // Lets a column's own cell render function (e.g. the leading status icon in
 // columns.tsx) become the drag handle for row reordering, instead of DataTable
@@ -107,7 +108,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 			rowId={row.id}
 			sortable={!!onReorder}
 			cells={row.getVisibleCells().map((cell) => (
-				<TableCell key={cell.id} className={notEnd ? "first:pl-4 last:pr-4 text-sm" : "first:pl-4 last:pr-4 text-sm last:text-right"}>
+				<TableCell key={cell.id} className={cn(notEnd ? "first:pl-4 last:pr-4 text-sm" : "first:pl-4 last:pr-4 text-sm last:text-right", cell.column.columnDef.meta?.className)}>
 					<table.FlexRender cell={cell} />
 				</TableCell>
 			))}
@@ -150,7 +151,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 						<TableRow key={headerGroup.id}>
 							{
 								headerGroup.headers.map((header) => (
-									<TableHead key={header.id} className={notEnd ? "bg-gray-50 text-xs first:pl-4 last:pr-4" : "bg-gray-50 text-xs first:pl-4 last:pr-4 last:flex last:justify-end last:items-center"}>
+									<TableHead key={header.id} className={cn(notEnd ? "bg-gray-50 text-xs first:pl-4 last:pr-4" : "bg-gray-50 text-xs first:pl-4 last:pr-4 last:flex last:justify-end last:items-center", header.column.columnDef.meta?.className)}>
 										{header.isPlaceholder ? null : (
 											<table.FlexRender header={header || null} />
 										)}

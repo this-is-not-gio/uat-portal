@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "./database.types";
 import type { currentUser } from "./auth";
 import { can } from "@/lib/auth/permissions";
+import { cache } from "react";
 
 export type suiteStatus = Database["public"]["Enums"]["suite_status"];
 
@@ -63,7 +64,8 @@ export type SidebarSuite = {
 };
 
 // The role filter is in the SQL function, so a suite the user may not open never reaches the page.
-export async function getSidebarSuites(user: currentUser): Promise<SidebarSuite[]> {
+// Cached per request: the layout (sidebar) and the dashboard both read it.
+export const getSidebarSuites = cache(async (user: currentUser): Promise<SidebarSuite[]> => {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("get_sidebar_suites");
     if (error) throw error;
@@ -96,4 +98,4 @@ export async function getSidebarSuites(user: currentUser): Promise<SidebarSuite[
         },
         ...(adminCounts?.has(row.suite_id) ? { adminCounts: adminCounts.get(row.suite_id) } : {}),
     }));
-}
+});

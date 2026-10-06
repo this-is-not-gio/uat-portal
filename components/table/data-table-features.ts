@@ -31,3 +31,13 @@ export const features = tableFeatures({
 // Pass this as the first generic argument to `ColumnDef`, `Column`, `Table`,
 // and `Row` so each type knows which feature APIs are available.
 export type DataTableFeatures = typeof features
+
+// Per-column styling, applied by DataTable to both the header and every cell
+// of that column — e.g. `meta: { className: "hidden md:table-cell" }` hides a
+// column below the md breakpoint.
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- params must match the original declaration
+  interface ColumnMeta<TFeatures, TData, TValue> {
+    className?: string
+  }
+}

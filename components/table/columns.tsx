@@ -155,6 +155,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.accessor("preconditions", {
 			header: "Preconditions",
+			meta: { className: "hidden md:table-cell" },
 			cell: (info) => (
 				info.getValue()?.length === 0 ? (
 					<div className="flex flex-row items-center gap-2 justify-between">
@@ -196,6 +197,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.accessor("stepsToExecute", {
 			header: "Steps to Execute",
+			meta: { className: "hidden md:table-cell" },
 			cell: (info) => {
 				const steps = info.getValue() ?? [];
 				// The readiness RPC only flags step_without_expected_result once per
@@ -274,6 +276,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.accessor("roleAssignee", {
 			header: "Role Assignee",
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => (
 				!info.getValue() ? (
 					<div className="flex flex-row items-center gap-2">
@@ -310,6 +313,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.accessor("audience", {
 			header: "Audience",
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => {
 				const value = info.getValue();
 				return value ? <AudienceBadge audience={value} /> : null;

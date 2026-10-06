@@ -12,6 +12,7 @@ import {
 	BreadcrumbSeparator,
 } from "./ui/breadcrumb";
 import type { SidebarSuite } from "@/lib/supabase/Init";
+import { SidebarTrigger } from "./ui/sidebar";
 
 const SEGMENT_LABELS: Record<string, string> = {
 	dashboard: "Dashboard",
@@ -60,6 +61,7 @@ export function SiteHeader({ testingSuites }: { testingSuites: SidebarSuite[] })
 
 	return (
 		<header data-slot="site-header" className="flex shrink-0 items-center gap-2 transition-[width,height] ease-linear p-4 ">
+			<SidebarTrigger className="lg:hidden" />
 			<Breadcrumb>
 				<BreadcrumbList>
 					{crumbs.map((crumb) => (
