@@ -429,3 +429,134 @@ export async function getIterationParticipants(iterationId: string): Promise<ite
         .map((row) => ({ organization: row.organization, submittedAt: row.submitted_at, withdrawnAt: row.withdrawn_at }))
         .sort((a, b) => compareOrganizations(a.organization, b.organization));
 }
+
+// One row per running round, for the admin dashboard's Active rounds card.
+// tested/included count result rows (one per case per org), so a case shared by
+// three orgs counts three times — matches the work actually left to do.
+export type activeRound = {
+    suiteName: string;
+    suiteSlug: string;
+    suiteCode: string | null;
+    iteration: testIteration;
+    testedCount: number;
+    includedCount: number;
+    // Included rows currently Failed or Blocked, for the Needs attention card.
+    failedCount: number;
+    submittedOrgs: number;
+    totalOrgs: number;
+};
+
+export async function getActiveRounds(): Promise<activeRound[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_iterations")
+        .select(`${ITERATION_SELECT}, testing_suites ( name, slug, code ), iteration_participants ( submitted_at )`)
+        .eq("status", "in_progress")
+        .order("planned_end_date", { ascending: true, nullsFirst: false });
+    if (error) throw error;
+
+    // ponytail: three head counts per round; fine for a handful of running rounds, move to an RPC if it grows.
+    return Promise.all(data.map(async (row) => {
+        const included = () => supabase.from("test_case_results").select("id", { count: "exact", head: true })
+            .eq("iteration_id", row.id).eq("included_in_run", true);
+        const counts = await Promise.all([
+            included(),
+            included().in("status", ["Passed", "Failed", "Blocked"]),
+            included().in("status", ["Failed", "Blocked"]),
+        ]);
+        const countError = counts.find((c) => c.error)?.error;
+        if (countError) throw countError;
+        const [includedCount, testedCount, failedCount] = counts.map((c) => c.count ?? 0);
+
+        return {
+            suiteName: row.testing_suites.name,
+            suiteSlug: row.testing_suites.slug,
+            suiteCode: row.testing_suites.code,
+            iteration: toIteration(row),
+            testedCount,
+            includedCount,
+            failedCount,
+            submittedOrgs: row.iteration_participants.filter((p) => p.submitted_at).length,
+            totalOrgs: row.iteration_participants.length,
+        };
+    }));
+}
+
+// The latest completed round of each in_testing suite that has no live (unrevoked) sign-off:
+// the vendor's "ready to issue" list. Suites with a newer round already running are skipped
+// by the caller, since that round supersedes this one.
+export type roundAwaitingSignOff = { suiteName: string; suiteSlug: string; suiteCode: string | null; iteration: testIteration };
+
+export async function getRoundsAwaitingSignOff(): Promise<roundAwaitingSignOff[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_iterations")
+        .select(`${ITERATION_SELECT}, testing_suite_id, testing_suites!inner ( name, slug, code, status ), suite_sign_offs ( revoked_at )`)
+        .eq("status", "completed")
+        .eq("testing_suites.status", "in_testing")
+        .order("iteration_number", { ascending: false });
+    if (error) throw error;
+
+    const latest = new Map<string, (typeof data)[number]>();
+    for (const row of data) if (!latest.has(row.testing_suite_id)) latest.set(row.testing_suite_id, row);
+    return [...latest.values()]
+        .filter((row) => !row.suite_sign_offs.some((s) => s.revoked_at == null))
+        .map((row) => ({ suiteName: row.testing_suites.name, suiteSlug: row.testing_suites.slug, suiteCode: row.testing_suites.code, iteration: toIteration(row) }));
+}
+
+// Issued sign-offs the client hasn't acknowledged yet (and the vendor hasn't revoked).
+export type signOffAwaitingAck = { id: string; suiteName: string; suiteSlug: string; iterationName: string | null; signedOffAt: string };
+
+export async function getSignOffsAwaitingAck(): Promise<signOffAwaitingAck[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("suite_sign_offs")
+        .select("id, signed_off_at, suite:testing_suites!inner ( name, slug ), iteration:test_iterations ( name )")
+        .is("acknowledged_at", null)
+        .is("revoked_at", null)
+        .order("signed_off_at", { ascending: true });
+    if (error) throw error;
+    return data.map((row) => ({ id: row.id, suiteName: row.suite.name, suiteSlug: row.suite.slug, iterationName: row.iteration?.name ?? null, signedOffAt: row.signed_off_at }));
+}
+
+// Latest executed results across every round, newest first, for the dashboard's Recent activity card.
+export type recentResult = {
+    id: string;
+    code: string | null;
+    title: string;
+    status: testCaseStatus;
+    completedAt: string;
+    executorName: string | null;
+    organizationName: string | null;
+    iterationName: string;
+    suiteName: string;
+    suiteSlug: string;
+};
+
+export async function getRecentResults(limit = 10): Promise<recentResult[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_case_results")
+        .select(`
+            id, code, title, status, completed_at,
+            executor:profiles!test_case_results_executed_by_fkey ( full_name ),
+            participant:iteration_participants!test_case_results_participant_fkey ( organization:organizations ( name ) ),
+            iteration:test_iterations!inner ( name, suite:testing_suites!inner ( name, slug ) )
+        `)
+        .not("completed_at", "is", null)
+        .order("completed_at", { ascending: false })
+        .limit(limit);
+    if (error) throw error;
+    return data.map((row) => ({
+        id: row.id,
+        code: row.code,
+        title: row.title,
+        status: row.status,
+        completedAt: row.completed_at as string,
+        executorName: row.executor?.full_name ?? null,
+        organizationName: row.participant?.organization?.name ?? null,
+        iterationName: row.iteration.name,
+        suiteName: row.iteration.suite.name,
+        suiteSlug: row.iteration.suite.slug,
+    }));
+}
