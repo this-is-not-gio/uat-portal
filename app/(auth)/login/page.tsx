@@ -21,11 +21,11 @@ export default async function LoginPage({
 	}
 
 	return (
-		<div className="flex min-h-svh flex-col items-center justify-center bg-blue-900 p-4 md:p-10">
+		<div className="flex min-h-svh flex-col items-center justify-center bg-blue-900 p-4 sm:p-6 md:p-10">
 			{/* <div className="w-full max-w-sm md:max-w-4xl">
 				<LoginForm redirectTo={redirectTo} />
 			</div> */}
-			<div className="bg-white p-6 rounded-lg min-w-md max-w-sm md:max-w-4xl flex flex-col gap-8">
+			<div className="bg-white p-5 sm:p-6 md:p-8 rounded-lg w-full max-w-sm sm:max-w-md flex flex-col gap-6 md:gap-8">
 				<div className="flex flex-row gap-2 items-center justify-between">
 					<div className="flex aspect-square items-center size-10 justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground text-2xl">
 						<ClipboardList className="size-5!" />
@@ -36,7 +36,7 @@ export default async function LoginPage({
 					</div>
 				</div>
 				<div className="">
-					<p className="font-bold text-2xl">Start Testing</p>
+					<p className="font-bold text-xl sm:text-2xl">Start Testing</p>
 					<p className="text-xs text-muted-foreground">Start testing your application and solve some test cases.</p>
 				</div>
 				<LoginForm />

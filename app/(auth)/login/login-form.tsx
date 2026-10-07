@@ -14,7 +14,6 @@ import {
 import { signIn, type SignInState } from "./actions";
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
-import image from "@/app/LoginImage.jpg";
 import { ClipboardList } from "lucide-react";
 
 export function LoginForm({ redirectTo, className, ...props }: { redirectTo?: string; className?: string; props?: React.HTMLAttributes<HTMLDivElement> }) {

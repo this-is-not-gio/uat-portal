@@ -1,21 +1,21 @@
 "use client";
 
 import { BookMarked, ChevronRight, FolderIcon, LucideIcon, Plus, Trash2 } from "lucide-react";
-import { Button } from "./ui/button";
-import SuiteDialog from "./suite-dialog";
+import { Button } from "../ui/button";
+import SuiteDialog from "../suite-dialog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from "./ui/sidebar";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuAction, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from "../ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import type { SidebarSuite } from "@/lib/supabase/Init";
 import type { currentUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/auth/permissions";
 import { groupSuites, type badgeTone } from "./nav-suites";
-import { Badge } from "./ui/badge";
+import { Badge } from "../ui/badge";
 import { cn } from "@/lib/utils";
 import { deleteSuite } from "@/lib/supabase/authoring-actions";
-import ConfirmDialog from "@/app/testingsuite/[testingSuiteSlug]/components/confirm-dialog";
+import ConfirmDialog from "../confirm-dialog";
 import { useRef, useState } from "react";
 
 // Badge tone -> classes. Styling is Gio's lane; these are placeholders.

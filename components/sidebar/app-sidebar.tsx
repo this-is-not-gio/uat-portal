@@ -1,76 +1,18 @@
 "use client";
 
-import { Book, BookMarked, Bug, ChevronRight, Clipboard, ClipboardEditIcon, Download, FlaskConical, House, Pencil, TestTubeDiagonal, UserGroup } from "lucide-react";
+import { Book, BookMarked, Bug, ChevronRight, Clipboard, ClipboardEditIcon, Download, FlaskConical, House, Pencil, TestTubeDiagonal, UserGroup, Users } from "lucide-react";
 import * as React from "react"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 import { NavMain } from "./nav-main";
 import { NavSecondary } from "./nav-secondary";
-import { Badge } from "./ui/badge";
+import { Badge } from "../ui/badge";
 import type { SidebarSuite } from "@/lib/supabase/Init";
 import type { currentUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/auth/permissions";
-import { SignOutButton } from "./sign-out-button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
+import { SignOutButton } from "../sign-out-button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible";
+import NavTestCase from "./nav-testcase";
 
-const data = {
-	user: {
-		name: "shadcn",
-		email: "m@example.com",
-		avatar: "/avatars/shadcn.jpg",
-	},
-	navMain: [
-		{
-			title: "Dashboard",
-			url: "/dashboard",
-			icon: House,
-		},
-		{
-			title: "Testing Master Plan",
-			url: "/masterPlan",
-			icon: Book,
-		},
-		{
-			title: "Participants",
-			url: "/admin/users",
-			icon: UserGroup,
-		}
-	],
-	// Internal and External testers: one home link, no Master Plan.
-	navTester: [
-		{
-			title: "My Testing",
-			url: "/dashboard",
-			icon: House,
-		},
-	],
-	// navComponents: [
-	//     {
-	//         title: "General",
-	//         url: "#",
-	//         icon: BookMarked
-	//     },
-	//     {
-	//         title: "Company Registration",
-	//         url: "/epics/company-registration",
-	//         icon: BookMarked,
-	//     },
-	// 	{
-	// 		title : "Finalizing Company Details",
-	// 		url : "#",
-	// 		icon : BookMarked,
-	// 	},
-	//     {
-	//         title: "SEC Endrsement",
-	//         url: "/epics/sec-endorsement",
-	//         icon: BookMarked,
-	//     },
-	// 	{
-	// 		title : "Certificate of Authority",
-	// 		url : "/epics/certificate-of-authority",
-	// 		icon : BookMarked,
-	// 	}
-	// ]
-}
 
 const BADGE_VARIANTS = {
 	external: {
@@ -99,6 +41,17 @@ const BADGE_VARIANTS = {
 	}
 }
 
+const data = {
+	navMain: [
+		{ title: "Master Plan", url: "/masterPlan", icon: BookMarked },
+		{ title: "Users", url: "/admin/users", icon: Users },
+	],
+	// navTester: [
+	// 	{ title: "Dashboard", url: "/dashboard", icon: House },
+	// 	{ title: "Test Suites", url: "/testingsuite", icon: Book },
+	// ]
+}	
+
 
 
 export function AppSidebar({ testingSuites, user, ...props }: React.ComponentProps<typeof Sidebar> & { testingSuites: SidebarSuite[]; user: currentUser }) {
@@ -109,8 +62,8 @@ export function AppSidebar({ testingSuites, user, ...props }: React.ComponentPro
 	const initials = (user.fullName || user.email || "?").trim().split(/\s+/).filter(Boolean)
 		.map((word, i, words) => (i === 0 || i === words.length - 1 ? word[0] : "")).join("").toUpperCase();
 	return (
-		<Sidebar {...props}>
-			<SidebarHeader>
+		<Sidebar {...props} className="">
+			<SidebarHeader className="flex flex-col gap-2 px-2 pt-4">
 				<SidebarMenu className="flex flex-col gap-2">
 					<SidebarMenuButton
 						size="lg"
@@ -126,13 +79,13 @@ export function AppSidebar({ testingSuites, user, ...props }: React.ComponentPro
 					</SidebarMenuButton>
 				</SidebarMenu>
 			</SidebarHeader>
-			<SidebarContent>
-				<NavMain items={isAdmin ? data.navMain : data.navTester} />
-				<NavSecondary testingSuites={testingSuites} user={user} />
+			<SidebarContent className="px-1 py-0">
+				<NavTestCase testingSuites={testingSuites} user={user} />
+				<NavMain items={isAdmin ? data.navMain : []} />
 			</SidebarContent>
 			<SidebarFooter>
 				<SidebarMenu>
-					<SidebarMenuItem className="px-2 py-1">
+					<SidebarMenuItem className="px-1 pb-4">
 						<div className="flex flex-row gap-2 items-center justify-between">
 							<div className="flex flex-row gap-2 items-center min-w-0">
 								<div className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center ${badge.UserClassName}`}>

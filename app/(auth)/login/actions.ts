@@ -24,9 +24,3 @@ export async function signIn(_prevState: SignInState, formData: FormData): Promi
 
   redirect(safeRedirect(redirectTo));
 }
-
-export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect("/login");
-}

@@ -42,7 +42,7 @@ export function groupSuites(role: role, suites: SidebarSuite[]): suiteGroup[] {
                     icon: PencilSparkles,
                 },
                 {
-                    label: "Ready to Test",
+                    label: "For Testing",
                     suites: suites.filter((s) => s.status === "ready"),
                     icon: BookOpenCheck,
                 },
@@ -72,7 +72,7 @@ export function groupSuites(role: role, suites: SidebarSuite[]): suiteGroup[] {
         case "Internal":
             return nonEmptyGroups([
                 {
-                    label: "Test Suites",
+                    label: "Your Testing",
                     suites: suites.filter(
                         (s) => s.openRound?.status === "in_progress",
                     ),

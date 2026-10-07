@@ -3,8 +3,9 @@
 import { useFormStatus } from "react-dom";
 import { ArrowRightToLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { signOut } from "@/app/login/actions";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { signOut } from "@/lib/auth/action";
 
 export function SignOutButton() {
 	return (
