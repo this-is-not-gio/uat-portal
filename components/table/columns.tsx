@@ -71,8 +71,17 @@ function TestCaseTitleCell({ row }: { row: testCase; suiteStatus: suiteStatus })
 	return (
 		<div className="flex flex-row justify-between items-center gap-1">
 			<div className="">
-				<p className="text-sm">{row.title}</p>
-				<p className="font-mono text-xs text-muted-foreground">{row.code}</p>
+				<p className="text-xs">{row.title}</p>
+				<p className="font-mono text-xs text-muted-foreground">
+					{row.code}
+					{/* Below md the status column is hidden, so status and top flag ride along as text. */}
+					{row.caseState && (
+						<span className="md:hidden">
+							{`·${TestCaseStatusBadge[row.caseState.status].label}`}
+							{row.caseState.flags[0] && `·${flagText(row.caseState.flags[0], row.caseState)}`}
+						</span>
+					)}
+				</p>
 			</div>
 		</div>
 	)
@@ -155,7 +164,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.accessor("preconditions", {
 			header: "Preconditions",
-			meta: { className: "hidden md:table-cell" },
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => (
 				info.getValue()?.length === 0 ? (
 					<div className="flex flex-row items-center gap-2 justify-between">
@@ -197,7 +206,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.accessor("stepsToExecute", {
 			header: "Steps to Execute",
-			meta: { className: "hidden md:table-cell" },
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => {
 				const steps = info.getValue() ?? [];
 				// The readiness RPC only flags step_without_expected_result once per
@@ -238,7 +247,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 							<Waypoints size={15} className="text-gray-800" />
 							<div className="flex flex-row items-center gap-0.5">
 								<p className="font-mono text-xs text-gray-800">{steps.length}</p>
-								<p className="text-xs text-gray-800 font-semibold">Steps</p>
+								<p className="text-xs  text-gray-800 font-semibold">Steps</p>
 							</div>
 						</div>
 						{stepsMissingExpected.length > 0 && (
@@ -321,6 +330,7 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 		}),
 		columnHelper.display({
 			id: "status",
+			meta: { className: "hidden md:table-cell" },
 			cell: (info) => <CaseStatusCell state={info.row.original.caseState} />,
 		}),
 	])

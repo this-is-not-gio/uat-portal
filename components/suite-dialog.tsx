@@ -19,7 +19,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { updateExitCriteria, upsertSuite } from "@/lib/supabase/authoring-actions";
 import { DEFAULT_EXIT_CRITERIA, exitCriteriaError, sameExitCriteria, type ExitCriteria } from "@/lib/report/exit-criteria";
-import { ExitCriteriaFields } from "@/app/testingsuite/[testingSuiteSlug]/components/exit-criteria-card";
+import { ExitCriteriaFields } from "./exit-criteria-card";
+
 
 type suiteFields = { id: string; name: string; code: string | null; slug: string; description: string; status: string };
 

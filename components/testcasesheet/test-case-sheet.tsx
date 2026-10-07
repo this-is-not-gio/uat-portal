@@ -186,8 +186,8 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	}
 
 	return (
-		<SheetContent className="overflow-y-auto data-[side=right]:w-[50vw] data-[side=right]:sm:max-w-[50vw]">
-			<SheetHeader className="px-8 pt-10">
+		<SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-none data-[side=right]:md:w-[75vw] data-[side=right]:lg:w-[50vw]">
+			<SheetHeader className="px-4 pt-6 md:px-8 md:pt-10">
 				<SheetDescription className="text-xs text-muted-foreground">
 					{testCase.code}
 				</SheetDescription>
@@ -203,7 +203,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 				</div>
 			</SheetHeader>
-			<div className="px-8">
+			<div className="px-4 md:px-8">
 				<div className="flex flex-row items-center gap-2 pb-3 ">
 					<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
 						<ClipboardCheckIcon />
@@ -231,7 +231,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						/>
 				}
 			</div>
-			<div className="flex flex-col justify-between px-8">
+			<div className="flex flex-col justify-between px-4 md:px-8">
 				<div className="flex flex-row items-center justify-between gap-2 pb-3 w-full">
 					<div className="flex flex-row items-center gap-2 pb-3">
 						<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
@@ -425,7 +425,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 			</div>
 			{/* Results the vendor archived with a force refresh, newest first. */}
 			{showResults && (testCase.archives?.length ?? 0) > 0 && (
-				<div className="flex flex-col px-8 pb-6 gap-3">
+				<div className="flex flex-col px-4 md:px-8 pb-6 gap-3">
 					<div className="flex flex-row items-center gap-2">
 						<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
 							<History />
@@ -561,7 +561,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 			</div>} */}
 			{mode === "execute" ? (
 				<SheetFooter className="flex flex-row justify-between sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
-					<div className="flex flex-row items-center gap-2 justify-between w-full">
+					<div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
 						<div className="flex flex-row items-center gap-2">
 							{/* <div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
 								{testedSteps} / {totalSteps} Tested Steps

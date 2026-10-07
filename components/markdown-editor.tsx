@@ -103,9 +103,8 @@ export function MarkdownEditor({
 						value={value}
 						onChange={(e) => onChange(e.target.value)}
 						placeholder={placeholder}
-						className="min-h-40 resize-y rounded-none border-0 shadow-none focus-visible:ring-0 p-4"
+						className="min-h-40 resize-y rounded-none border-0 shadow-none focus-visible:ring-0 p-4 text-xs md:text-sm"
 						disabled={disabled}
-						autoFocus
 					/>
 				</TabsContent>
 				<TabsContent value="preview" className="mt-0 min-h-40 p-4">

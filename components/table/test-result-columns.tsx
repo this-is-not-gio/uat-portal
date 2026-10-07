@@ -7,7 +7,6 @@ import { Badge } from "../ui/badge"
 import { TestStatusMapping } from "./columns"
 // Type-only import: test-iterations.ts uses the server Supabase client.
 import type { testResultRow } from "@/lib/supabase/test-iterations"
-import { Avatar, AvatarFallback } from "../ui/avatar"
 import { cn, initials } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 
@@ -139,21 +138,32 @@ export function ResultSummaryCell({ row }: { row: testResultRow }) {
 
 const columnHelper = createColumnHelper<DataTableFeatures, testResultRow>()
 
+// " · Failed · Updated mid-round": the result (once tested) and the highest-priority change flag.
+function mobileStatusText(row: testResultRow) {
+	const flag = RESULT_CHANGE_FLAG_ORDER.find((f) => f === row.syncKind || f === row.pendingChange)
+	return `${row.status !== "Untested" ? ` · ${row.status}` : ""}${flag ? ` · ${RESULT_CHANGE_FLAG_STYLES[flag].label}` : ""}`
+}
+
 export const testResultColumns = columnHelper.columns([
 	columnHelper.display({
 		header: "Test Case",
 		cell: (info) => (
 			<div>
 				<div className="flex flex-row flex-wrap items-center gap-1">
-					<p className="text-sm">{info.row.original.title}</p>
+					<p className="text-xs">{info.row.original.title}</p>
 				</div>
-				<p className="text-xs text-muted-foreground font-mono">{info.row.original.code}</p>
+				<p className="text-xs text-muted-foreground font-mono">
+					{info.row.original.code}
+					{/* Mobile hides the status column, so its result and top change flag ride on the code line as text. */}
+					<span className="md:hidden">{mobileStatusText(info.row.original)}</span>
+				</p>
 			</div>
 		),
 	}),
 
 	columnHelper.accessor("executor", {
 		header: "Executed By",
+		meta: { className: "hidden lg:table-cell" },
 		cell: (info) => {
 			const executor = info.getValue();
 			if (!executor) return <p className="text-xs text-muted-foreground">—</p>;
@@ -172,14 +182,17 @@ export const testResultColumns = columnHelper.columns([
 	}),
 	columnHelper.display({
 		header: "Remarks",
+		meta: { className: "hidden lg:table-cell" },
 		cell: (info) => <RemarkCountCell row={info.row.original} />,
 	}),
 
 	columnHelper.display({
 		header: "Result Summary",
+		meta: { className: "hidden md:table-cell" },
 		cell: (info) => <ResultSummaryCell row={info.row.original} />,
 	}),
 	columnHelper.accessor("previousStatus", {
+		meta: { className: "hidden lg:table-cell" },
 		header: () => (
 			<div className="flex flex-row items-center gap-1">
 				<p>Last Iteration Results</p>
@@ -208,6 +221,7 @@ export const testResultColumns = columnHelper.columns([
 	}),
 	columnHelper.accessor("status", {
 		header: "",
+		meta: { className: "hidden md:table-cell" },
 		cell: (info) => {
 			// Same chip as the Test Cases tab's Result column (columns.tsx CaseResultCell), followed by the change flags.
 			const status = TestStatusMapping[info.getValue() as keyof typeof TestStatusMapping];

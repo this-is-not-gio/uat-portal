@@ -6,8 +6,8 @@ import { type DataTableFeatures } from "./data-table-features"
 import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import ConfirmDialog from "@/app/testingsuite/[testingSuiteSlug]/components/confirm-dialog"
 import { removeParticipant } from "@/lib/supabase/iteration-actions"
+import ConfirmDialog from "../confirm-dialog"
 
 // One participating org in a round, shaped by IterationParticipantsTable.
 export type iterationParticipantRow = {
@@ -47,13 +47,14 @@ export const iterationParticipantColumns = columnHelper.columns([
 		header: "Organization",
 		cell: (info) => (
 			<div>
-				<p className="text-sm">{info.getValue()}</p>
+				<p className="text-xs">{info.getValue()}</p>
 				<p className="text-xs text-muted-foreground font-mono">{info.row.original.typeLabel}</p>
 			</div>
 		),
 	}),
 	columnHelper.accessor("testerCount", {
 		header: "Testers",
+		meta: { className: "hidden lg:table-cell" },
 		cell: (info) => <div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
 			<Users size={15} className="text-gray-800" />
 			<div className="flex flex-row items-center gap-0.5">
@@ -65,6 +66,7 @@ export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.display({
 		id: "progress",
 		header: "Progress",
+		meta: { className: "hidden lg:table-cell" },
 		cell: (info) => {
 			const { tested, total } = info.row.original
 			const percent = total === 0 ? 0 : Math.round((tested / total) * 100)
@@ -82,6 +84,7 @@ export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.display({
 		id: "Iteration Summary",
 		header: "Iteration Summary",
+		meta: { className: "hidden md:table-cell" },
 		cell: (info) => (
 			<div className="flex flex-row items-center gap-1">
 				{SUMMARY_CHIPS.map(({ key, label, icon: Icon, className }) => (

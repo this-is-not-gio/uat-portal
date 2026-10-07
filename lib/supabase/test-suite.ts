@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getIterationsBySuiteId, type testIteration } from "@/lib/supabase/test-iterations";
 import type { audience } from "@/lib/supabase/test-cases";
 import { toExitCriteria } from "@/lib/report/exit-criteria";
+import {cache} from "react";
 
 
 //CRUD for Test suite
@@ -50,7 +51,7 @@ export type suiteScope = {
 };
 
 // The draft header's "Scope of Testing": what the suite will hand over for testing.
-export async function getSuiteScope(suiteId: string): Promise<suiteScope> {
+export const getSuiteScope = cache(async (suiteId: string): Promise<suiteScope> => {
     const supabase = await createClient();
     const [sectionsResult, casesResult] = await Promise.all([
         supabase.from("sections").select("id", { count: "exact", head: true }).eq("test_suite_id", suiteId),
@@ -72,7 +73,11 @@ export async function getSuiteScope(suiteId: string): Promise<suiteScope> {
         roleCount: new Set(casesResult.data.map((c) => c.role_assignee).filter(Boolean)).size,
         audience,
     };
-}
+});
+
+// cache() compares args by identity, so key it on the slug string (an object arg would never hit).
+// The suite layout and its tab pages share one lookup per request.
+export const getTestSuiteBySlug = cache((slug: string) => getTestSuite({ slug }));
 
 export async function getTestSuite({ slug }: { slug: string }) {
     const supabase = await createClient();

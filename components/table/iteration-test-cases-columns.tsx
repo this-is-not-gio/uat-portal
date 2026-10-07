@@ -102,7 +102,7 @@ function TestCaseTitleCell({
 						}
 						<div className={`flex flex-row items-center gap-3 ${isExcluded ? "opacity-50" : ""}`}>
 							<div className="">
-								<p className="text-sm">{row.title}</p>
+								<p className="text-xs">{row.title}</p>
 								{row.lifecycleStatus === "updated" && (
 									<Badge variant="outline" className="text-xs">Updated</Badge>
 								)}
@@ -222,6 +222,7 @@ export function createIterationTestCaseColumns({
 		}),
 		columnHelper.accessor("preconditions", {
 			header: "Preconditions",
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => {
 				if (info.getValue()?.length === 0) {
 					return <div className="flex flex-row items-center gap-2 justify-between">
@@ -264,6 +265,7 @@ export function createIterationTestCaseColumns({
 		}),
 		columnHelper.accessor("stepsToExecute", {
 			header: "Steps to Execute",
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => {
 				const steps = info.getValue() ?? [];
 				return (
@@ -279,6 +281,7 @@ export function createIterationTestCaseColumns({
 		}),
 		columnHelper.accessor("audience", {
 			header: "Audience",
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => {
 				const value = info.getValue()
 				return value ? <AudienceBadge audience={value} /> : null
@@ -286,6 +289,7 @@ export function createIterationTestCaseColumns({
 		}),
 		columnHelper.accessor("roleAssignee", {
 			header: "Role Assignee",
+			meta: { className: "hidden lg:table-cell" },
 			cell: (info) => (
 				<p className="text-xs font-medium text-muted-foreground">{info.getValue()}</p>
 			)
