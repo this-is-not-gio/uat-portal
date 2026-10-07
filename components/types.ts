@@ -1,5 +1,3 @@
-import { CheckIcon, ClipboardIcon, HourglassIcon, LucideIcon, XIcon } from "lucide-react"
-
 export type testCaseStatus = "Untested" | "In Progress" | "Passed" | "Failed"
 
 export type Priority = "low" | "medium" | "high"
@@ -44,12 +42,5 @@ export type TestCase = {
   status: testCaseStatus
   order: number
 }
-
-export const LANES: { id: testCaseStatus; title: string, Icon: LucideIcon }[] = [
-  { id: "Untested", title: "Test Backlogs", Icon: ClipboardIcon },
-  { id: "In Progress", title: "In Progress", Icon: HourglassIcon },
-  { id: "Passed", title: "Pass", Icon: CheckIcon },
-  { id: "Failed", title: "Fails", Icon: XIcon },
-]
 
 
