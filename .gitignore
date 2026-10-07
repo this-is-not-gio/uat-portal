@@ -42,3 +42,6 @@ next-env.d.ts
 
 # claude code local state
 /.claude/
+
+# graphify knowledge graph (local, regenerate with `graphify update .`)
+graphify-out/

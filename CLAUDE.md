@@ -17,14 +17,28 @@ There is no test runner configured in this repo.
 
 ## Architecture
 
-UAT Portal: a Next.js App Router app for tracking UAT epics and their test cases, backed by Supabase (Postgres).
+UAT Portal: a Next.js App Router app for running UAT testing suites (sections → test cases → testing rounds/iterations → results → sign-off), backed by Supabase (Postgres) with role-based access.
 
-- **Data flow**: Server Components fetch data via `lib/supabase/test-cases.ts` (uses the server Supabase client from `lib/supabase/server.ts`, which reads/writes auth cookies via `next/headers`). Data is shaped into the app's domain types (`components/types.ts`) at the fetch boundary — e.g. `getTestCasesByEpicId` selects a nested Supabase query (`sections`, `preconditions`, `test_steps` → `expected_results`/`test_remarks`) and flattens/sorts it into `TestCase[]` via `toTestCase`. Do new data fetching in `lib/supabase/*.ts`, not in components.
-- **Two Supabase clients**: `lib/supabase/client.ts` (`createBrowserClient`, for Client Components) vs `lib/supabase/server.ts` (`createServerClient`, async, for Server Components/route handlers). Use the one matching the component type. `lib/supabase/database.types.ts` holds generated DB types.
-- **Routing**: `app/layout.tsx` is a Server Component that loads all epics (`getAllEpics`) for the sidebar nav on every page. `app/[epicId]/page.tsx` looks up one epic by slug, fetches its test cases, and calls `notFound()` if missing. It's an async Server Component wrapped in `Suspense` — the actual data fetching/rendering lives in an inner `EpicContent` async component so the route can show a skeleton fallback.
-- **Epic workspace** (`components/epic-workspace.tsx`, Client Component): owns `testCases` state (seeded from server-fetched `initialTestCases`) and toggles between two views of the same data:
-  - **Board** (`components/board/board.tsx`): Kanban view using `@dnd-kit`. Lanes come from `LANES` in `components/types.ts` (`Untested`/`Passed`/`Failed`). Drag-and-drop reorders `TestCase.order` and reassigns `status` client-side only — there is currently no persistence of drag changes back to Supabase.
-  - **Table** (`components/table/data-table.tsx` + `uat-ticket-columns.tsx`): TanStack Table view; clicking a row opens `TestCaseSheet` (`components/testcasesheet/`) with the full test case detail, including Markdown fields rendered via `react-markdown`/`remark-gfm`.
-- **Domain model** (`components/types.ts`): a `TestCase` has `preconditions`, `stepsToExecute` (each `TestStep` has `expectedResults` and optional `remarks`), `priority`, `roleAssignee`, `section`, and a `status`/`order` pair used for Kanban placement. This is the shape all UI components consume; Supabase row shapes are private to `lib/supabase/test-cases.ts`.
-- **UI components** (`components/ui/`): shadcn/ui components (style `base-nova`, base color `stone`, icon library `lucide`) generated per `components.json`. Path aliases: `@/components`, `@/lib`, `@/hooks`, `@/components/ui` all map to their literal directories (see `tsconfig.json`'s `@/*` → `./*`).
-- **Auth**: login/auth gating was previously added then removed (see git history) — the app currently has no auth gate in front of pages, but the Supabase server/browser clients are still wired for cookie-based auth sessions.
+- **Route groups**: pages live under two route groups — `app/(app)/` (the signed-in app: `dashboard`, `testingsuite/[testingSuiteSlug]/...`, `admin/{organizations,users}`, `exports`) and `app/(auth)/` (`login`, `set-password`). Route groups don't appear in URLs but **do** appear in import paths: import suite-local files as `@/app/(app)/testingsuite/[testingSuiteSlug]/components/...`, not `@/app/testingsuite/...`.
+- **Root layout** (`app/layout.tsx`): renders the sidebar (`components/app-sidebar.tsx` → `nav-main`, `nav-secondary`, `nav-suites.ts`), `site-header`, and wraps the app in `CurrentUserProvider` (`components/current-user-provider.tsx`, read via `useCurrentUser`) so client components know the signed-in user/role.
+- **Testing suite page** (`app/(app)/testingsuite/[testingSuiteSlug]/[[...section]]/page.tsx`): Server Component that loads the suite and passes server-rendered tab slots into the client `PageTab` (`page-tab.tsx`): Overview, Test Cases (`TestCasesTab` for authors, `TesterTestCasesTab` for testers), Test Results, and Sign-off. Suite-specific components live next to it in `[testingSuiteSlug]/components/`; the sign-off report page is `sign-off/[signOffId]/report/page.tsx`.
+- **Data flow**: do data fetching/mutations in `lib/supabase/*.ts` (e.g. `test-suite.ts`, `sign-off-report.ts`) and server actions, not in components. Supabase row shapes are shaped into app types at that boundary. Related logic: `lib/import/*` (CSV/XLSX test case import parsing) and `lib/report/*` (sign-off report building).
+- **Two Supabase clients**: `lib/supabase/client.ts` (`createBrowserClient`, for Client Components) vs `lib/supabase/server.ts` (`createServerClient`, async, for Server Components/route handlers/actions). Use the one matching the component type. `lib/supabase/database.types.ts` holds generated DB types.
+- **Shared components** (`components/`):
+  - `table/`: TanStack `DataTable` (`data-table.tsx`, feature flags in `data-table-features.ts`) plus one column-definition file per view (`columns`, `test-result-columns`, `iteration-test-cases-columns`, `iteration-participant-columns`, `import-review-columns`).
+  - `testcasesheet/`: `TestCaseSheet` — test case detail + step result entry, Markdown via `react-markdown`/`remark-gfm`.
+  - `sign-off-report/`: sign-off report view, picker and its tables.
+  - Misc: `markdown-editor`, `audience-badge`, `suite-status-badge` (suite lifecycle/status mapping), `scope-of-testing`, `suite-dialog`, `sign-out-button`.
+- **Domain types** (`components/types.ts`): `TestCase` (with `preconditions`, `stepsToExecute` → `TestStep.expectedResults`/`remarks`, `priority`, `roleAssignee`, `section`, `status`, `order`) used by the test cases tab and `lib/supabase/test-suite.ts`.
+- **UI components** (`components/ui/`): shadcn/ui components (style `base-nova`, base color `stone`, icon library `lucide`) generated per `components.json`. Unused sub-exports in these files are normal — don't trim them. Path aliases: `@/components`, `@/lib`, `@/hooks`, `@/components/ui` all map to their literal directories (see `tsconfig.json`'s `@/*` → `./*`).
+- **Drag and drop**: `@dnd-kit` is used for the section tree and row reordering in `DataTable`. The old Kanban board / epic workspace has been removed.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
