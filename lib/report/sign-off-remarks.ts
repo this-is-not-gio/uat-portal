@@ -19,6 +19,10 @@ export type ReportRemark = {
     stepNumber: number;
     stepStatus: string;
     remark: string;
+    // Who wrote it and when (test_remarks.created_by / created_at). Missing on reports frozen
+    // before they were added; the report page backfills them by id.
+    authorName?: string | null;
+    createdAt?: string | null;
 };
 
 // A vendor-written observation. Quotes are whole remarks cited by id, never typed text.

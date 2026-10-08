@@ -18,6 +18,8 @@ import type { ReportRemark, ReportThemes } from "@/lib/report/sign-off-remarks";
 // The report is frozen into suite_sign_offs.report (jsonb), so every exported shape is plain JSON.
 
 import { DEFAULT_EXIT_CRITERIA, toExitCriteria, type ExitCriteria } from "@/lib/report/exit-criteria";
+import type { ReportSection } from "@/lib/report/report-details";
+
 export { DEFAULT_EXIT_CRITERIA, toExitCriteria, type ExitCriteria };
 
 export type CriterionResult = {
@@ -30,7 +32,7 @@ export type CriterionResult = {
 
 export type Verdict = "met" | "not_met";
 
-type ExecutedStatus = "Passed" | "Failed" | "Blocked";
+export type ExecutedStatus = "Passed" | "Failed" | "Blocked";
 export type FinalStatus = ExecutedStatus | "Untested";
 type Priority = "low" | "medium" | "high";
 
@@ -104,6 +106,16 @@ export type RoundHistory = {
     fixes: RoundCaseChange[];
     // Executed in 2+ rounds and Failed in every one of them.
     failedEveryRound: { testCaseId: string; code: string | null; title: string; roundCount: number }[];
+    // Every executed case's combined result per round it ran in, oldest first: the audit trail
+    // the three lists above are derived from. Optional: reports frozen before it was added don't have it.
+    caseAudit?: CaseAuditEntry[];
+};
+
+export type CaseAuditEntry = {
+    testCaseId: string;
+    code: string | null;
+    title: string;
+    runs: { roundName: string; status: ExecutedStatus }[];
 };
 
 export type ReportLimitation = {
@@ -140,6 +152,19 @@ export type SignOffReport = {
     remarks?: ReportRemark[];
     // Vendor-written observations, attached at issue. Missing or null when none were written.
     themes?: ReportThemes | null;
+    // Vendor-added sections on the Report details page, attached at issue. Missing when none were added.
+    sections?: ReportSection[];
+    // Every case's final status and each org's result behind it. Missing on reports frozen before it was added.
+    caseResults?: ReportCaseResult[];
+};
+
+export type ReportCaseResult = {
+    testCaseId: string;
+    code: string | null;
+    title: string;
+    section: string;
+    status: FinalStatus;
+    perOrg: { organizationName: string; status: FinalStatus; roundName: string | null }[];
 };
 
 // Inputs to the pure functions below.
@@ -304,7 +329,7 @@ export function evaluateExitCriteria(
         const submitted = expected.filter((p) => p.submittedAt).length;
         results.push({
             key: "requireAllOrgsSubmitted",
-            label: "Every participating organization submitted, in every round",
+            label: "Every participant submitted, in every round",
             actual: `${submitted} of ${expected.length}`,
             threshold: "All",
             met: expected.length > 0 && submitted === expected.length,
@@ -367,9 +392,50 @@ export function buildRoundHistory(rounds: ReportRound[]): RoundHistory {
         }
     }
 
-    const byCode = (a: { code: string | null; title: string }, b: { code: string | null; title: string }) =>
-        caseLabel(a).localeCompare(caseLabel(b), undefined, { numeric: true });
-    return { rounds: summaries, regressions: regressions.sort(byCode), fixes: fixes.sort(byCode), failedEveryRound: failedEveryRound.sort(byCode) };
+    return {
+        rounds: summaries,
+        regressions: regressions.sort(byCode),
+        fixes: fixes.sort(byCode),
+        failedEveryRound: failedEveryRound.sort(byCode),
+        caseAudit: buildCaseAudit(rounds.map((r) => ({ name: r.iteration.name, rows: r.rows }))),
+    };
+}
+
+const byCode = (a: { code: string | null; title: string }, b: { code: string | null; title: string }) =>
+    caseLabel(a).localeCompare(caseLabel(b), undefined, { numeric: true });
+
+// Each executed case's combined status per round (orgs combined as in buildRoundHistory), rounds oldest first.
+function buildCaseAudit(rounds: { name: string; rows: testResultRow[] }[]): CaseAuditEntry[] {
+    const audit = new Map<string, CaseAuditEntry>();
+    for (const round of rounds) {
+        const byCase = new Map<string, { row: testResultRow; statuses: ExecutedStatus[] }>();
+        for (const row of round.rows) {
+            if (!row.testCaseId || !isExecuted(row.status)) continue;
+            const entry = byCase.get(row.testCaseId) ?? { row, statuses: [] };
+            entry.statuses.push(row.status);
+            byCase.set(row.testCaseId, entry);
+        }
+        for (const [testCaseId, { row, statuses }] of byCase) {
+            const entry = audit.get(testCaseId) ?? { testCaseId, code: null, title: "", runs: [] };
+            entry.code = row.code ?? null;
+            entry.title = row.title;
+            entry.runs.push({ roundName: round.name, status: combineExecuted(statuses) });
+            audit.set(testCaseId, entry);
+        }
+    }
+    return [...audit.values()].sort(byCode);
+}
+
+// Reports frozen before caseAudit existed: rebuild it from the frozen rounds' recorded results.
+// Completed rounds can't be edited, so this matches what would have been frozen.
+async function backfillCaseAudit(history: RoundHistory): Promise<CaseAuditEntry[]> {
+    const rounds = await Promise.all(
+        history.rounds.map(async (round) => ({
+            name: round.name,
+            rows: (await getIterationResults(round.iterationId)).filter((row) => row.includedInRun && !isRemovedFromRound(row)),
+        }))
+    );
+    return buildCaseAudit(rounds);
 }
 
 function groupCounts(finals: FinalCaseStatus[], keyOf: (f: FinalCaseStatus) => string, order: string[]): Breakdown {
@@ -499,6 +565,8 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
                         stepNumber: i + 1,
                         stepStatus: step.status ?? "Untested",
                         remark,
+                        authorName: r.author?.full_name ?? null,
+                        createdAt: r.created_at ?? null,
                     });
                 }
             }
@@ -507,33 +575,30 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
     return remarks;
 }
 
-export async function buildSignOffReport(suiteId: string): Promise<SignOffReport> {
+function loadRounds(iterations: testIteration[]): Promise<ReportRound[]> {
+    return Promise.all(
+        iterations.map(async (iteration) => {
+            const [rows, participants] = await Promise.all([getIterationResults(iteration.id), getIterationParticipants(iteration.id)]);
+            return { iteration, rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)), participants };
+        })
+    );
+}
+
+async function loadLiveCases(suiteId: string): Promise<ReportLiveCase[]> {
     const supabase = await createClient();
-    const [suiteResult, iterations, casesResult, statesResult] = await Promise.all([
-        supabase.from("testing_suites").select("id, name, code, exit_criteria").eq("id", suiteId).single(),
-        getIterationsBySuiteId(suiteId),
+    const [casesResult, statesResult] = await Promise.all([
         supabase
             .from("test_cases")
             .select("id, code, title, priority, role_assignee, order_index, sections!inner ( name, order_index, test_suite_id )")
             .eq("sections.test_suite_id", suiteId),
         supabase.rpc("get_suite_case_states", { p_suite_id: suiteId }),
     ]);
-    if (suiteResult.error) throw suiteResult.error;
     if (casesResult.error) throw casesResult.error;
     if (statesResult.error) throw statesResult.error;
 
-    // Rule 2: completed rounds only (stopped rounds never count), oldest first.
-    const completed = iterations.filter((i) => i.status === "completed").sort((a, b) => a.iterationNumber - b.iterationNumber);
-    const rounds: ReportRound[] = await Promise.all(
-        completed.map(async (iteration) => {
-            const [rows, participants] = await Promise.all([getIterationResults(iteration.id), getIterationParticipants(iteration.id)]);
-            return { iteration, rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)), participants };
-        })
-    );
-
     // Only the flags: the report carries earlier results forward, unlike the RPC's result column.
     const flagsById = new Map(statesResult.data.map((s) => [s.test_case_id, s.flags as caseFlag[]]));
-    const liveCases: ReportLiveCase[] = casesResult.data
+    return casesResult.data
         .map((c) => ({
             id: c.id,
             code: c.code,
@@ -546,6 +611,59 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
             flags: flagsById.get(c.id) ?? [],
         }))
         .sort((a, b) => a.sectionOrder - b.sectionOrder || a.orderIndex - b.orderIndex);
+}
+
+function toCaseResults(finals: FinalCaseStatus[]): ReportCaseResult[] {
+    return finals.map((f) => ({
+        testCaseId: f.testCaseId,
+        code: f.code,
+        title: f.title,
+        section: f.section,
+        status: f.status,
+        perOrg: f.perOrg.map((o) => ({ organizationName: o.organizationName, status: o.status, roundName: o.roundName })),
+    }));
+}
+
+// For reports frozen before caseResults existed: re-roll the rounds the report counted. Completed
+// rounds' results don't change, but case titles and sections are today's, and deleted cases drop out.
+// For reports frozen before remarks carried their author and time: look them up by test_remarks id.
+// Only created_by/created_at are read, which never change, so the frozen remark text is kept as is.
+async function backfillRemarkAuthors(remarks: ReportRemark[] | undefined): Promise<ReportRemark[] | undefined> {
+    const missing = (remarks ?? []).filter((r) => r.createdAt === undefined).map((r) => r.id);
+    if (!remarks || missing.length === 0) return remarks;
+    const supabase = await createClient();
+    // Batched: the ids go in the request URL.
+    const batches = Array.from({ length: Math.ceil(missing.length / 100) }, (_, i) => missing.slice(i * 100, (i + 1) * 100));
+    const results = await Promise.all(
+        batches.map((ids) => supabase.from("test_remarks").select("id, created_at, profile:profiles ( full_name )").in("id", ids))
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+    const byId = new Map(results.flatMap((r) => r.data ?? []).map((r) => [r.id, r]));
+    return remarks.map((r) => {
+        const found = byId.get(r.id);
+        return r.createdAt !== undefined || !found ? r : { ...r, authorName: found.profile?.full_name ?? null, createdAt: found.created_at };
+    });
+}
+
+async function backfillCaseResults(suiteId: string, history: RoundHistory): Promise<ReportCaseResult[]> {
+    const counted = new Set(history.rounds.map((r) => r.iterationId));
+    const [iterations, liveCases] = await Promise.all([getIterationsBySuiteId(suiteId), loadLiveCases(suiteId)]);
+    const rounds = await loadRounds(iterations.filter((i) => counted.has(i.id)).sort((a, b) => a.iterationNumber - b.iterationNumber));
+    return toCaseResults(rollUpFinalStatuses(rounds, liveCases).finals);
+}
+
+export async function buildSignOffReport(suiteId: string): Promise<SignOffReport> {
+    const supabase = await createClient();
+    const [suiteResult, iterations, liveCases] = await Promise.all([
+        supabase.from("testing_suites").select("id, name, code, exit_criteria").eq("id", suiteId).single(),
+        getIterationsBySuiteId(suiteId),
+        loadLiveCases(suiteId),
+    ]);
+    if (suiteResult.error) throw suiteResult.error;
+
+    // Rule 2: completed rounds only (stopped rounds never count), oldest first.
+    const rounds = await loadRounds(iterations.filter((i) => i.status === "completed").sort((a, b) => a.iterationNumber - b.iterationNumber));
 
     const exitCriteria = toExitCriteria(suiteResult.data.exit_criteria);
     const rolledUp = rollUpFinalStatuses(rounds, liveCases);
@@ -588,6 +706,7 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
         roundHistory: buildRoundHistory(rounds),
         limitations: buildLimitations(rounds, rolledUp),
         remarks: buildRemarkCatalog(rolledUp, liveCases),
+        caseResults: toCaseResults(rolledUp.finals),
         // Attached by issueSignOff after validation.
         themes: null,
     };
@@ -602,6 +721,10 @@ export type FrozenSignOffReport = {
     acknowledgedAt: string | null;
     acknowledgedBy: string | null;
     revokedAt: string | null;
+    // The client's rejection, with its reason (0047).
+    rejectedAt: string | null;
+    rejectedBy: string | null;
+    rejectionReason: string | null;
     report: SignOffReport;
 };
 
@@ -612,11 +735,12 @@ export async function getSignOffReport({ suiteSlug, signOffId }: { suiteSlug: st
     const { data, error } = await supabase
         .from("suite_sign_offs")
         .select(`
-            id, signed_off_at, note, acknowledged_at, revoked_at, report,
-            suite:testing_suites!inner ( slug ),
+            id, signed_off_at, note, acknowledged_at, revoked_at, rejected_at, rejection_reason, report,
+            suite:testing_suites!inner ( id, slug ),
             iteration:test_iterations ( name ),
             signer:profiles!suite_sign_offs_signed_off_by_fkey ( full_name ),
-            acknowledger:profiles!suite_sign_offs_acknowledged_by_fkey ( full_name )
+            acknowledger:profiles!suite_sign_offs_acknowledged_by_fkey ( full_name ),
+            rejecter:profiles!suite_sign_offs_rejected_by_fkey ( full_name )
         `)
         .eq("id", signOffId)
         .eq("suite.slug", suiteSlug)
@@ -625,6 +749,13 @@ export async function getSignOffReport({ suiteSlug, signOffId }: { suiteSlug: st
     if (error?.code === "22P02") return null;
     if (error) throw error;
     if (!data?.report) return null;
+    const report = data.report as SignOffReport;
+    const [caseAudit, caseResults, remarks] = await Promise.all([
+        report.roundHistory.caseAudit ?? backfillCaseAudit(report.roundHistory),
+        report.caseResults ?? backfillCaseResults(data.suite.id, report.roundHistory),
+        backfillRemarkAuthors(report.remarks),
+    ]);
+    const roundHistory = { ...report.roundHistory, caseAudit };
     return {
         signOffId: data.id,
         iterationName: data.iteration?.name ?? "—",
@@ -634,6 +765,9 @@ export async function getSignOffReport({ suiteSlug, signOffId }: { suiteSlug: st
         acknowledgedAt: data.acknowledged_at,
         acknowledgedBy: data.acknowledger?.full_name ?? null,
         revokedAt: data.revoked_at,
-        report: data.report as SignOffReport,
+        rejectedAt: data.rejected_at,
+        rejectedBy: data.rejecter?.full_name ?? null,
+        rejectionReason: data.rejection_reason,
+        report: { ...report, roundHistory, caseResults, remarks },
     };
 }

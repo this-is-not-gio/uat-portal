@@ -11,6 +11,7 @@ import { getIterationParticipants } from "./test-iterations";
 import { buildSignOffReport, type SignOffReport } from "./sign-off-report";
 import { validateThemes, type ThemeInput } from "@/lib/report/sign-off-remarks";
 import { draftThemes, type ThemeDraft } from "@/lib/report/remark-themes";
+import { validateSections, type ReportSection } from "@/lib/report/report-details";
 
 // Lifecycle rules live in Postgres (see the suite lifecycle RPCs), so their
 // messages are what the user needs to see. Server Action errors are masked in
@@ -52,7 +53,8 @@ async function readCaseResultState(caseResultId: string): Promise<actionResult<c
 
 export async function setSuiteStatus({ suiteId, status }: { suiteId: string; status: Database["public"]["Enums"]["suite_status"] }): Promise<actionResult> {
     const user = await requireUser();
-    const permission = status === "archived" ? "archive" : "author";
+    // in_testing here is the vendor reopening testing after the client rejected the sign-off.
+    const permission = status === "archived" ? "archive" : status === "in_testing" ? "issue_sign_off" : "author";
     if (!can(user, permission)) return denied(permission);
     const supabase = await createClient();
     const { error } = await supabase.rpc("set_suite_status", { p_suite_id: suiteId, p_status: status });
@@ -98,11 +100,69 @@ export async function draftSignOffThemes({ suiteId }: { suiteId: string }): Prom
     }
 }
 
-// Vendor issues the sign-off on the latest completed iteration (every round must be finished).
-// Untested cases are only warned about in the dialog; the note is optional. The report is
-// frozen into suite_sign_offs.report (0040). Themes are optional vendor observations; each one
-// must cite remarks from the catalog rebuilt here, never the client's copy.
-export async function issueSignOff({ suiteId, note, themes = [] }: { suiteId: string; note: string; themes?: ThemeInput[] }): Promise<actionResult> {
+// Create sign-off: starts the vendor's draft (yellow, vendor-only) on the latest completed round.
+// Also answers a rejection by drafting a new report (the suite goes back to in_testing).
+export async function createSignOff({ suiteId }: { suiteId: string }): Promise<actionResult<{ id: string }>> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("create_sign_off", { p_suite_id: suiteId, p_by: user.id });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: { id: data.id } };
+}
+
+// save_sign_off_draft replaces both note and report, so each save reads the draft and keeps
+// whatever this one doesn't change: the dialog (note, themes) and the sections editor never clobber each other.
+async function writeSignOffDraft(signOffId: string, change: { note?: string; themes?: ThemeInput[]; sections?: ReportSection[] }): Promise<actionResult> {
+    const supabase = await createClient();
+    const { data: current, error: readError } = await supabase.from("suite_sign_offs").select("note, report").eq("id", signOffId).eq("status", "drafting").maybeSingle();
+    if (readError) return fail(readError);
+    if (!current) return { ok: false, error: "This sign-off is no longer a draft" };
+    const saved = (current.report ?? {}) as { themes?: unknown; sections?: unknown };
+    const themes = change.themes === undefined ? saved.themes : change.themes.length > 0 ? { source: "manual", items: change.themes } : undefined;
+    const sections = change.sections === undefined ? saved.sections : change.sections.length > 0 ? change.sections : undefined;
+    const report = themes || sections ? { ...(themes ? { themes } : {}), ...(sections ? { sections } : {}) } : undefined;
+    const note = change.note ?? current.note ?? "";
+    const { error } = await supabase.rpc("save_sign_off_draft", { p_sign_off_id: signOffId, p_note: note || undefined, p_report: report as Json | undefined });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Keeps the vendor's note and observations on the draft. Themes are checked only on issue,
+// so a half-written one can be saved.
+export async function saveSignOffDraft({ signOffId, note, themes = [] }: { signOffId: string; note: string; themes?: ThemeInput[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    return writeSignOffDraft(signOffId, { note, themes });
+}
+
+// The vendor's own sections on the Report details page, edited on the draft's document.
+// Checked here too (not only on issue): each edit saves one complete section, so there's no half-written state to keep.
+export async function saveSignOffSections({ signOffId, sections }: { signOffId: string; sections: ReportSection[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    const checked = validateSections(sections);
+    if (!checked.ok) return { ok: false, error: checked.error };
+    return writeSignOffDraft(signOffId, { sections: checked.sections });
+}
+
+export async function discardSignOffDraft({ signOffId }: { signOffId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("discard_sign_off_draft", { p_sign_off_id: signOffId });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Issue sign-off: sends the draft to the client (blue) on the latest completed iteration (every
+// round must be finished). Untested cases are only warned about in the dialog; the note is optional.
+// The report is rebuilt here and frozen into suite_sign_offs.report. Themes are optional vendor
+// observations; each one must cite remarks from the catalog rebuilt here, never the client's copy.
+export async function issueSignOff({ suiteId, signOffId, note, themes = [], sections = [] }: { suiteId: string; signOffId: string; note: string; themes?: ThemeInput[]; sections?: ReportSection[] }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "issue_sign_off")) return denied("issue_sign_off");
     let report: SignOffReport;
@@ -114,8 +174,24 @@ export async function issueSignOff({ suiteId, note, themes = [] }: { suiteId: st
     const checked = validateThemes(themes, report.remarks ?? []);
     if (!checked.ok) return { ok: false, error: checked.error };
     report.themes = checked.themes.length > 0 ? { source: "manual", items: checked.themes } : null;
+    const checkedSections = validateSections(sections);
+    if (!checkedSections.ok) return { ok: false, error: checkedSections.error };
+    if (checkedSections.sections.length > 0) report.sections = checkedSections.sections;
     const supabase = await createClient();
-    const { error } = await supabase.rpc("issue_sign_off", { p_suite_id: suiteId, p_by: user.id, p_note: note || undefined, p_report: report as unknown as Json });
+    const { error } = await supabase.rpc("issue_sign_off", { p_sign_off_id: signOffId, p_by: user.id, p_note: note || undefined, p_report: report as unknown as Json });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Client rejects the issued sign-off with a reason. The suite stays locked (sign_off_rejected)
+// until the vendor reopens testing or creates a new report.
+export async function rejectSignOff({ suiteId, reason }: { suiteId: string; reason: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "sign_off")) return denied("sign_off");
+    if (!reason.trim()) return { ok: false, error: "Give a reason for rejecting the sign-off." };
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("reject_sign_off", { p_suite_id: suiteId, p_by: user.id, p_reason: reason.trim() });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
@@ -137,7 +213,7 @@ export async function acknowledgeSignOff({ suiteId }: { suiteId: string }): Prom
 // Plans an empty round (0027): participants and sections are added on the round's page,
 // and begin_iteration checks there's something to test. A blank name falls back to
 // Untitled_Iteration_{n} in the DB.
-export async function startIteration({ suiteId, name, plannedEndDate }: { suiteId: string; name?: string; plannedEndDate?: string }): Promise<actionResult<{ iterationNumber: number }>> {
+export async function startIteration({ suiteId, name, plannedEndDate }: { suiteId: string; name?: string; plannedEndDate?: string }): Promise<actionResult<{ iterationNumber: number; slug: string }>> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
@@ -149,7 +225,7 @@ export async function startIteration({ suiteId, name, plannedEndDate }: { suiteI
     });
     if (error) return fail(error);
     refresh();
-    return { ok: true, data: { iterationNumber: data.iteration_number } };
+    return { ok: true, data: { iterationNumber: data.iteration_number, slug: data.slug } };
 }
 
 // Brings another org into the running round with the same scope as everyone else.

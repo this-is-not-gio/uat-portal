@@ -2,11 +2,18 @@ import { createClient } from "@/lib/supabase/server";
 import { getIterationParticipants, getIterationsBySuiteId, type iterationParticipant, type testIteration } from "./test-iterations";
 import type { organization } from "./organizations";
 import type { testCaseStatus } from "./test-cases";
+import type { Database } from "./database.types";
+import type { ThemeInput } from "@/lib/report/sign-off-remarks";
+import type { ReportSection } from "@/lib/report/report-details";
 
 export type statusCounts = Record<"total" | "passed" | "failed" | "blocked" | "inProgress" | "untested", number>;
 
+// drafting (vendor only) → issued → acknowledged | rejected; withdrawn = superseded by a newer round (0047).
+export type signOffState = Database["public"]["Enums"]["sign_off_status"];
+
 export type signOff = {
     id: string;
+    status: signOffState;
     iterationName: string;
     signedOffBy: string | null;
     signedOffAt: string;
@@ -17,6 +24,10 @@ export type signOff = {
     // Null while the vendor's issued sign-off waits for the client (suite status sign_off_issued).
     acknowledgedAt: string | null;
     acknowledgedBy: string | null;
+    // The client's reason when it rejected the sign-off.
+    rejectedAt: string | null;
+    rejectedBy: string | null;
+    rejectionReason: string | null;
     // Issued after sign-off reports existed (0040), so it has a report page.
     hasReport: boolean;
 };
@@ -80,20 +91,24 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
 }
 
 const SIGN_OFF_SELECT = `
-    id, signed_off_at, note, exceptions, revoked_at, acknowledged_at,
+    id, status, signed_off_at, note, exceptions, revoked_at, acknowledged_at, rejected_at, rejection_reason,
     report_generated_at:report->header->>generatedAt,
     iteration:test_iterations ( name ),
     signer:profiles!suite_sign_offs_signed_off_by_fkey ( full_name ),
     revoker:profiles!suite_sign_offs_revoked_by_fkey ( full_name ),
-    acknowledger:profiles!suite_sign_offs_acknowledged_by_fkey ( full_name )
+    acknowledger:profiles!suite_sign_offs_acknowledged_by_fkey ( full_name ),
+    rejecter:profiles!suite_sign_offs_rejected_by_fkey ( full_name )
 ` as const;
 
 function toSignOff(row: {
-    id: string; signed_off_at: string; note: string | null; exceptions: unknown; revoked_at: string | null; acknowledged_at: string | null; report_generated_at: string | null;
-    iteration: { name: string } | null; signer: { full_name: string | null } | null; revoker: { full_name: string | null } | null; acknowledger: { full_name: string | null } | null;
+    id: string; status: signOffState; signed_off_at: string; note: string | null; exceptions: unknown; revoked_at: string | null; acknowledged_at: string | null;
+    rejected_at: string | null; rejection_reason: string | null; report_generated_at: string | null;
+    iteration: { name: string } | null; signer: { full_name: string | null } | null; revoker: { full_name: string | null } | null;
+    acknowledger: { full_name: string | null } | null; rejecter: { full_name: string | null } | null;
 }): signOff {
     return {
         id: row.id,
+        status: row.status,
         iterationName: row.iteration?.name ?? "—",
         signedOffBy: row.signer?.full_name ?? null,
         signedOffAt: row.signed_off_at,
@@ -103,17 +118,22 @@ function toSignOff(row: {
         revokedBy: row.revoker?.full_name ?? null,
         acknowledgedAt: row.acknowledged_at,
         acknowledgedBy: row.acknowledger?.full_name ?? null,
+        rejectedAt: row.rejected_at,
+        rejectedBy: row.rejecter?.full_name ?? null,
+        rejectionReason: row.rejection_reason,
         hasReport: !!row.report_generated_at,
     };
 }
 
-// Every sign-off for the suite, newest first (withdrawn ones included). RLS: Admin and Internal only.
+// Every issued sign-off for the suite, newest first (rejected and withdrawn ones included; the
+// vendor's draft isn't one yet, see getDraftSignOff). RLS: Admin and Internal only.
 export async function getSuiteSignOffs(suiteId: string): Promise<signOff[]> {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("suite_sign_offs")
         .select(SIGN_OFF_SELECT)
         .eq("testing_suite_id", suiteId)
+        .neq("status", "drafting")
         .order("signed_off_at", { ascending: false });
     if (error) throw error;
     return data.map(toSignOff);
@@ -126,13 +146,29 @@ export async function getPendingSignOff(suiteId: string): Promise<signOff | null
         .from("suite_sign_offs")
         .select(SIGN_OFF_SELECT)
         .eq("testing_suite_id", suiteId)
-        .is("revoked_at", null)
-        .is("acknowledged_at", null)
-        .order("signed_off_at", { ascending: false })
-        .limit(1)
+        .eq("status", "issued")
         .maybeSingle();
     if (error) throw error;
     return data ? toSignOff(data) : null;
+}
+
+// The sign-off the vendor is drafting (Create sign-off → Issue), with what it saved so far.
+// RLS hides drafts from everyone but Admin, so other roles always get null.
+export type signOffDraft = { id: string; note: string; themes: ThemeInput[]; sections: ReportSection[] };
+
+export async function getDraftSignOff(suiteId: string): Promise<signOffDraft | null> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("suite_sign_offs")
+        .select("id, note, themes:report->themes->items, sections:report->sections")
+        .eq("testing_suite_id", suiteId)
+        .eq("status", "drafting")
+        .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    const themes = Array.isArray(data.themes) ? (data.themes as ThemeInput[]) : [];
+    const sections = Array.isArray(data.sections) ? (data.sections as ReportSection[]) : [];
+    return { id: data.id, note: data.note ?? "", themes, sections };
 }
 
 // Testing orgs (Internal and External) that haven't submitted. The vendor never submits,

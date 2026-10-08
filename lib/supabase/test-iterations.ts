@@ -482,8 +482,8 @@ export async function getActiveRounds(): Promise<activeRound[]> {
     }));
 }
 
-// The latest completed round of each in_testing suite that has no live (unrevoked) sign-off:
-// the vendor's "ready to issue" list. Suites with a newer round already running are skipped
+// The latest completed round of each in_testing / for_sign_off suite that hasn't been issued for sign-off yet
+// (a draft still counts as not issued): the vendor's "ready to issue" list. Suites with a newer round already running are skipped
 // by the caller, since that round supersedes this one.
 export type roundAwaitingSignOff = { suiteName: string; suiteSlug: string; suiteCode: string | null; iteration: testIteration };
 
@@ -491,20 +491,20 @@ export async function getRoundsAwaitingSignOff(): Promise<roundAwaitingSignOff[]
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("test_iterations")
-        .select(`${ITERATION_SELECT}, testing_suite_id, testing_suites!inner ( name, slug, code, status ), suite_sign_offs ( revoked_at )`)
+        .select(`${ITERATION_SELECT}, testing_suite_id, testing_suites!inner ( name, slug, code, status ), suite_sign_offs ( status )`)
         .eq("status", "completed")
-        .eq("testing_suites.status", "in_testing")
+        .in("testing_suites.status", ["in_testing", "for_sign_off"])
         .order("iteration_number", { ascending: false });
     if (error) throw error;
 
     const latest = new Map<string, (typeof data)[number]>();
     for (const row of data) if (!latest.has(row.testing_suite_id)) latest.set(row.testing_suite_id, row);
     return [...latest.values()]
-        .filter((row) => !row.suite_sign_offs.some((s) => s.revoked_at == null))
+        .filter((row) => !row.suite_sign_offs.some((s) => s.status === "issued" || s.status === "acknowledged"))
         .map((row) => ({ suiteName: row.testing_suites.name, suiteSlug: row.testing_suites.slug, suiteCode: row.testing_suites.code, iteration: toIteration(row) }));
 }
 
-// Issued sign-offs the client hasn't acknowledged yet (and the vendor hasn't revoked).
+// Issued sign-offs the client hasn't acknowledged or rejected yet.
 export type signOffAwaitingAck = { id: string; suiteName: string; suiteSlug: string; iterationName: string | null; signedOffAt: string };
 
 export async function getSignOffsAwaitingAck(): Promise<signOffAwaitingAck[]> {
@@ -512,8 +512,7 @@ export async function getSignOffsAwaitingAck(): Promise<signOffAwaitingAck[]> {
     const { data, error } = await supabase
         .from("suite_sign_offs")
         .select("id, signed_off_at, suite:testing_suites!inner ( name, slug ), iteration:test_iterations ( name )")
-        .is("acknowledged_at", null)
-        .is("revoked_at", null)
+        .eq("status", "issued")
         .order("signed_off_at", { ascending: true });
     if (error) throw error;
     return data.map((row) => ({ id: row.id, suiteName: row.suite.name, suiteSlug: row.suite.slug, iterationName: row.iteration?.name ?? null, signedOffAt: row.signed_off_at }));
