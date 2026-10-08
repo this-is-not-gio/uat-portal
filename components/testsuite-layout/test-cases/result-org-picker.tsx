@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { organization } from "@/lib/supabase/organizations";
-import { ORG_TYPE_LABELS } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/participant-picker";
+import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 
 // Which participant's results the Test Results tab shows. Lives in the URL (?org=)
 // so the server component can fetch just that org's rows.

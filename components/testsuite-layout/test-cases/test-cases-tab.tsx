@@ -19,7 +19,7 @@ import TestCasesComponents, { type authoringContext } from "./test-cases-compone
 import SectionDialog from "./section-dialog";
 import SectionRow from "./section-row";
 import SectionList from "./section-list";
-import StartIterationDialog from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/start-iteration-dialog";
+import StartIterationDialog from "@/components/testsuite-layout/shared/start-iteration-dialog";
 import { TestIterationComponent } from "./test-iteration-component";
 import { TestIterationSection } from "./test-iteration-section";
 import { getSuiteTestCaseIssues } from "@/lib/supabase/test-suite";
@@ -28,8 +28,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { IterationSelectionProvider } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/iteration-selection-context";
-import TreeCollapsible from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/tree-collapsible";
+import { IterationSelectionProvider } from "@/components/testsuite-layout/shared/iteration-selection-context";
+import TreeCollapsible from "@/components/testsuite-layout/shared/tree-collapsible";
 
 export default async function TestCasesTab({
 	testSuiteId,
@@ -48,7 +48,7 @@ export default async function TestCasesTab({
 
 
 	// Authoring is locked once a suite is signed off or archived (the DB enforces it too).
-	const editable = suiteStatus !== "sign_off_issued" && suiteStatus !== "signed_off" && suiteStatus !== "archived";
+	const editable = suiteStatus !== "for_sign_off" && suiteStatus !== "sign_off_issued" && suiteStatus !== "signed_off" && suiteStatus !== "archived";
 	// Per-case completeness: drives the Ready/Not ready markers and which cases can be picked for an iteration.
 	const showReadiness = editable;
 
@@ -134,6 +134,7 @@ export default async function TestCasesTab({
 											{canStartIteration && (
 												<StartIterationDialog
 													suiteId={testSuiteId}
+													testSuiteSlug={testSuiteSlug}
 													trigger={
 														<Button variant="ghost" size="icon" className="size-6" aria-label="Add a test iteration" title="Add a test iteration">
 															<Plus className="h-3.5 w-3.5" />

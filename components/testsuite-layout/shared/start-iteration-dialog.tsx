@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarIcon, Play, X } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -20,17 +21,22 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { startIteration } from "@/lib/supabase/iteration-actions";
+import { testCasesHref } from "@/components/testsuite-layout/test-cases/href";
 
 // Plans the next test round as an empty, not-started iteration. Participants and
 // sections are added on the round's own page; a blank name falls back to
-// Untitled_Iteration_{n} (start_iteration, 0027).
+// Untitled_Iteration_{n} (start_iteration, 0027). With `testSuiteSlug`, the
+// dialog closes onto the new round's page.
 export default function StartIterationDialog({
 	suiteId,
+	testSuiteSlug,
 	trigger,
 }: {
 	suiteId: string;
+	testSuiteSlug?: string;
 	trigger?: React.ReactElement;
 }) {
+	const router = useRouter();
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
 	const [plannedEndDate, setPlannedEndDate] = useState("");
@@ -51,6 +57,7 @@ export default function StartIterationDialog({
 			setOpen(false);
 			setName("");
 			setPlannedEndDate("");
+			if (testSuiteSlug) router.push(testCasesHref(testSuiteSlug, result.data.slug));
 		});
 	}
 

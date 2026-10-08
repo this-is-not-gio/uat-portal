@@ -5,11 +5,10 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createColumnHelper } from "@tanstack/react-table";
 import { format, parseISO } from "date-fns";
-import { Check, ChevronDown, CircleCheck, CircleX, ClipboardIcon, Eye, Info, Search, TriangleAlert, File, ListCheck, TestTubesIcon, Icon, LucideIcon, GitBranch, ClipboardCheck } from "lucide-react";
+import { CircleCheck, CircleX, ClipboardIcon, Eye, Info, Search, TriangleAlert, File, ListCheck, TestTubesIcon, Icon, LucideIcon, GitBranch, ClipboardCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { DataTable } from "@/components/table/data-table";
@@ -20,7 +19,7 @@ import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import { isRemovedFromRound } from "@/lib/supabase/case-states";
 import { cn } from "@/lib/utils";
-import { SubmitDialog, WithdrawButton, type untestedCase } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/submission-bar";
+import { SubmitDialog, WithdrawButton, type untestedCase } from "@/components/testsuite-layout/shared/submission-bar";
 import { Progress } from "@/components/ui/progress";
 
 type statusFilter = "all" | "untested" | "failed" | "changed";
@@ -195,22 +194,19 @@ export default function TesterTestCasesComponents({
 						<BreadcrumbItem><p className="text-xs text-muted-foreground">{sectionName}</p></BreadcrumbItem>
 					</BreadcrumbList>
 				</Breadcrumb>
-				<div className="bg-gray-50/20 px-4 py-3 border rounded-md flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+				<div className="bg-gray-50/20 px-4 py-3 border rounded-md flex flex-col items-start gap-1 md:flex-row md:items-center md:justify-between md:gap-4">
 					<div className="flex flex-row items-center gap-2">
 						<TestCasesSidebarTrigger />
 						<ClipboardIcon size={16} className="hidden lg:block" />
-						<p className="font-medium">{sectionName}</p>
+						<p className="font-medium text-xs">{sectionName}</p>
 						{/* <div className="px-2 py-1 rounded-md bg-gray-200 text-gray-800 text-xs">
 							<p className="text-xs font-medium"><span className="font-mono">{tested}</span>/<span className="font-mono">{inRun.length}</span> Test cases</p>
 						</div> */}
 					</div>
-					<div className="flex flex-row items-center gap-2 w-full md:w-auto">
+					<div className="flex flex-row justify-between items-center gap-2 w-full md:w-auto">
 						{/* This section's progress (removed rows don't count). Hidden on mobile; the chips stay. */}
-						<div className="hidden md:flex flex-row items-center gap-2 w-40">
-							<Progress value={inRun.length ? Math.round((tested / inRun.length) * 100) : 0} className="flex-1" aria-label="Tested" />
-							<span className="text-xs font-mono text-muted-foreground shrink-0">{tested}/{inRun.length}</span>
-						</div>
 						<div className="flex flex-row items-center gap-2">
+							<p className="text-xs text-muted-foreground">Iteration Summary:</p>
 							<div className="px-2 py-1 rounded-md bg-green-200/20">
 								<span className="flex flex-row items-center gap-1 text-xs text-green-800"><CircleCheck size={14} /><span className="font-mono">{passed}</span></span>
 							</div>
@@ -224,7 +220,7 @@ export default function TesterTestCasesComponents({
 								organizationName={submit.organizationName}
 								untestedCases={submit.untestedCases}
 								trigger={
-									<Button className="flex-1 md:flex-none">
+									<Button className="w-fit">
 										<ClipboardCheck size={16} />
 										<p className="text-xs">Submit Result</p>
 									</Button>
@@ -244,55 +240,35 @@ export default function TesterTestCasesComponents({
 					</div>
 				)}
 				<div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
-					{/* Mobile: the status filters collapse into a dropdown. */}
-					<DropdownMenu>
-						<DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between md:hidden" />}>
-							<span className="flex flex-row items-center gap-1">
-								<activeFilter.icon size={15} />
-								<p className="text-xs">{activeFilter.label}</p>
-								<span className="font-mono text-xs text-muted-foreground">{rows.filter(activeFilter.match).length}</span>
-							</span>
-							<ChevronDown className="size-4" />
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="start">
-							{STATUS_FILTERS.map((filter) => (
-								<DropdownMenuItem key={filter.value} className="text-xs" onClick={() => setStatusFilter(filter.value)}>
-									<filter.icon size={15} />
-									{filter.label}
-									<span className="font-mono text-muted-foreground">{rows.filter(filter.match).length}</span>
-									{statusFilter === filter.value && <Check className="ml-auto" />}
-								</DropdownMenuItem>
-							))}
-						</DropdownMenuContent>
-					</DropdownMenu>
-					{STATUS_FILTERS.map((filter) => {
-						const Icon = filter.icon;
-						return (
-							<Button
-								key={filter.value}
-								size="sm"
-								className="hidden md:inline-flex"
-								variant={statusFilter === filter.value ? "default" : "outline"}
-								onClick={() => setStatusFilter(filter.value)}
-							>
-								<Icon size={15} className="mr-1" />
-								<p className="text-xs">{filter.label}</p>
-								<span className={cn("font-mono text-xs", statusFilter === filter.value ? "" : "text-muted-foreground")}>{rows.filter(filter.match).length}</span>
-							</Button>
-						)
-					})}
+					<div className="flex flex-row flex-wrap items-center gap-2">
+						{STATUS_FILTERS.map((filter) => {
+							const Icon = filter.icon;
+							return (
+								<Button
+									key={filter.value}
+									size="sm"
+									variant={statusFilter === filter.value ? "default" : "outline"}
+									onClick={() => setStatusFilter(filter.value)}
+								>
+									<Icon size={15} className="mr-1" />
+									<p className="text-xs">{filter.label}</p>
+									<span className={cn("font-mono text-xs", statusFilter === filter.value ? "" : "text-muted-foreground")}>{rows.filter(filter.match).length}</span>
+								</Button>
+							)
+						})}
+					</div>
 					<Select value={role} onValueChange={(value) => setRole(value ?? ALL_ROLES)}>
-						<SelectTrigger size="sm" className="w-full md:w-48">
+						<SelectTrigger size="sm" className="w-full text-xs md:w-48 md:text-sm">
 							<SelectValue>{role === ALL_ROLES ? "All roles" : role}</SelectValue>
 						</SelectTrigger>
 						<SelectContent alignItemWithTrigger={false}>
-							<SelectItem value={ALL_ROLES}>All roles</SelectItem>
-							{roles.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+							<SelectItem value={ALL_ROLES} className="text-xs md:text-sm">All roles</SelectItem>
+							{roles.map((r) => <SelectItem key={r} value={r} className="text-xs md:text-sm">{r}</SelectItem>)}
 						</SelectContent>
 					</Select>
 					<div className="relative w-full md:ml-auto md:w-64">
 						<Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-						<Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search code or title…" className="pl-8" />
+						<Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search code or title…" className="pl-8 text-xs md:text-xs" />
 					</div>
 				</div>
 				{/* First column (change flags) shrinks to its chip with no padding; DataTable is shared, so override here. */}

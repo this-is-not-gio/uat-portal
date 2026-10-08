@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import type { suiteStatus } from "@/lib/supabase/Init";
-import { clearTreeState } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/tree-collapsible";
+import { clearTreeState } from "@/components/testsuite-layout/shared/tree-collapsible";
 import { useImportStaging } from "./import-staging";
 import ImportReview from "./import-review";
 

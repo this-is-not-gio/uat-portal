@@ -11,7 +11,7 @@ import { createIterationTestCaseColumns, type iterationCaseRow } from "@/compone
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import IterationParticipantsTable from "./iteration-participants-table";
 import { setCaseResultInclusion } from "@/lib/supabase/iteration-actions";
-import { useIterationSelection } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/iteration-selection-context";
+import { useIterationSelection } from "@/components/testsuite-layout/shared/iteration-selection-context";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import SectionDialog, { type notIncludedSection } from "./section-dialog";
@@ -187,13 +187,17 @@ export function IterationTestCaseList({
 			{/* Start open when empty so the "Add Participant" action is visible. */}
 			{!sectionSlug && <Collapsible defaultOpen={participantsDefaultOpen}>
 				<div className="border rounded-md overflow-hidden">
-					<div className="p-4 bg-gray-200/10 flex flex-row md:items-center justify-between gap-2">
-						<div className="flex flex-col md:flex-row md:items-center gap-4 w-full">
+					<div className="p-4 bg-gray-200/10 flex flex-row items-center justify-between gap-2">
+						<div className="flex flex-row items-center gap-4 w-full">
 							<div className="flex flex-row items-center gap-2">
 								<UserGroup className="size-5" />
 								<div className="flex flex-row items-center gap-2">
 									<p className="text-xs font-medium">Participants</p>
-									<Badge variant="secondary" className="text-xs">{participants.length} {participants.length === 1 ? "Organization" : "Organizations"}</Badge>
+									{
+										participants.length === 0 ? 
+										<Badge variant="secondary" className="text-xs">No participants</Badge>
+										: <Badge variant="secondary" className="text-xs">{participants.length} {participants.length === 1 ? "Organization" : "Organizations"}</Badge>
+									}
 								</div>
 							</div>
 						</div>
@@ -276,7 +280,11 @@ export function IterationTestCaseList({
 							<div className="flex flex-row items-center gap-2">
 								<p className="text-xs font-medium">Test Cases</p>
 								{/* caseRows is one row per case; testCases has a copy per org. */}
-								<Badge variant="secondary" className="text-xs">{caseRows.length} {caseRows.length === 1 ? "test case" : "test cases"}</Badge>
+								{
+									caseRows.length === 0 ?
+									<Badge variant="secondary" className="text-xs">No test cases</Badge>
+									: <Badge variant="secondary" className="text-xs">{caseRows.length} {caseRows.length === 1 ? "test case" : "test cases"}</Badge>
+								}
 							</div>
 						</div>
 						{canAddSection && caseRows.length > 0 && (

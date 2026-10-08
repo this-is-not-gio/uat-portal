@@ -104,13 +104,14 @@ export function RemarkMarkdownField({
 	}
 
 	return (
-		<div className="flex rounded-lg border gap-0">
-			<Tabs value={tab} onValueChange={(value) => setTab(value as "write" | "preview")} className="w-full gap-0">
-				<div className="flex items-center justify-between border-b p-2 bg-accent/50">
+		<div className="flex rounded-lg border gap-0 min-w-0">
+			<Tabs value={tab} onValueChange={(value) => setTab(value as "write" | "preview")} className="w-full min-w-0 gap-0">
+				{/* Too wide for a phone: the toolbar stays one row and scrolls sideways. */}
+				<div className="flex items-center justify-between gap-2 border-b p-2 bg-accent/50 overflow-x-auto">
 					{
 						TOOLBAR_ACTIONS.find(group => group.name === "Headings") &&
 						<Select>
-							<SelectTrigger className="w-50 text-xs bg-white">
+							<SelectTrigger className="w-28 sm:w-50 shrink-0 text-xs bg-white">
 								<SelectValue placeholder="Headings" />
 							</SelectTrigger>
 							<SelectContent>
@@ -130,13 +131,13 @@ export function RemarkMarkdownField({
 							</SelectContent>
 						</Select>
 					}
-					<div className="flex items-center gap-3 justify-center">
+					<div className="flex shrink-0 items-center gap-2 sm:gap-3 justify-center">
 						{TOOLBAR_ACTIONS.map((group) => {
 							const isHeadingGroup = group.name === "Headings";
 							return isHeadingGroup ?
 								null
 								:
-								<ButtonGroup key={group.name} className="bg-white">
+								<ButtonGroup key={group.name} className="bg-white shrink-0">
 									{
 										group.items.map((action, index) => (
 											<Tooltip key={action.label}>
@@ -171,11 +172,11 @@ export function RemarkMarkdownField({
 						value={draftText}
 						onChange={(e) => setDraftText(e.target.value)}
 						placeholder={placeholder}
-						className="min-h-24 resize-none rounded-none border-0 shadow-none focus-visible:ring-0 p-4"
+						className="min-h-24 resize-none rounded-none border-0 shadow-none focus-visible:ring-0 p-3 sm:p-4 text-xs md:text-xs"
 						disabled={isPending}
 					/>
 				</TabsContent>
-				<TabsContent value="preview" className="mt-0 min-h-24 p-4">
+				<TabsContent value="preview" className="mt-0 min-h-24 p-3 sm:p-4">
 					{isEmpty ? (
 						<p className="text-sm text-muted-foreground">Nothing to preview.</p>
 					) : (
@@ -185,14 +186,14 @@ export function RemarkMarkdownField({
 					)}
 				</TabsContent>
 
-				<div className="flex items-center justify-between border-t p-4">
+				<div className="flex items-center justify-between gap-2 border-t p-2 sm:p-4">
 					<TabsList>
 						<TabsTrigger value="write" className="text-sm">Write</TabsTrigger>
 						<TabsTrigger value="preview" className="text-sm">Preview</TabsTrigger>
 					</TabsList>
 
 					<div className="flex flex-row items-center gap-2">
-						<Button type="button" variant="default" disabled={isEmpty || isPending} onClick={onSubmit} className="flex items-center gap-1 p-4">
+						<Button type="button" variant="default" disabled={isEmpty || isPending} onClick={onSubmit} className="flex items-center gap-1 px-3 sm:p-4">
 							<Send size={16} className="ml-1" />
 							<p>Add Remark</p>
 						</Button>

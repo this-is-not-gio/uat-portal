@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { DataTable } from "@/components/table/data-table";
 import { iterationParticipantColumns, type iterationParticipantRow } from "@/components/table/iteration-participant-columns";
 import type { iterationParticipant, testResultRow } from "@/lib/supabase/test-iterations";
-import { ORG_TYPE_LABELS } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/participant-picker";
+import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
 
 // One row per org taking part in the round: who they are, how many testers

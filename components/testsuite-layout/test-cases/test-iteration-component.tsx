@@ -14,7 +14,7 @@ import type { notIncludedSection } from "./section-dialog";
 import AddTestCasesControl, { type addableSection } from "./add-test-cases-control";
 import IterationHeaderMenu from "./iteration-header-menu";
 import AddParticipantButton from "./add-participant-button";
-import { CompleteIterationButton, ResetIterationButton, StartIterationButton, StopIterationButton } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/iteration-actions";
+import { CompleteIterationButton, ResetIterationButton, StartIterationButton, StopIterationButton } from "@/components/testsuite-layout/shared/iteration-actions";
 import { unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
 export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suiteName, iteration, sectionsNotIncluded }: {
@@ -31,6 +31,8 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 	// Every result row (excluded ones included) so the table can show what's left out.
 	const allRows = sections.flatMap((section) => section.testCases);
 	const allTestCases = allRows.filter((tc) => tc.includedInRun);
+	// Rows are one per case per org, so count distinct cases. No sections means none.
+	const plannedCaseCount = new Set(allTestCases.map((tc) => tc.testCaseId ?? tc.id)).size;
 
 	// Note: a running round can no longer take more test cases (0023 locks its case set), so
 	// AddTestCasesControl stays unused; this list currently only feeds the header buttons' disabled state.
@@ -83,10 +85,15 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 								<StartIterationButton
 									iteration={iteration}
 									participantCount={participants.length}
-									// Rows are one per case per org, so count distinct cases.
-									testCaseCount={new Set(allTestCases.map((tc) => tc.testCaseId ?? tc.id)).size}
+									testCaseCount={plannedCaseCount}
+									// Nothing to run yet: Start stays disabled until the round has participants and test cases.
+									disabledReason={
+										participants.length === 0 && plannedCaseCount === 0 ? "Add participants and test cases first."
+											: participants.length === 0 ? "Add at least one participant first."
+												: plannedCaseCount === 0 ? "Add at least one test case first."
+													: undefined
+									}
 								/>
-								
 							</div>
 							: iteration?.status === "in_progress" ?
 								<div className="flex flex-row items-center gap-1 w-full md:w-fit">
@@ -112,7 +119,8 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 										</div>
 										: null
 						}
-						{iteration && <IterationHeaderMenu iteration={iteration} />}
+						{/* A completed round is read-only history: nothing left to edit. */}
+						{iteration && iteration.status !== "completed" && <IterationHeaderMenu iteration={iteration} />}
 					</div>
 				</div>
 				<IterationTestCaseList

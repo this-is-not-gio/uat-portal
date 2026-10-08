@@ -13,14 +13,15 @@ export default function UnsubmittedOrgsWarning({
 	if (organizations.length === 0) return null;
 	const many = organizations.length > 1;
 	return (
-		<div className="text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3 flex flex-col gap-2 px-4">
-			<p className="font-medium flex flex-row items-center gap-1">
-				<span><TriangleAlert size={16}/></span>Warning: {many ? "Some organizations haven't" : "An organization hasn't"} submitted {context === "complete" ? "their results yet" : "their results for this round"}.
+		<div className="text-xs sm:text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3 flex flex-col gap-2 sm:px-4">
+			<p className="font-medium flex flex-row items-start gap-1.5">
+				<TriangleAlert size={16} className="shrink-0 mt-px" /><span>Warning: {many ? "Some organizations haven't" : "An organization hasn't"} submitted {context === "complete" ? "their results yet" : "their results for this round"}.</span>
 			</p>
 			<p>
 				{organizations.length} {many ? "organizations haven't" : "organization hasn't"} submitted {context === "complete" ? "their results yet" : "their results for this round"}:
 			</p>
-			<ul className="list-disc pl-5 text-xs">
+			{/* A long list scrolls instead of pushing the dialog's buttons off a phone screen. */}
+			<ul className="list-disc pl-5 text-xs max-h-32 overflow-y-auto break-words">
 				{organizations.map((org) => <li key={org.id}>{org.name}</li>)}
 			</ul>
 			<p className="text-xs">

@@ -58,7 +58,7 @@ export async function TestIterationSection({
 						</BreadcrumbList>
 					</Breadcrumb>
 				</div>
-				<div className="bg-gray-50/30 px-4 py-3 border rounded-md flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+				<div className="bg-gray-50/30 px-4 py-3 border rounded-md flex flex-col md:flex-row md:items-center md:justify-between gap-1">
 					<div className="flex flex-row items-center gap-1">
 						<TestCasesSidebarTrigger />
 						<div className="size-9 hidden lg:flex flex-row items-center justify-center">
@@ -69,7 +69,7 @@ export async function TestIterationSection({
 							<p className="text-xs text-muted-foreground font-mono">{iteration?.name}</p>
 						</div>
 					</div>
-					<div className="flex flex-row items-center gap-4">
+					<div className="flex flex-row items-center justify-between gap-4">
 						{iteration && (
 							<IterationSectionCaseCount selectionKey={`${iteration.id}:${sectionSlug}`} initialIncluded={includedCaseIds.size} total={allCaseIds.size} />
 						)}

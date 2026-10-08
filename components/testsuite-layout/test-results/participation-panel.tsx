@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { participationProgress } from "@/lib/supabase/overview";
-import { ORG_TYPE_LABELS } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/participant-picker";
+import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 
 // Per-org progress + submission state for one round (tester-screens plan §2.2), for Admin and
 // Internal. Each org name switches the Results lens (?org=) to that org's rows.

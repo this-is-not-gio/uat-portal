@@ -261,7 +261,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 
 
 								return (
-									<div key={index} className="flex flex-row gap-4 w-full group/step">
+									<div key={index} className="flex flex-row gap-3 sm:gap-4 w-full group/step">
 										<div className="w-fit flex flex-col ">
 											<div key={index} className="size-4 rounded-full border p-4 flex flex-col items-center justify-center gap-2 bg-accent text-accent-foreground">
 												<p className="text-xs font-bold">{index + 1}</p>
@@ -305,7 +305,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 											</div>
 											{showResults && <Accordion className="w-full">
 												<AccordionItem className="border-none">
-													<div className="flex flex-row items-center justify-between gap-2">
+													<div className="flex flex-row flex-wrap items-center justify-between gap-2">
 														<div className="flex items-center gap-1.5">
 															{mode === "execute" ? (
 																<StepResultButton
@@ -341,7 +341,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 														</AccordionTrigger>
 													</div>
 													<AccordionContent className="[&_p:not(:last-child)]:mb-0 ">
-														<div className="flex flex-col gap-10 pt-5">
+														<div className="flex flex-col gap-6 pt-3 sm:gap-10 sm:pt-5">
 															<div className="flex flex-col gap-4">
 																<div className="flex items-center gap-1">
 																	<MessagesSquare size="12" />
@@ -353,27 +353,32 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																			remarks.map((remark) => {
 																				const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
 																				const Icon = author_role_badge?.Icon
+																				const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
 																				return (<div className="flex flex-row gap-2 group/remark" key={remark.id}>
-																					<div className="flex flex-col items-center group-first/remark:pt-2">
+																					<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 																						<div className="w-0.5 h-2 bg-accent rounded-full self-center group-first/remark:h-0"></div>
 																						<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
-																							<p className="text-xs font-bold">{remark.author?.full_name?.charAt(0) || 'U'}{remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}</p>
+																							<p className="text-xs font-bold">{initials}</p>
 																						</div>
 																						<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
 																					</div>
-																					<div className="border w-full bg-accent/10 rounded-xl mb-5 group-last/remark:mb-0">
-																						<div className="flex flex-row items-center justify-between gap-2 border-b p-4 mb-0 bg-accent/90 rounded-t-xl">
-																							<div className="flex-row flex gap-2 items-center">
-																								<p className="text-sm font-semibold">{remark.author?.full_name || 'Unknown Author'}</p>
-																								<Badge variant="outline" className={author_role_badge?.className || "bg-muted text-foreground border-border"}>
+																					<div className="border w-full min-w-0 bg-accent/10 rounded-xl mb-3 sm:mb-5 group-last/remark:mb-0">
+																						{/* Mobile drops the avatar column (the avatar moves in here) and the role badge. */}
+																						<div className="flex flex-row items-center justify-between gap-2 border-b p-3 sm:p-4 mb-0 bg-accent/90 rounded-t-xl">
+																							<div className="flex-row flex min-w-0 gap-2 items-center">
+																								<div className="sm:hidden size-6 shrink-0 rounded-full flex items-center justify-center bg-primary text-white">
+																									<p className="text-[10px] font-bold">{initials}</p>
+																								</div>
+																								<p className="text-xs sm:text-sm font-semibold truncate">{remark.author?.full_name || 'Unknown Author'}</p>
+																								<Badge variant="outline" className={cn("hidden sm:inline-flex", author_role_badge?.className || "bg-muted text-foreground border-border")}>
 																									{Icon && <Icon className="h-3 w-3" />}
 																									{remark.author?.role || 'Unknown Role'}
 																								</Badge>
 																							</div>
-																							<p className="text-xs text-muted-foreground">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
+																							<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
 																						</div>
-																						<div className="p-4">
-																							<div className="typeset text-sm">
+																						<div className="p-3 sm:p-4 overflow-x-auto">
+																							<div className="typeset text-sm break-words">
 																								<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
 																							</div>
 																						</div>
@@ -385,14 +390,14 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		) : null
 																	}
 																	{showResults && canRemark && <div className="flex flex-row gap-2 group/remark">
-																		<div className="flex flex-col items-center group-first/remark:pt-2">
+																		<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 																			<div className={`w-0.5 bg-accent rounded-full self-center ${remarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div>
 																			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
 																				<p className="text-xs font-bold">{author?.full_name?.charAt(0) || 'U'}{author?.full_name?.charAt(1).toUpperCase() || 'U'}</p>
 																			</div>
 																			<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
 																		</div>
-																		<div className="flex flex-col gap-4 w-full">
+																		<div className="flex flex-col gap-2 sm:gap-4 w-full min-w-0">
 																			<div className="flex items-center gap-1">
 																				<MessageSquareShare size="12" />
 																				<p className="text-xs font-medium">Leave a Remark:</p>

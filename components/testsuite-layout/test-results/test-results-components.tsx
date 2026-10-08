@@ -12,10 +12,10 @@ import type { testIteration, testResultRow } from "@/lib/supabase/test-iteration
 import { isRemovedFromRound } from "@/lib/supabase/case-states";
 import { cn, formatIterationTimestamp } from "@/lib/utils";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
-import IterationActions from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/iteration-actions";
+import IterationActions from "@/components/testsuite-layout/shared/iteration-actions";
 import type { organization } from "@/lib/supabase/organizations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ORG_TYPE_LABELS } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/participant-picker";
+import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 import { TestCasesSidebarTrigger } from "../test-cases/test-cases-sidebar";
 // import { SelectTrigger } from "@base-ui/react";
 
@@ -51,7 +51,8 @@ const PARTICIPATION_BADGES: Record<participationStatus["kind"], { label: string;
 function ParticipationBadge({ status }: { status: participationStatus }) {
 	const { label, Icon, className, prefix } = PARTICIPATION_BADGES[status.kind];
 	return (
-		<div className="flex flex-row items-center gap-2 w-fit">
+		<div className="flex flex-row items-center justify-between gap-2 w-full md:w-fit md:justify-start">
+
 			{
 				status.kind === "not_submitted" || status.kind === "in_progress" ? null : (
 					<p className="text-xs text-muted-foreground">{label} on {status.at ? format(parseISO(status.at), "MMM d yyyy, h:mm a") : "N/A"}</p>
@@ -65,6 +66,10 @@ function ParticipationBadge({ status }: { status: participationStatus }) {
 				<Icon data-icon="inline-start" />
 				{label}
 			</Badge>
+			<Button className="text-xs" variant="outline" onClick={() => { }}>
+				<FileUpIcon size={15} />
+				Export Result
+			</Button>
 		</div>
 	);
 }
@@ -88,6 +93,7 @@ export default function TestResultsComponents({
 	selectedOrgId = null,
 	participationStatus = null,
 	syncBanner = null,
+	headerActions = null,
 }: {
 	iteration: testIteration;
 	testSuiteSlug: string;
@@ -111,6 +117,8 @@ export default function TestResultsComponents({
 	participationStatus?: participationStatus | null;
 	// Vendor only, while the round runs: edits to tested cases waiting for Sync (server tab renders it).
 	syncBanner?: React.ReactNode;
+	// Create New Iteration / Issue Sign-off, each only when allowed (server tab renders them).
+	headerActions?: React.ReactNode;
 }) {
 	const router = useRouter();
 	const pathname = usePathname();
@@ -147,56 +155,33 @@ export default function TestResultsComponents({
 
 	return (
 		<div className="flex-1 min-w-0 p-4 flex flex-col gap-4">
-				<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
-					<div className="flex flex-row gap-3 items-center">
-						<TestCasesSidebarTrigger />
-						<FolderClock size={30} className="hidden lg:block" />
-						<div className="flex flex-col">
-							<p className="font-semibold text-md">{iteration.name} Results</p>
-							<p className="font-mono text-xs text-muted-foreground">{iteration.startedAt ? format(parseISO(iteration.startedAt), "MMM d yyyy") : "Not started"} to {iteration.plannedEndDate ? format(parseISO(iteration.plannedEndDate), "MMM d yyyy") : "no end date"}</p>
-						</div>
-					</div>
-					<div className="flex flex-row items-center gap-1 w-full md:w-auto">
-						{/* <p className="text-xs text-muted-foreground">Participant</p> */}
-						<Button className="text-xs flex-1 md:flex-none" variant="outline" onClick={() => {}}>
-							<FileUpIcon size={15} />
-							Export Result
-						</Button>
-						<Select value={selectedOrgId} onValueChange={pickParticipant} disabled={participantOrgs.length < 2}>
-							<SelectTrigger className="flex-1 min-w-0 md:flex-none md:w-50">
-								<SelectValue>
-									<p className="text-xs font-medium">{selectedOrg ? `${selectedOrg.name} - ${ORG_TYPE_LABELS[selectedOrg.type]}` : "No participants"}</p>
-								</SelectValue>
-							</SelectTrigger>
-							<SelectContent alignItemWithTrigger={false}>
-								{participantOrgs.map((org) => (
-									<SelectItem key={org.id} value={org.id}>
-										<div className="flex flex-col">
-											<p className="text-xs">{org.name}</p>
-											<p className="text-xs text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</p>
-										</div>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					
-				</div>
-				{/* {submission} */}
-				{/* {participation} */}
-				<div className="flex flex-col gap-1 font-semibold">
-					<div className="">
-						<p className="text-xs">Overview</p>
-					</div>
-					<div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-						<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
-						<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
-						<SummaryCard label="Failed Test Cases" count={failed} icon={<CircleX className="text-red-800" />} iconClassName="bg-red-50/50 border-red-800" />
-						<SummaryCard label="Blocked Test Cases" count={blocked} icon={<Ban className="text-gray-800" />} />
-						{/* <SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} /> */}
+			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+				<div className="flex flex-row gap-3 items-center">
+					<TestCasesSidebarTrigger />
+					<FolderClock size={30} className="hidden lg:block" />
+					<div className="flex flex-col">
+						<p className="font-semibold text-xs">{iteration.name} Results</p>
+						<p className="font-mono text-xs text-muted-foreground">{iteration.startedAt ? format(parseISO(iteration.startedAt), "MMM d yyyy") : "Not started"} to {iteration.plannedEndDate ? format(parseISO(iteration.plannedEndDate), "MMM d yyyy") : "no end date"}</p>
 					</div>
 				</div>
-				{/* {(hasPreviousRound || hasMidRoundChanges) && (
+				{headerActions}
+
+			</div>
+			{/* {submission} */}
+			{/* {participation} */}
+			<div className="flex flex-col gap-1 font-semibold">
+				<div className="">
+					<p className="text-xs">Overview</p>
+				</div>
+				<div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+					<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
+					<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
+					<SummaryCard label="Failed Test Cases" count={failed} icon={<CircleX className="text-red-800" />} iconClassName="bg-red-50/50 border-red-800" />
+					<SummaryCard label="Blocked Test Cases" count={blocked} icon={<Ban className="text-gray-800" />} />
+					{/* <SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} /> */}
+				</div>
+			</div>
+			{/* {(hasPreviousRound || hasMidRoundChanges) && (
 					<div className="flex flex-row items-center gap-2">
 						{hasPreviousRound && (
 							<Button
@@ -220,32 +205,49 @@ export default function TestResultsComponents({
 						)}
 					</div>
 				)} */}
-				{syncBanner}
-				<div className="min-h-0 flex-1 flex flex-col gap-2">
-					<div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:justify-between">
-						<p className="text-xs">{`${selectedOrg?.name ?? "Organization"}'s Test Results`}</p>
-						{participationStatus && <ParticipationBadge status={participationStatus} />}
-					</div>
-					<DataTable
-						columns={testResultColumns}
-						data={visibleRows}
-						// Removed from the suite: its results stay in this round, but there's nothing left to execute.
-						isRowDisabled={(row) => row.pendingChange === "removed" || isRemovedFromRound(row)}
-						// Result writes don't revalidate and the root layout doesn't re-render on
-						// navigation, so refresh once on close to keep the sidebar's "N left" current.
-						onDetailClose={() => router.refresh()}
-						renderRowDetail={(row) => (
-							<TestCaseSheet
-								testCase={row}
-								mode={isRunning && !isLocked ? "execute" : "review"}
-								canRemark={canRemark}
-								onChangeTestCase={(updated) => {
-									setTestResultRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
-								}}
-							/>
-						)}
-					/>
+			{syncBanner}
+			<div className="min-h-0 flex-1 flex flex-col gap-2">
+				<div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:justify-between">
+					{/* <p className="text-xs">{`${selectedOrg?.name ?? "Organization"}'s Test Results`}</p> */}
+					<Select value={selectedOrgId} onValueChange={pickParticipant} disabled={participantOrgs.length < 2}>
+						<SelectTrigger className="w-full min-w-0 md:w-50">
+							<SelectValue>
+								<p className="text-xs font-medium">{selectedOrg ? `${selectedOrg.name} - ${ORG_TYPE_LABELS[selectedOrg.type]}` : "No participants"}</p>
+							</SelectValue>
+						</SelectTrigger>
+						<SelectContent alignItemWithTrigger={false}>
+							{participantOrgs.map((org) => (
+								<SelectItem key={org.id} value={org.id}>
+									<div className="flex flex-col">
+										<p className="text-xs">{org.name}</p>
+										<p className="text-xs text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</p>
+									</div>
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+					{participationStatus && <ParticipationBadge status={participationStatus} />}
 				</div>
+				<DataTable
+					columns={testResultColumns}
+					data={visibleRows}
+					// Removed from the suite: its results stay in this round, but there's nothing left to execute.
+					isRowDisabled={(row) => row.pendingChange === "removed" || isRemovedFromRound(row)}
+					// Result writes don't revalidate and the root layout doesn't re-render on
+					// navigation, so refresh once on close to keep the sidebar's "N left" current.
+					onDetailClose={() => router.refresh()}
+					renderRowDetail={(row) => (
+						<TestCaseSheet
+							testCase={row}
+							mode={isRunning && !isLocked ? "execute" : "review"}
+							canRemark={canRemark}
+							onChangeTestCase={(updated) => {
+								setTestResultRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
+							}}
+						/>
+					)}
+				/>
+			</div>
 		</div>
 	)
 }

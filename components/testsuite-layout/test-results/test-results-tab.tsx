@@ -2,19 +2,21 @@ import { CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsi
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
 import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./result-leaf";
-import TreeCollapsible from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/tree-collapsible";
+import TreeCollapsible from "@/components/testsuite-layout/shared/tree-collapsible";
 import { isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 import TestResultsComponents, { type participationStatus } from "./test-results-components";
-import StartIterationDialog from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/start-iteration-dialog";
+import StartIterationDialog from "@/components/testsuite-layout/shared/start-iteration-dialog";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/auth/permissions";
-import { canWithdrawParticipation, getParticipationProgress, unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
+import { canWithdrawParticipation, getParticipationProgress, getDraftSignOff, getSignOffContext, unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
+import SignOffDialog from "@/components/testsuite-layout/sign-off/sign-off-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import ParticipationPanel from "./participation-panel";
-import SubmissionBar from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/submission-bar";
-import SyncBanner from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/sync-dialog";
+import SubmissionBar from "@/components/testsuite-layout/shared/submission-bar";
+import SyncBanner from "@/components/testsuite-layout/shared/sync-dialog";
 import TestCasesSidebar, { TestCasesSidebarTrigger } from "../test-cases/test-cases-sidebar";
 import type { suiteStatus } from "@/lib/supabase/Init";
-import { CalendarClock, ChevronRight } from "lucide-react";
+import { CalendarClock, ChevronRight, FolderPlus, Stamp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type TreeNode = {
@@ -144,6 +146,67 @@ export default async function TestResultsTab({
 		&& (isViewingOwnOrg || currentUser?.role === "Admin");
 	const showParticipation = can(currentUser, "view_all_results") && participants.length > 0;
 
+	// Header actions. A new round needs the open one finished first (same rule as the empty state).
+	const showCreateIteration = canStartIteration && can(currentUser, "run_iteration");
+	// Sign-off: vendor only, once no round is open and one has completed. Untested cases still
+	// block it (same rule as the DB), so the button stays visible but disabled with the reason.
+	const signOffContext = suiteStatus === "in_testing" && can(currentUser, "issue_sign_off")
+		? await getSignOffContext(testSuiteId)
+		: null;
+	const canIssueSignOff = !!signOffContext?.latestCompleted && !signOffContext.hasActiveIteration;
+	// The vendor's saved draft (Create sign-off → Issue), so the button continues it instead.
+	const draftSignOff = canIssueSignOff ? await getDraftSignOff(testSuiteId) : null;
+	const signOffBlockers = signOffContext && signOffContext.openUntestedCases > 0
+		? [`${signOffContext.openUntestedCases} test case${signOffContext.openUntestedCases === 1 ? " still needs" : "s still need"} a finished result.`]
+		: [];
+	const issueSignOffButton = (
+		<Button className="text-xs flex-1 md:flex-none" disabled={signOffBlockers.length > 0}>
+			<Stamp size={15} />
+			{draftSignOff ? "Continue Sign-off" : "Create Sign-off"}
+		</Button>
+	);
+	const headerActions = showCreateIteration || canIssueSignOff ? (
+		// Keyed: a server-created element rendered among a client component's static children trips React's dev key check.
+		<div key="header-actions" className="flex flex-row items-center gap-1 w-full md:w-auto">
+			{showCreateIteration && (
+				<StartIterationDialog
+					suiteId={testSuiteId}
+					testSuiteSlug={testSuiteSlug}
+					trigger={
+						<Button className="text-xs flex-1 md:flex-none" variant="outline">
+							<FolderPlus size={15} />
+							Create New Iteration
+						</Button>
+					}
+				/>
+			)}
+			{canIssueSignOff && signOffContext && (signOffBlockers.length > 0 ? (
+				<Tooltip>
+					{/* A disabled button gets no pointer events, so the span carries the hover. */}
+					<TooltipTrigger render={<span className="inline-flex flex-1 md:flex-none cursor-not-allowed [&>button]:pointer-events-none [&>button]:w-full" tabIndex={0} />}>
+						{issueSignOffButton}
+					</TooltipTrigger>
+					<TooltipContent className="flex flex-col items-start gap-1">
+						<p className="text-xs font-semibold">Meet the sign-off criteria first:</p>
+						<ul className="list-disc pl-4">
+							{signOffBlockers.map((blocker) => <li key={blocker} className="text-xs">{blocker}</li>)}
+						</ul>
+					</TooltipContent>
+				</Tooltip>
+			) : (
+				<SignOffDialog
+					suiteId={testSuiteId}
+					draft={draftSignOff}
+					hasActiveIteration={signOffContext.hasActiveIteration}
+					latestCompleted={signOffContext.latestCompleted}
+					openUntestedCases={signOffContext.openUntestedCases}
+					aiDraftAvailable={!!process.env.GROQ_API_KEY}
+					trigger={issueSignOffButton}
+				/>
+			))}
+		</div>
+	) : null;
+
 	// Same rule as the Test Cases tab: "all" (or no section) shows the whole
 	// suite, a section slug narrows the table and the scorecards to it.
 	const isAllSections = !sectionSlug || sectionSlug === "all";
@@ -200,6 +263,7 @@ export default async function TestResultsTab({
 					participantOrgs={participantOrgs}
 					selectedOrgId={selectedOrg?.id ?? null}
 					participationStatus={participationStatus}
+					headerActions={headerActions}
 					syncBanner={showSyncBanner && syncChanges.length > 0 ? (
 						// Keyed: a server-created element rendered among a client component's static children trips React's dev key check.
 						<SyncBanner key="sync-banner" iteration={{ id: selectedIteration.id, name: selectedIteration.name }} changes={syncChanges} />
@@ -225,7 +289,7 @@ export default async function TestResultsTab({
 					<div className="pt-3"><TestCasesSidebarTrigger withLabel /></div>
 					{canStartIteration && (
 						<div className="pt-3">
-							<StartIterationDialog suiteId={testSuiteId} />
+							<StartIterationDialog suiteId={testSuiteId} testSuiteSlug={testSuiteSlug} />
 						</div>
 					)}
 				</div>

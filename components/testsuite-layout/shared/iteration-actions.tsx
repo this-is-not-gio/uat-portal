@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CircleStop, Flag, Play, RotateCcw, StopCircle, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
 	Dialog,
 	DialogClose,
@@ -61,7 +62,8 @@ export default function IterationActions({
 // not_started -> in_progress. begin_iteration rejects a round with no participants or no
 // included cases (0027), so the dialog just shows the scope and surfaces that message.
 // Sections with nothing ticked are dropped from the round as it starts (0032).
-export function StartIterationButton({ iteration, participantCount, testCaseCount }: { iteration: testIteration; participantCount?: number; testCaseCount?: number }) {
+// `disabledReason` greys the button out and explains why in a tooltip.
+export function StartIterationButton({ iteration, participantCount, testCaseCount, disabledReason }: { iteration: testIteration; participantCount?: number; testCaseCount?: number; disabledReason?: string }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -78,10 +80,27 @@ export function StartIterationButton({ iteration, participantCount, testCaseCoun
 		});
 	}
 
+	if (disabledReason) {
+		return (
+			<Tooltip>
+				{/* A disabled button fires no pointer events, so the span carries the hover. */}
+				<TooltipTrigger render={<span className="inline-flex cursor-not-allowed [&>button]:pointer-events-none" />}>
+					<Button size="sm" disabled>
+						<Play className="h-4 w-4" />
+						<p className="text-xs">Start Iteration</p>
+					</Button>
+				</TooltipTrigger>
+				<TooltipContent side="bottom">
+					<p className="text-xs">{disabledReason}</p>
+				</TooltipContent>
+			</Tooltip>
+		);
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={(next) => { setOpen(next); setError(null); }}>
 			<DialogTrigger render={
-				<Button size="lg">
+				<Button size="sm">
 					<Play className="h-4 w-4" />
 					<p className="text-xs">Start Iteration</p>
 				</Button>
@@ -188,20 +207,21 @@ export function CompleteIterationButton({ iteration, untestedCount, unsubmittedO
 					<p className="text-xs">Complete Iteration</p>
 				</Button>
 			} />
-			<DialogContent className="min-w-lg">
+			{/* Default width on phones; caps at lg and scrolls when the warnings run long. */}
+			<DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
 				<DialogHeader className="px-2 pt-2">
-					<DialogTitle>Complete {iteration.name}?</DialogTitle>
-					<DialogDescription>
+					<DialogTitle className="break-words">Complete {iteration.name}?</DialogTitle>
+					<DialogDescription className="text-xs sm:text-sm">
 						Results become read-only history. Corrections go into the next round.
 					</DialogDescription>
 				</DialogHeader>
 				<UnsubmittedOrgsWarning organizations={unsubmittedOrgs} context="complete" />
 				{untestedCount > 0 && (
-					<div className="text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3 flex flex-col gap-2	">
-						<p className="font-medium flex flex-row items-center gap-1">
-							<span><TriangleAlert size={16} /></span> Warning: Incomplete Testing
+					<div className="text-xs sm:text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3 flex flex-col gap-2">
+						<p className="font-medium flex flex-row items-start gap-1.5">
+							<TriangleAlert size={16} className="shrink-0 mt-px" /> Warning: Incomplete Testing
 						</p>
-						<p className="">
+						<p>
 							{untestedCount} test case{untestedCount === 1 ? " is" : "s are"} not fully tested yet. They will be recorded as they stand.
 						</p>
 					</div>

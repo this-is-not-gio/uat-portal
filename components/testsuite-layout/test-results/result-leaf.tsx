@@ -5,7 +5,7 @@ import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { File, Folder, FolderClock, ClipboardList } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useIterationSelection } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/iteration-selection-context";
+import { useIterationSelection } from "@/components/testsuite-layout/shared/iteration-selection-context";
 import { testResultsHref } from "./href";
 
 // Test Results counterpart of SectionLeaf. Two node kinds:

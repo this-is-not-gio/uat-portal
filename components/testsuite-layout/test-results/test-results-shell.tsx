@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { clearTreeState } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/tree-collapsible";
+import { clearTreeState } from "@/components/testsuite-layout/shared/tree-collapsible";
 
 // Round folders stay as the user left them while moving around Test Results;
 // leaving the tab unmounts this layout and resets them.

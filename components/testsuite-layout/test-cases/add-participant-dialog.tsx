@@ -18,7 +18,7 @@ import {
 import { addParticipant, getParticipantOptions } from "@/lib/supabase/iteration-actions";
 import type { organization } from "@/lib/supabase/organizations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
-import { ORG_TYPE_LABELS } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/participant-picker";
+import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 
 // Brings more orgs into an open (not_started / in_progress) round — same
 // checklist layout as SectionDialog's "add existing sections". Each org gets

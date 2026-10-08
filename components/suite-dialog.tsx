@@ -77,9 +77,9 @@ export default function SuiteDialog({ suite, exitCriteria, trigger, open: contro
 			// rarely fails; if it does the suite keeps the defaults, editable from its menu.
 			if (!suite && criteriaChanged) await updateExitCriteria({ suiteId: result.data.id, criteria });
 			setOpen(false);
-			if (!isEdit) router.push(`/testingsuite/${result.data.slug}?tab=overview`);
+			if (!isEdit) router.push(`/testsuite/${result.data.slug}/overview`);
 			// A rename may give the suite a new slug, so leave the old URL behind.
-			else if (result.data.slug !== suite.slug) router.replace(`/testingsuite/${result.data.slug}?tab=overview`);
+			else if (result.data.slug !== suite.slug) router.replace(`/testsuite/${result.data.slug}/overview`);
 		});
 	}
 

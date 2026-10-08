@@ -1,6 +1,6 @@
 "use client";
 
-import { useIterationSelection } from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/iteration-selection-context";
+import { useIterationSelection } from "@/components/testsuite-layout/shared/iteration-selection-context";
 
 // Header count for a round's section. IterationTestCaseList publishes the live
 // tick count to the selection context; until it does, show the server's count.

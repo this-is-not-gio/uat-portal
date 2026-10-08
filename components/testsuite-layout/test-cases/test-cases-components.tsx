@@ -9,7 +9,7 @@ import { deleteTestCase, reorderTestCases } from "@/lib/supabase/authoring-actio
 import { arrayMove } from "@dnd-kit/sortable";
 import type { readinessIssue } from "@/lib/supabase/test-suite";
 import type { iterationChange } from "@/lib/supabase/test-iterations";
-import SyncBanner from "@/app/(app)/testingsuite/[testingSuiteSlug]/components/sync-dialog";
+import SyncBanner from "@/components/testsuite-layout/shared/sync-dialog";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/table/data-table";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";

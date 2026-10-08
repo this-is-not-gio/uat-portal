@@ -31,7 +31,7 @@ export default async function TestSuiteOverviewPage({ params }: PageProps<"/test
 			overviewSections={overviewSections}
 			endpoints={endpoints}
 			exitCriteria={testSuite.exitCriteria}
-			canEdit={isAuthor && !["sign_off_issued", "signed_off", "archived"].includes(testSuite.status)}
+			canEdit={isAuthor && !["for_sign_off", "sign_off_issued", "signed_off", "archived"].includes(testSuite.status)}
 			canEditCriteria={isAuthor && (testSuite.status === "draft" || testSuite.status === "ready")}
 		/>
 	);

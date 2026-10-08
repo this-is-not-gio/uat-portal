@@ -56,6 +56,8 @@ export default function SectionDialog({
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
 	const isRename = !!section;
+	// Opened from an iteration's menu: only pick existing sections, no create form.
+	const isIterationMode = !!iterationId;
 
 	const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(new Set());
 	const [syncError, setSyncError] = useState<string | null>(null);
@@ -126,19 +128,21 @@ export default function SectionDialog({
 					<DialogDescription className="text-xs text-muted-foreground">
 						{isRename
 							? "The new name shows everywhere, including rounds that haven't been synced yet."
-							: sectionsNotIncluded
-								? "Create a brand-new section, or add an existing one straight into this iteration."
+							: isIterationMode
+								? "Pick existing sections to add straight into this iteration."
 								: "Sections group related test cases, e.g. \"Login and Authentication\"."}
 					</DialogDescription>
 				</DialogHeader>
-				<form
-					className="flex flex-col gap-2 px-2 py-1"
-					onSubmit={(event) => { event.preventDefault(); if (name.trim()) onSave(); }}
-				>
-					<Label htmlFor="section-name" className="text-xs text-muted-foreground">Section name</Label>
-					<Input id="section-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} disabled={isPending} />
-					{error && <p className="text-xs text-destructive">{error}</p>}
-				</form>
+				{!isIterationMode && (
+					<form
+						className="flex flex-col gap-2 px-2 py-1"
+						onSubmit={(event) => { event.preventDefault(); if (name.trim()) onSave(); }}
+					>
+						<Label htmlFor="section-name" className="text-xs text-muted-foreground">Section name</Label>
+						<Input id="section-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} disabled={isPending} />
+						{error && <p className="text-xs text-destructive">{error}</p>}
+					</form>
+				)}
 				{sectionsNotIncluded && (
 					<div className="flex flex-col gap-2 px-2 py-1">
 						<p className="text-xs text-muted-foreground">Existing sections not yet in this iteration</p>
@@ -168,10 +172,10 @@ export default function SectionDialog({
 						<X className="size-4" />
 						Close
 					</DialogClose>
-					{selectedSections.length > 0 ? (
+					{isIterationMode ? (
 						<Button onClick={onAddToIteration} disabled={isSyncPending || addableCount === 0}>
 							<Check className="size-4" />
-							{isSyncPending ? "Adding…" : selectedSections.length === 1 ? `Add ${selectedSections.length} Section to iteration` : `Add ${selectedSections.length} Sections to iteration`}
+							{isSyncPending ? "Adding…" : selectedSections.length === 0 ? "Add to iteration" : selectedSections.length === 1 ? `Add ${selectedSections.length} Section to iteration` : `Add ${selectedSections.length} Sections to iteration`}
 						</Button>
 					) : (
 						<Button onClick={onSave} disabled={isPending || name.trim().length === 0}>
