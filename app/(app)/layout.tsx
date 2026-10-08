@@ -25,7 +25,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 						} as React.CSSProperties
 					}>
 					<AppSidebar testingSuites={testSuites} user={user} />
-					<SidebarInset>
+					{/* min-w-0: a flex item defaults to its content's width, so wide content (e.g. the zoomed
+					    sign-off sheets) would widen the whole app instead of scrolling inside its own area. */}
+					<SidebarInset className="min-w-0">
 						<div className="flex min-h-0 flex-1 flex-col overflow-y-hidden">
 							<SiteHeader testingSuites={testSuites} />
 							{children}

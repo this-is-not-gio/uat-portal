@@ -150,6 +150,12 @@
   @page {
     margin: 14mm;
   }
+  /* The sign-off document's pages (page: sign-off). No page margin leaves the browser no room for its
+     date/title/URL header and footer; the sheets carry the 14mm margin as padding instead. Always A4. */
+  @page sign-off {
+    size: A4;
+    margin: 0;
+  }
   * {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
@@ -158,14 +164,26 @@
   body,
   [data-slot="sidebar-wrapper"],
   [data-slot="sidebar-inset"],
-  [data-slot="sidebar-inset"] > div {
+  [data-slot="sidebar-inset"] > div,
+  [data-slot="scroll-area"],
+  [data-slot="scroll-area-viewport"] {
     display: block !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
+    /* Print on bare paper: the app and canvas backgrounds would tint the page. */
+    background: transparent !important;
   }
   [data-slot="sidebar"],
   [data-slot="site-header"] {
     display: none !important;
   }
+}
+
+/* Hides the scrollbar but keeps the element scrollable (wheel, trackpad, keyboard). */
+@utility no-scrollbar {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
 }

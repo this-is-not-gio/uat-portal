@@ -22,6 +22,24 @@ const formatCriterionValue = (row: VerdictRow, value: number | string) =>
       row.key === "minPassRate" && typeof value === "number" ? `${value}%` : String(value);
 
 const columns = columnHelper.columns([
+		columnHelper.accessor("met", {
+		header: "",
+		cell: (info) => {
+			const met = info.getValue();
+			return (
+				// <div className="flex flex-row justify-end">
+				// 	<div className={cn("flex flex-row items-center gap-1 py-1 px-2  rounded-md w-fit", met ? "text-green-700 bg-green-200/20" : "text-red-700 bg-red-200/20")}>
+				// 		{
+				// 			met ? <CheckIcon className="size-4" /> : <XIcon className="size-4" />
+				// 		}
+				// 	</div>
+				// </div>
+				<div className={cn("flex flex-row items-center p-1 rounded-md w-fit border", met ? "text-green-800 bg-green-200/20 border-green-800" : "text-red-800 bg-red-200/20 border-red-800")}>
+					{met ? <CheckIcon className="size-3" /> : <XIcon className="size-3" />}
+				</div>
+			);
+		},
+	}),
 	columnHelper.accessor("label", {
 		header: "Criterion",
 		cell: (info) => <p className="text-xs font-semibold">{info.getValue()}</p>
@@ -34,22 +52,7 @@ const columns = columnHelper.columns([
 		header: "Required",
 		cell: (info) => <p className="text-xs font-mono">{formatCriterionValue(info.row.original, info.getValue())}</p>
 	}),
-	columnHelper.accessor("met", {
-		header: "Result",
-		cell: (info) => {
-			const met = info.getValue();
-			return (
-				<div className="flex flex-row justify-end">
-					<div className={cn("flex flex-row items-center gap-1 py-1 px-2  rounded-md w-fit", met ? "text-green-700 bg-green-200/20" : "text-red-700 bg-red-200/20")}>
-						{
-							met ? <CheckIcon className="size-4" /> : <XIcon className="size-4" />
-						}
-						<p className="text-xs font-semibold">{met ? "Met" : "Not met"}</p>
-					</div>
-				</div>
-			);
-		},
-	}),
+
 
 ]);
 

@@ -40,7 +40,7 @@ export function NavSecondary({ testingSuites, user }: { testingSuites: SidebarSu
 		: user.role === "External" ? "No testing assigned yet" : "Nothing in testing right now";
 
 	const renderSuite = (testingSuite: SidebarSuite) => {
-		const isActive = pathname.startsWith(`/testingsuite/${testingSuite.slug}`);
+		const isActive = pathname.startsWith(`/testsuite/${testingSuite.slug}`);
 		//const badge = suiteBadge(user.role, testingSuite);
 		const counts = testingSuite.adminCounts ?? { sections: 0, testCaseCount: 0, iterationCount: 0, resultCount: 0 };
 		return (
@@ -48,7 +48,7 @@ export function NavSecondary({ testingSuites, user }: { testingSuites: SidebarSu
 				<SidebarMenuButton
 					tooltip={testingSuite.title}
 					isActive={isActive}
-					render={<Link href={`/testingsuite/${testingSuite.slug}`} />}
+					render={<Link href={`/testsuite/${testingSuite.slug}/overview`} />}
 					className={`group/archived flex flex-row items-center gap-2 min-w-0`}
 				>
 					<FolderIcon />

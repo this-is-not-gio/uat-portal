@@ -27,14 +27,14 @@ export default function NavTestCase({ testingSuites, user }: { testingSuites: Si
 	const groups = groupSuites(user.role, testingSuites);
 
 	const renderSuite = (testingSuite: SidebarSuite) => {
-		const isActive = pathname.startsWith(`/testingsuite/${testingSuite.slug}`);
+		const isActive = pathname.startsWith(`/testsuite/${testingSuite.slug}`);
 		const counts = testingSuite.adminCounts ?? { sections: 0, testCaseCount: 0, iterationCount: 0, resultCount: 0 };
 		return (
 			<SidebarMenuItem key={testingSuite.id}>
 				<SidebarMenuButton
 					tooltip={testingSuite.title}
 					isActive={isActive}
-					render={<Link href={`/testingsuite/${testingSuite.slug}`} />}
+					render={<Link href={`/testsuite/${testingSuite.slug}/overview`} />}
 					className={`group/archived flex flex-row items-center gap-2 min-w-0`}
 				>
 					<FolderOpen />

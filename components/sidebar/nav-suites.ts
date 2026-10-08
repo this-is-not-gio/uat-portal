@@ -52,9 +52,9 @@ export function groupSuites(role: role, suites: SidebarSuite[]): suiteGroup[] {
                     icon: TestTubeDiagonalIcon,
                 },
                 {
-                    // Issued by the vendor, waiting for the client's acknowledgement.
+                    // Being drafted, issued and waiting for the client, or rejected and waiting for the vendor's next step.
                     label: "For Sign-off",
-                    suites: suites.filter((s) => s.status === "sign_off_issued"),
+                    suites: suites.filter((s) => s.status === "for_sign_off" || s.status === "sign_off_issued" || s.status === "sign_off_rejected"),
                     icon: Signature,
                 },
                 {
@@ -80,7 +80,7 @@ export function groupSuites(role: role, suites: SidebarSuite[]): suiteGroup[] {
                 {
                     label: "For Sign-Offs",
                     suites: suites.filter(
-                        (s) => s.status === "sign_off_issued" || (s.status === "in_testing" && !s.openRound),
+                        (s) => s.status === "for_sign_off" || s.status === "sign_off_issued" || s.status === "sign_off_rejected" || (s.status === "in_testing" && !s.openRound),
                     ),
                 },
                 {

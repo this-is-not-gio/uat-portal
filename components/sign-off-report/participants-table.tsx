@@ -39,7 +39,7 @@ const columns = columnHelper.columns([
 		header: "Submitted On",
 		cell: ({ row: { original: p } }) =>
 			p.withdrawnAt ? <Badge variant="outline">Withdrawn {formatTimestamp(p.withdrawnAt)}</Badge>
-			: p.submittedAt ? <p className="text-xs font-mono"> {formatTimestamp(p.submittedAt)}</p>
+			: p.submittedAt ? <p className="text-xs font-mono text-muted-foreground"> {formatTimestamp(p.submittedAt)}</p>
 			: <Badge variant="destructive">Not submitted</Badge>,
 	}),
 ]);

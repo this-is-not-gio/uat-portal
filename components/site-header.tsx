@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Fragment } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -18,13 +18,14 @@ const SEGMENT_LABELS: Record<string, string> = {
 	dashboard: "Dashboard",
 	masterPlan: "Testing Master Plan",
 	exports: "Exports",
-	testingsuite: "Testing Suites",
+	testsuite: "Testing Suites",
 };
 
 const TAB_LABELS: Record<string, string> = {
 	overview: "Overview",
 	"test-cases": "Test Cases",
 	"test-results": "Test Results",
+	"sign-off": "Sign-off",
 };
 
 function labelForSegment(segment: string, testingSuites: SidebarSuite[]) {
@@ -35,13 +36,12 @@ function labelForSegment(segment: string, testingSuites: SidebarSuite[]) {
 
 export function SiteHeader({ testingSuites }: { testingSuites: SidebarSuite[] }) {
 	const pathname = usePathname();
-	const searchParams = useSearchParams();
 	const segments = pathname.split("/").filter(Boolean);
-	const isTestSuiteRoute = segments[0] === "testingsuite" && segments.length > 1;
+	const isTestSuiteRoute = segments[0] === "testsuite" && segments.length > 1;
 
-	// Inside a testing suite, only "testingsuite" and the suite slug become
-	// path-based crumbs — any section/"all" path segment is an implementation
-	// detail, not something to show. The active tab becomes the final crumb.
+	// Inside a testing suite, only "testsuite" and the suite slug become
+	// path-based crumbs — any section/"all" path segment after the tab is an
+	// implementation detail, not something to show. The tab becomes the final crumb.
 	const pathSegments = isTestSuiteRoute ? segments.slice(0, 2) : segments;
 
 	const crumbs = pathSegments.map((segment, index) => ({
@@ -51,9 +51,9 @@ export function SiteHeader({ testingSuites }: { testingSuites: SidebarSuite[] })
 	}));
 
 	if (isTestSuiteRoute) {
-		const tab = searchParams.get("tab") ?? "overview";
+		const tab = segments[2] ?? "overview";
 		crumbs.push({
-			href: pathname + "?" + searchParams.toString(),
+			href: `/${segments[0]}/${segments[1]}/${tab}`,
 			label: TAB_LABELS[tab] ?? tab,
 			isLast: true,
 		});

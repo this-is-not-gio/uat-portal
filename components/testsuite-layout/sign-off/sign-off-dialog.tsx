@@ -2,7 +2,8 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { CheckIcon, FileTextIcon, SparklesIcon, XIcon } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { CheckIcon, FileTextIcon, SparklesIcon, Stamp, StampIcon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -18,22 +19,22 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
-import { acknowledgeSignOff, draftSignOffThemes, issueSignOff, previewSignOffReport } from "@/lib/supabase/iteration-actions";
-import type { signOff, statusCounts } from "@/lib/supabase/overview";
+import { acknowledgeSignOff, createSignOff, draftSignOffThemes, previewSignOffReport, rejectSignOff, saveSignOffDraft } from "@/lib/supabase/iteration-actions";
+import type { signOff, signOffDraft, statusCounts } from "@/lib/supabase/overview";
 import type { organization } from "@/lib/supabase/organizations";
 import type { CriterionResult, SignOffReport } from "@/lib/supabase/sign-off-report";
 import { STALE_REMARK_ERROR, THEME_LIMITS, themeProblem, type ThemeInput } from "@/lib/report/sign-off-remarks";
 import SignOffThemeEditor from "./sign-off-theme-editor";
-import UnsubmittedOrgsWarning from "./unsubmitted-orgs-warning";
+import UnsubmittedOrgsWarning from "@/components/testsuite-layout/shared/unsubmitted-orgs-warning";
 
-// Step 1 of sign-off (vendor): issue it on the latest completed iteration.
+// Step 1 of sign-off (vendor). Opening it only previews the report; Create draft makes the draft
+// ("Creating sign-off report", vendor-only) with the note. Issuing it to the client happens later.
 // Hard gate: every round finished. Untested cases and other exceptions are only warnings.
-// Opening the dialog previews the report; issuing rebuilds it on the server and freezes it,
-// along with any tester observations the vendor wrote (themes citing remarks from the preview).
-// The client then acknowledges it (AcknowledgeSignOffDialog), which closes the suite.
+// The client then acknowledges or rejects it (AcknowledgeSignOffDialog / RejectSignOffDialog).
 // aiDraftAvailable: the server has an AI key, so "Draft with AI" can prefill observations.
 export default function SignOffDialog({
 	suiteId,
+	draft,
 	hasActiveIteration,
 	latestCompleted,
 	openUntestedCases,
@@ -41,13 +42,18 @@ export default function SignOffDialog({
 	trigger,
 }: {
 	suiteId: string;
+	// The saved draft, or null for a fresh report (created on Create draft).
+	draft: signOffDraft | null;
 	hasActiveIteration: boolean;
 	latestCompleted: { name: string; counts: statusCounts; unsubmittedOrgs: organization[] } | null;
 	openUntestedCases: number;
 	aiDraftAvailable: boolean;
 	trigger: React.ReactElement;
 }) {
+	const router = useRouter();
+	const { testSuiteSlug } = useParams<{ testSuiteSlug: string }>();
 	const [open, setOpen] = useState(false);
+	const [draftId, setDraftId] = useState<string | null>(draft?.id ?? null);
 	const [note, setNote] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [report, setReport] = useState<SignOffReport | null>(null);
@@ -68,6 +74,7 @@ export default function SignOffDialog({
 	const remarkIds = new Set((report?.remarks ?? []).map((r) => r.id));
 	const incompleteThemes = themes.filter((t) => themeProblem(t) || t.remarkIds.some((id) => !remarkIds.has(id))).length;
 
+	// Opening the dialog only previews; nothing is saved until Create draft (ensureDraft).
 	function loadPreview() {
 		const request = ++previewRequest.current;
 		setError(null);
@@ -104,24 +111,40 @@ export default function SignOffDialog({
 			previewRequest.current++;
 			return;
 		}
-		setNote("");
-		setThemes([]);
+		setDraftId(draft?.id ?? null);
+		setNote(draft?.note ?? "");
+		setThemes(draft?.themes ?? []);
 		setDraftError(null);
 		setError(null);
 		setReport(null);
 		if (!blocker) loadPreview();
 	}
 
-	function onSignOff() {
+	// Create sign-off happens on confirm: Create draft makes the record the first time.
+	async function ensureDraft(): Promise<string | null> {
+		if (draftId) return draftId;
+		const created = await createSignOff({ suiteId });
+		if (!created.ok) {
+			setError(created.error);
+			return null;
+		}
+		setDraftId(created.data.id);
+		return created.data.id;
+	}
+
+	function onSave() {
 		setError(null);
 		startTransition(async () => {
-			// A stale-remark error keeps the dialog open; Retry preview reloads the catalog.
-			const result = await issueSignOff({ suiteId, note: note.trim(), themes });
+			const id = await ensureDraft();
+			if (!id) return;
+			const result = await saveSignOffDraft({ signOffId: id, note: note.trim(), themes });
 			if (!result.ok) {
 				setError(result.error);
 				return;
 			}
 			setOpen(false);
+			// The Sign-off tab opens the draft by default, so the vendor lands on the document being drafted.
+			router.push(`/testsuite/${testSuiteSlug}/sign-off`);
 		});
 	}
 
@@ -130,9 +153,22 @@ export default function SignOffDialog({
 			<DialogTrigger render={trigger} />
 			<DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
 				<DialogHeader>
-					<DialogTitle>Issue sign-off</DialogTitle>
-					<DialogDescription>
-						{latestCompleted ? `Based on ${latestCompleted.name}. The client acknowledges it to close the suite; starting a new iteration withdraws it.` : "The client acknowledges it to close the suite."}
+					<DialogTitle className="flex flex-row items-center gap-2">
+						<StampIcon className="size-5" />
+						Sign-off report
+					</DialogTitle>
+					<DialogDescription className="text-xs flex flex-col gap-1">
+						{latestCompleted ? (
+							// Spans, not <p>: DialogDescription already renders a <p>.
+							<>
+								<span>
+									Each case uses its latest result across all completed iterations carried over if not
+									re-tested. Any organization failing it makes it Failed.
+								</span>
+							</>
+						) : (
+							"The client acknowledges it to close the suite."
+						)}
 					</DialogDescription>
 				</DialogHeader>
 				{blocker ? (
@@ -154,7 +190,7 @@ export default function SignOffDialog({
 								<Skeleton className="h-16 w-full" />
 							</div>
 						) : null}
-						{report && (
+						{/* {report && (
 							<div className="flex flex-col gap-2">
 								<div className="flex items-center justify-between gap-2">
 									<p className="text-sm font-medium">
@@ -175,9 +211,9 @@ export default function SignOffDialog({
 								{draftError && <p className="text-xs text-destructive">{draftError}</p>}
 								<SignOffThemeEditor remarks={report.remarks ?? []} themes={themes} onChange={setThemes} disabled={isPending || isDrafting} />
 							</div>
-						)}
+						)} */}
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="sign-off-note">
+							<Label htmlFor="sign-off-note" className="text-xs">
 								Note <span className="text-muted-foreground font-normal">(optional{hasExceptions ? ", recommended with exceptions" : ""})</span>
 							</Label>
 							<Textarea
@@ -186,6 +222,7 @@ export default function SignOffDialog({
 								onChange={(e) => setNote(e.target.value)}
 								placeholder={hasExceptions ? "e.g. Accepted with 2 known issues tracked for the next release" : "Anything worth recording with the sign-off"}
 								disabled={isPending}
+								className="text-xs"
 							/>
 						</div>
 					</div>
@@ -197,12 +234,12 @@ export default function SignOffDialog({
 					</p>
 				)}
 				<DialogFooter>
-					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
+					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Close</DialogClose>
 					{!blocker && (!report || error === STALE_REMARK_ERROR) && !isLoadingReport ? (
-						<Button variant="outline" onClick={loadPreview}>Retry preview</Button>
+						<Button variant="outline" onClick={() => loadPreview()}>Retry preview</Button>
 					) : (
-						<Button onClick={onSignOff} disabled={isPending || isDrafting || !!blocker || !report || incompleteThemes > 0}>
-							{isPending ? "Issuing…" : hasExceptions ? "Issue with exceptions" : "Issue sign-off"}
+						<Button onClick={onSave} disabled={isPending || isDrafting || !!blocker || !report}>
+							{isPending ? "Creating…" : "Create draft"}
 						</Button>
 					)}
 				</DialogFooter>
@@ -220,9 +257,9 @@ function formatCriterionValue(criterion: CriterionResult, value: number | string
 function ReportPreview({ report }: { report: SignOffReport }) {
 	const { totals, header } = report;
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-2">
 			<div className="flex items-center justify-between gap-2">
-				<p className="text-sm font-medium">Exit criteria</p>
+				<p className="text-xs font-medium">Exit criteria</p>
 				{report.verdict === "met" ? (
 					<Badge className="bg-green-100 text-green-800">Met</Badge>
 				) : (
@@ -237,13 +274,19 @@ function ReportPreview({ report }: { report: SignOffReport }) {
 						) : (
 							<XIcon className="size-4 shrink-0 text-destructive" aria-label="Not met" />
 						)}
-						<span className="flex-1">{criterion.label}</span>
+						<span className="flex-1 text-xs">{criterion.label}</span>
 						<span className="font-mono text-xs text-muted-foreground">
 							{formatCriterionValue(criterion, criterion.actual)} / {formatCriterionValue(criterion, criterion.threshold)}
 						</span>
 					</li>
 				))}
 			</ul>
+			<p className="text-xs text-muted-foreground">
+				These results are used to determine if the exit criteria are met.
+			</p>
+			<p className="text-xs font-medium">
+				Latest Reults Summary
+			</p>
 			<div className="grid grid-cols-5 gap-2 text-center">
 				{([
 					["Cases", totals.total, ""],
@@ -258,18 +301,18 @@ function ReportPreview({ report }: { report: SignOffReport }) {
 					</div>
 				))}
 			</div>
-			<p className="text-xs text-muted-foreground">
-				Pass rate {report.passRate}% across {header.roundsCounted.length} completed round{header.roundsCounted.length === 1 ? "" : "s"} ({header.roundsCounted.join(", ")}).
+			<p className="text-xs font-medium text-muted-foreground">
+				These totals are the final status per case, rolled up across every completed round.
 			</p>
 			{report.limitations.length > 0 && (
 				<div className="flex flex-col gap-1">
-					<p className="text-sm font-medium">Limitations</p>
+					<p className="text-xs font-medium">Limitations</p>
 					<ul className="flex flex-col gap-1 text-sm list-disc pl-5">
 						{report.limitations.map((limitation) => (
-							<li key={limitation.key}>
+							<li className="text-xs" key={limitation.key}>
 								{limitation.text}
 								{limitation.items.length > 0 && (
-									<span className="text-muted-foreground">
+									<span className="text-muted-foreground ">
 										{": "}
 										{limitation.items.slice(0, 3).join(", ")}
 										{limitation.items.length > 3 && ` and ${limitation.items.length - 3} more`}
@@ -339,18 +382,71 @@ export function AcknowledgeSignOffDialog({ suiteId, signOff, reportHref, trigger
 							</div>
 						))}
 					</div>
-					{signOff.note && (
+					{/* {signOff.note && (
 						<div className="flex flex-col gap-1">
 							<Label>Vendor note</Label>
 							<p className="text-sm">{signOff.note}</p>
 						</div>
-					)}
+					)} */}
 				</div>
 				{error && <p className="text-xs text-destructive">{error}</p>}
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
 					<Button onClick={onAcknowledge} disabled={isPending}>
 						{isPending ? "Acknowledging…" : "Acknowledge & close suite"}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+// The client's other answer to an issued sign-off: reject it with a reason. The suite stays locked
+// until the vendor reopens testing or creates a new report.
+export function RejectSignOffDialog({ suiteId, signOff, trigger }: { suiteId: string; signOff: signOff; trigger: React.ReactElement }) {
+	const [open, setOpen] = useState(false);
+	const [reason, setReason] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
+
+	function onReject() {
+		setError(null);
+		startTransition(async () => {
+			const result = await rejectSignOff({ suiteId, reason });
+			if (!result.ok) {
+				setError(result.error);
+				return;
+			}
+			setOpen(false);
+		});
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={(next) => { setOpen(next); if (next) { setReason(""); setError(null); } }}>
+			<DialogTrigger render={trigger} />
+			<DialogContent className="sm:max-w-lg">
+				<DialogHeader>
+					<DialogTitle>Reject sign-off</DialogTitle>
+					<DialogDescription>
+						{signOff.signedOffBy ?? "The vendor"} issued the sign-off based on {signOff.iterationName}. Tell them why it can&apos;t be accepted; they can reopen testing or prepare a new report.
+					</DialogDescription>
+				</DialogHeader>
+				<div className="flex flex-col gap-2">
+					<Label htmlFor="reject-reason" className="text-xs">Reason</Label>
+					<Textarea
+						id="reject-reason"
+						value={reason}
+						onChange={(e) => setReason(e.target.value)}
+						placeholder="e.g. Claims approval still fails for Company A; retest after the fix"
+						disabled={isPending}
+						className="text-xs"
+					/>
+				</div>
+				{error && <p className="text-xs text-destructive">{error}</p>}
+				<DialogFooter>
+					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
+					<Button variant="destructive" onClick={onReject} disabled={isPending || !reason.trim()}>
+						{isPending ? "Rejecting…" : "Reject sign-off"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

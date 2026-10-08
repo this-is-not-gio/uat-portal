@@ -16,13 +16,15 @@ const RESULT_TONE: Record<string, string> = { Passed: "text-green-700", Failed: 
 const formatDate = (value: string) => new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 // Archived is left out on purpose: the row tracks suites still moving through the lifecycle.
-const PIPELINE: suiteStatus[] = ["draft", "ready", "in_testing", "sign_off_issued", "signed_off"];
+const PIPELINE: suiteStatus[] = ["draft", "ready", "in_testing", "for_sign_off", "sign_off_issued", "sign_off_rejected", "signed_off"];
 
 const TAGLINES: Partial<Record<suiteStatus, string>> = {
 	draft: "Still on the drawing board",
 	ready: "Locked, loaded, waiting for testers",
 	in_testing: "Bug hunt in progress",
+	for_sign_off: "Sign-off report in the works",
 	sign_off_issued: "Ball's in the client's court",
+	sign_off_rejected: "Sent back by the client",
 	signed_off: "Shipped it!",
 };
 
@@ -56,12 +58,18 @@ export default async function DashboardPage() {
 			.map((round) => ({ key: `complete-${round.iteration.id}`, Icon: CircleCheck, tone: "text-emerald-600", suite: round.suiteName, href: testResultsHref(round.suiteSlug, "all", { iteration: round.iteration.iterationNumber }), text: `Every org submitted ${round.iteration.name}, ready to complete` })),
 		...awaitingSignOff
 			.filter((round) => !runningSlugs.has(round.suiteSlug))
-			.map((round) => ({ key: `signoff-${round.iteration.id}`, Icon: FileSignature, tone: "text-amber-600", suite: round.suiteName, href: `/testingsuite/${round.suiteSlug}?tab=sign-off`, text: `${round.iteration.name} completed, sign-off not issued yet` })),
+			.map((round) => ({ key: `signoff-${round.iteration.id}`, Icon: FileSignature, tone: "text-amber-600", suite: round.suiteName, href: testResultsHref(round.suiteSlug, "all", { iteration: round.iteration.iterationNumber }), text: `${round.iteration.name} completed, sign-off not issued yet` })),
+		...suites
+			.filter((suite) => suite.status === "sign_off_rejected")
+			.map((suite) => ({ key: `rejected-${suite.id}`, Icon: CircleAlert, tone: "text-destructive", suite: suite.title, href: `/testsuite/${suite.slug}/sign-off`, text: "Client rejected the sign-off: reopen testing or create a new report" })),
 		...awaitingAck.map((signOff) => {
 			const days = daysSince(signOff.signedOffAt);
-			return { key: `ack-${signOff.id}`, Icon: Hourglass, tone: "text-muted-foreground", suite: signOff.suiteName, href: `/testingsuite/${signOff.suiteSlug}?tab=sign-off`, text: `Sign-off${signOff.iterationName ? ` for ${signOff.iterationName}` : ""} awaiting client acknowledgement, ${days === 0 ? "issued today" : `${days} ${days === 1 ? "day" : "days"} waiting`}` };
+			return { key: `ack-${signOff.id}`, Icon: Hourglass, tone: "text-muted-foreground", suite: signOff.suiteName, href: `/testsuite/${signOff.suiteSlug}/sign-off`, text: `Sign-off${signOff.iterationName ? ` for ${signOff.iterationName}` : ""} awaiting client acknowledgement, ${days === 0 ? "issued today" : `${days} ${days === 1 ? "day" : "days"} waiting`}` };
 		}),
 	];
+
+	// The client's in-app notice: issued sign-offs waiting for its answer.
+	const awaitingMySignOff = user.role === "Internal" ? suites.filter((suite) => suite.status === "sign_off_issued") : [];
 
 	// Tester view: rounds their org is in, split by whether the org has submitted yet.
 	// Planned (not_started) rounds already list their participants, but can't be tested yet.
@@ -167,7 +175,7 @@ export default async function DashboardPage() {
 											return (
 												<TableRow key={iteration.id}>
 													<TableCell className="font-medium">
-														<Link href={`/testingsuite/${round.suiteSlug}`} className="hover:underline">
+														<Link href={`/testsuite/${round.suiteSlug}/overview`} className="hover:underline">
 															{round.suiteCode && <span className="mr-1 font-mono text-muted-foreground">{round.suiteCode}</span>}
 															{round.suiteName}
 														</Link>
@@ -194,6 +202,29 @@ export default async function DashboardPage() {
 									</TableBody>
 								</Table>
 							)}
+						</CardContent>
+					</Card>
+				)}
+				{awaitingMySignOff.length > 0 && (
+					<Card size="sm" className="mb-4">
+						<CardHeader>
+							<CardTitle className="text-sm">Waiting for your sign-off</CardTitle>
+							<CardDescription className="text-xs">
+								The vendor issued {awaitingMySignOff.length === 1 ? "a sign-off" : `${awaitingMySignOff.length} sign-offs`}. Read the report, then acknowledge or reject it.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<ul className="flex flex-col divide-y">
+								{awaitingMySignOff.map((suite) => (
+									<li key={suite.id}>
+										<Link href={`/testsuite/${suite.slug}/sign-off`} className="flex items-center gap-3 py-2 text-xs hover:bg-muted/50">
+											<FileSignature className="size-4 shrink-0 text-blue-600" />
+											<span className="font-medium">{suite.title}</span>
+											<span className="text-muted-foreground">Sign-off report ready for review</span>
+										</Link>
+									</li>
+								))}
+							</ul>
 						</CardContent>
 					</Card>
 				)}
@@ -251,7 +282,7 @@ export default async function DashboardPage() {
 											return (
 												<TableRow key={suite.id}>
 													<TableCell className="font-medium">
-														<Link href={`/testingsuite/${suite.slug}?tab=test-cases`} className="hover:underline">
+														<Link href={`/testsuite/${suite.slug}/test-cases`} className="hover:underline">
 															{suite.code && <span className="mr-1 font-mono text-muted-foreground">{suite.code}</span>}
 															{suite.title}
 														</Link>
@@ -358,7 +389,7 @@ export default async function DashboardPage() {
 												return (
 													<TableRow key={suite.id}>
 														<TableCell className="font-medium">
-															<Link href={`/testingsuite/${suite.slug}/all?tab=test-cases`} className="hover:underline">
+															<Link href={`/testsuite/${suite.slug}/test-cases/all`} className="hover:underline">
 																{suite.code && <span className="mr-1 font-mono text-muted-foreground">{suite.code}</span>}
 																{suite.title}
 															</Link>
@@ -386,7 +417,7 @@ export default async function DashboardPage() {
 									<ul className="flex flex-col divide-y">
 										{submitted.map((suite) => (
 											<li key={suite.id}>
-												<Link href={`/testingsuite/${suite.slug}/all?tab=test-cases`} className="flex flex-wrap items-baseline gap-x-2 py-2 text-xs hover:bg-muted/50">
+												<Link href={`/testsuite/${suite.slug}/test-cases/all`} className="flex flex-wrap items-baseline gap-x-2 py-2 text-xs hover:bg-muted/50">
 													<Send className="size-3.5 self-center text-muted-foreground" />
 													<span className="font-medium">{suite.title}</span>
 													<span className="text-muted-foreground">Round {suite.openRound!.number}: {suite.openRound!.name}</span>
