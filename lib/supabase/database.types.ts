@@ -82,6 +82,35 @@ export type Database = {
           },
         ]
       }
+      organization_roles: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -140,6 +169,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          org_role_id: string | null
           organization_id: string | null
           role: Database["public"]["Enums"]["user_role"]
         }
@@ -147,6 +177,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id: string
+          org_role_id?: string | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
@@ -154,10 +185,18 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          org_role_id?: string | null
           organization_id?: string | null
           role?: Database["public"]["Enums"]["user_role"]
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_org_role_fkey"
+            columns: ["org_role_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "organization_roles"
+            referencedColumns: ["id", "organization_id"]
+          },
           {
             foreignKeyName: "profiles_organization_id_fkey"
             columns: ["organization_id"]

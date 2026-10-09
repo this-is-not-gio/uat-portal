@@ -6,7 +6,7 @@ import { createAdminClient } from "./admin";
 import { requireUser, type currentUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
-import type { organization, orgType } from "./organizations";
+import type { organization, orgRole, orgType } from "./organizations";
 
 // Users and organizations for the /admin area. Every action re-checks admin_area itself:
 // the /admin layout only hides the pages, it doesn't protect a direct action call.
@@ -41,6 +41,18 @@ async function checkRoleMatchesOrg(
     return null;
 }
 
+// The FK (0051) already rejects a role from another org; this just gives a readable message.
+async function checkRoleInOrg(orgRoleId: string | null, organizationId: string): Promise<string | null> {
+    if (!orgRoleId) return null;
+    const supabase = await createClient();
+    const { data } = await supabase
+        .from("organization_roles")
+        .select("organization_id")
+        .eq("id", orgRoleId)
+        .maybeSingle();
+    return data?.organization_id === organizationId ? null : "That test role doesn't belong to the selected organization.";
+}
+
 // Users -----------------------------------------------------------------------
 
 export type adminUser = {
@@ -49,6 +61,7 @@ export type adminUser = {
     fullName: string;
     role: role;
     organization: organization | null;
+    orgRole: { id: string; name: string } | null;
     invitedAt: string | null;
     lastSignInAt: string | null;
 };
@@ -66,7 +79,7 @@ export async function listUsers(): Promise<actionResult<adminUser[]>> {
         admin
             .from("profiles")
             .select(
-                "id, full_name, role, organization:organizations(id, name, type)",
+                "id, full_name, role, organization:organizations(id, name, type), org_role:organization_roles(id, name)",
             ),
     ]);
     if (authError) return fail(authError);
@@ -84,6 +97,7 @@ export async function listUsers(): Promise<actionResult<adminUser[]>> {
                     fullName: p.full_name,
                     role: p.role,
                     organization: p.organization,
+                    orgRole: p.org_role,
                     invitedAt: account?.invited_at ?? null,
                     lastSignInAt: account?.last_sign_in_at ?? null,
                 };
@@ -99,15 +113,17 @@ export async function inviteUser({
     fullName,
     role,
     organizationId,
+    orgRoleId,
 }: {
     email: string;
     fullName: string;
     role: role;
     organizationId: string;
+    orgRoleId: string | null;
 }): Promise<actionResult> {
     const user_ = await requireUser();
     if (!can(user_, "admin_area")) return denied("admin_area");
-    const mismatch = await checkRoleMatchesOrg(role, organizationId);
+    const mismatch = (await checkRoleMatchesOrg(role, organizationId)) ?? (await checkRoleInOrg(orgRoleId, organizationId));
     if (mismatch) return { ok: false, error: mismatch };
     const admin = createAdminClient();
 
@@ -118,7 +134,7 @@ export async function inviteUser({
 
     const { error: updateError } = await admin
         .from("profiles")
-        .update({ role, organization_id: organizationId })
+        .update({ role, organization_id: organizationId, org_role_id: orgRoleId })
         .eq("id", user.id);
     if (updateError) {
         await admin.auth.admin.deleteUser(user.id);
@@ -133,10 +149,12 @@ export async function updateUserRole({
     userId,
     role,
     organizationId,
+    orgRoleId,
 }: {
     userId: string;
     role: role;
     organizationId: string;
+    orgRoleId: string | null;
 }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
@@ -146,14 +164,34 @@ export async function updateUserRole({
             ok: false,
             error: "You can't change your own role or organization.",
         };
-    const mismatch = await checkRoleMatchesOrg(role, organizationId);
+    const mismatch = (await checkRoleMatchesOrg(role, organizationId)) ?? (await checkRoleInOrg(orgRoleId, organizationId));
     if (mismatch) return { ok: false, error: mismatch };
 
     // Service role: the profiles column grant (0003) only lets users edit their own full_name.
     const { error } = await createAdminClient()
         .from("profiles")
-        .update({ role, organization_id: organizationId })
+        .update({ role, organization_id: organizationId, org_role_id: orgRoleId })
         .eq("id", userId);
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Removes the profile, then the login. Profiles are referenced (no cascade) by results,
+// executions, cases and sign-offs, so anyone with test activity is refused before anything is deleted.
+export async function deleteUser({ userId }: { userId: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    if (userId === user.id) return { ok: false, error: "You can't delete your own account." };
+
+    const admin = createAdminClient();
+    const { error: profileError } = await admin.from("profiles").delete().eq("id", userId);
+    if (profileError) {
+        if (profileError.code === "23503")
+            return { ok: false, error: "This participant has test activity (results, cases or sign-offs), so they can't be deleted." };
+        return fail(profileError);
+    }
+    const { error } = await admin.auth.admin.deleteUser(userId);
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
@@ -183,4 +221,56 @@ export async function createOrg({
     if (error) return fail(error);
     refresh();
     return { ok: true, data: { id: data.id } };
+}
+
+export async function renameOrg({ id, name }: { id: string; name: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, error: "Name is required." };
+
+    const supabase = await createClient();
+    const { error } = await supabase.from("organizations").update({ name: trimmed }).eq("id", id);
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Test roles ---------------------------------------------------------------------
+
+// RLS (0051) limits writes to Admins; the unique index rejects a duplicate name in the same org.
+export async function createOrgRole({
+    organizationId,
+    name,
+}: {
+    organizationId: string;
+    name: string;
+}): Promise<actionResult<orgRole>> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, error: "Role name is required." };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("organization_roles")
+        .insert({ organization_id: organizationId, name: trimmed })
+        .select("id, name, organization_id")
+        .single();
+    if (error)
+        return error.code === "23505" ? { ok: false, error: `"${trimmed}" already exists in this organization.` } : fail(error);
+    refresh();
+    return { ok: true, data: { id: data.id, name: data.name, organizationId: data.organization_id } };
+}
+
+// Users holding the role keep their org; their role is cleared (FK on delete set null).
+export async function deleteOrgRole({ id }: { id: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const supabase = await createClient();
+    const { error } = await supabase.from("organization_roles").delete().eq("id", id);
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: undefined };
 }
