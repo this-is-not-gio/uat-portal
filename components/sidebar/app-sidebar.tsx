@@ -1,6 +1,6 @@
 "use client";
 
-import { Book, BookMarked, Bug, ChevronRight, Clipboard, ClipboardEditIcon, Download, FlaskConical, House, Pencil, TestTubeDiagonal, UserGroup, Users } from "lucide-react";
+import { Book, BookCopy, BookMarked, Bug, ChevronRight, Clipboard, ClipboardEditIcon, Download, FlaskConical, House, Pencil, TestTubeDiagonal, UserGroup, Users } from "lucide-react";
 import * as React from "react"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar";
 import { NavMain } from "./nav-main";
@@ -43,8 +43,9 @@ const BADGE_VARIANTS = {
 
 const data = {
 	navMain: [
+		{ title: "Manual", url: "/", icon: BookCopy },
 		{ title: "Master Plan", url: "/masterPlan", icon: BookMarked },
-		{ title: "Users", url: "/admin/users", icon: Users },
+		{ title: "Participants", url: "/admin/users", icon: Users },
 	],
 	// navTester: [
 	// 	{ title: "Dashboard", url: "/dashboard", icon: House },

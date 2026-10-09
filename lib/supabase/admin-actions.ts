@@ -223,6 +223,23 @@ export async function createOrg({
     return { ok: true, data: { id: data.id } };
 }
 
+// Members (profiles, RESTRICT) and round history (iteration_participants) both block the delete,
+// so only an empty org that never took part in a round can be withdrawn; its test roles cascade.
+export async function deleteOrg({ id }: { id: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    if (id === user.organization?.id) return { ok: false, error: "You can't withdraw your own organization." };
+
+    const { error } = await createAdminClient().from("organizations").delete().eq("id", id);
+    if (error) {
+        if (error.code === "23503")
+            return { ok: false, error: "This organization still has participants or has taken part in a testing round, so it can't be withdrawn." };
+        return fail(error);
+    }
+    refresh();
+    return { ok: true, data: undefined };
+}
+
 export async function renameOrg({ id, name }: { id: string; name: string }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
@@ -261,6 +278,21 @@ export async function createOrgRole({
         return error.code === "23505" ? { ok: false, error: `"${trimmed}" already exists in this organization.` } : fail(error);
     refresh();
     return { ok: true, data: { id: data.id, name: data.name, organizationId: data.organization_id } };
+}
+
+// Testers holding the role keep it — they reference it by id, so only the label changes.
+export async function renameOrgRole({ id, name }: { id: string; name: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, error: "Role name is required." };
+
+    const supabase = await createClient();
+    const { error } = await supabase.from("organization_roles").update({ name: trimmed }).eq("id", id);
+    if (error)
+        return error.code === "23505" ? { ok: false, error: `"${trimmed}" already exists in this organization.` } : fail(error);
+    refresh();
+    return { ok: true, data: undefined };
 }
 
 // Users holding the role keep their org; their role is cleared (FK on delete set null).

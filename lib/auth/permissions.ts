@@ -27,16 +27,16 @@ export function can(user: currentUser | null, permission: permission): boolean {
 }
 
 const DENIED_MESSAGES: Record<permission, string> = {
-    author: "Only the vendor team can edit suites, sections and test cases.",
-    archive: "Only the vendor team can archive a suite.",
-    sync: "Only the vendor team can sync test case changes into a round.",
+    author: "Only the Development Team can edit suites, sections and test cases.",
+    archive: "Only the Development Team can archive a suite.",
+    sync: "Only the Development Team can sync test case changes into a round.",
     run_iteration: "You can't start or manage testing rounds.",
-    issue_sign_off: "Only the vendor team can issue a sign-off.",
+    issue_sign_off: "Only the Development Team can issue a sign-off.",
     sign_off: "Only the client team can acknowledge a sign-off.",
     submit: "Only testing organizations submit their results.",
     execute: "You can't record results.",
     view_all_results: "You can only see your own organization's results.",
-    admin_area: "Only the vendor team can manage users and organizations.",
+    admin_area: "Only the Development Team can manage users and organizations.",
 };
 
 // Same shape as actionResult's failure branch, so actions can `return denied("author")`.

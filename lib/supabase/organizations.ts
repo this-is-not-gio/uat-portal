@@ -46,3 +46,15 @@ export async function getTesterCountsByOrg(): Promise<Record<string, number>> {
     }
     return counts;
 }
+
+// Tester accounts per test role id (organization_roles.id), for the Roles tab. Same RLS as above.
+export async function getTesterCountsByRole(): Promise<Record<string, number>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("profiles").select("org_role_id").not("org_role_id", "is", null);
+    if (error) throw error;
+    const counts: Record<string, number> = {};
+    for (const profile of data) {
+        if (profile.org_role_id) counts[profile.org_role_id] = (counts[profile.org_role_id] ?? 0) + 1;
+    }
+    return counts;
+}
