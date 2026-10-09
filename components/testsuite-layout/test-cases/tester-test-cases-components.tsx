@@ -21,6 +21,8 @@ import { isRemovedFromRound } from "@/lib/supabase/case-states";
 import { cn } from "@/lib/utils";
 import { SubmitDialog, WithdrawButton, type untestedCase } from "@/components/testsuite-layout/shared/submission-bar";
 import { Progress } from "@/components/ui/progress";
+import { useCurrentUser } from "@/components/current-user-provider";
+import { sameRoleName } from "@/lib/auth/test-role";
 
 type statusFilter = "all" | "untested" | "failed" | "changed";
 const ALL_ROLES = "__all__";
@@ -146,7 +148,11 @@ export default function TesterTestCasesComponents({
 	const router = useRouter();
 	const [rows, setRows] = useState<testResultRow[]>(results);
 	const [statusFilter, setStatusFilter] = useState<statusFilter>("all");
-	const [role, setRole] = useState<string>(ALL_ROLES);
+	// On their own org's rows, testers start on their test role's cases; "All roles" shows the rest.
+	const testRole = useCurrentUser()?.testRole;
+	const [role, setRole] = useState<string>(
+		() => (isOwnLens && results.find((row) => sameRoleName(row.roleAssignee, testRole?.name))?.roleAssignee) || ALL_ROLES
+	);
 	const [search, setSearch] = useState("");
 
 	const roles = useMemo(
@@ -259,11 +265,11 @@ export default function TesterTestCasesComponents({
 					</div>
 					<Select value={role} onValueChange={(value) => setRole(value ?? ALL_ROLES)}>
 						<SelectTrigger size="sm" className="w-full text-xs md:w-48 md:text-sm">
-							<SelectValue>{role === ALL_ROLES ? "All roles" : role}</SelectValue>
+							<SelectValue>{role === ALL_ROLES ? "All roles" : sameRoleName(role, testRole?.name) ? `${role} (my role)` : role}</SelectValue>
 						</SelectTrigger>
 						<SelectContent alignItemWithTrigger={false}>
 							<SelectItem value={ALL_ROLES} className="text-xs md:text-sm">All roles</SelectItem>
-							{roles.map((r) => <SelectItem key={r} value={r} className="text-xs md:text-sm">{r}</SelectItem>)}
+							{roles.map((r) => <SelectItem key={r} value={r} className="text-xs md:text-sm">{sameRoleName(r, testRole?.name) ? `${r} (my role)` : r}</SelectItem>)}
 						</SelectContent>
 					</Select>
 					<div className="relative w-full md:ml-auto md:w-64">

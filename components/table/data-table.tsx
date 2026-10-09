@@ -59,6 +59,9 @@ interface DataTableProps<TData extends RowData & { id: string }> {
 	isRowDisabled?: (row: TData) => boolean
 	// Keeps the last column left-aligned like the others instead of pushed to the end.
 	notEnd?: boolean
+	// Empty-state copy; defaults to the test case wording.
+	emptyTitle?: string
+	emptyDescription?: string
 }
 
 
@@ -72,6 +75,8 @@ export function DataTable<TData extends RowData & { id: string }>({
 	bordered = true,
 	isRowDisabled,
 	notEnd = false,
+	emptyTitle = "No Test Cases",
+	emptyDescription = "There are no test cases to display.",
 }: DataTableProps<TData>) {
 	const table = useTable<DataTableFeatures, TData>({
 		data,
@@ -135,7 +140,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 				) : (
 					<TableRow>
 						<TableCell colSpan={columns.length} className="">
-							<EmptyState icon={FileIcon} title="No Test Cases" description="There are no test cases to display." />
+							<EmptyState icon={FileIcon} title={emptyTitle} description={emptyDescription} />
 						</TableCell>
 					</TableRow>
 				)

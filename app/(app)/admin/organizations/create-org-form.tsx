@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { createOrg } from "@/lib/supabase/admin-actions";
 import type { orgType } from "@/lib/supabase/organizations";
 
-// New orgs are almost always external companies; vendor and client exist once each.
+// Internal = the client's own divisions (enum value "client"), External = companies.
 export function CreateOrgForm() {
 	const [name, setName] = useState("");
 	const [type, setType] = useState<orgType>("external");
@@ -26,8 +26,8 @@ export function CreateOrgForm() {
 			}}>
 			<Input className="w-64" placeholder="Organization name" value={name} onChange={(e) => setName(e.target.value)} required />
 			<select className="rounded-md border px-2 py-1 text-sm" value={type} onChange={(e) => setType(e.target.value as orgType)}>
-				<option value="external">External company</option>
-				<option value="client">Client</option>
+				<option value="external">External</option>
+				<option value="client">Internal</option>
 				<option value="vendor">Vendor</option>
 			</select>
 			<Button type="submit" disabled={pending}>{pending ? "Adding..." : "Add organization"}</Button>
