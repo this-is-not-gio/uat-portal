@@ -437,7 +437,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						</div>
 						<div className="flex flex-col gap-0">
 							<h3 className="text-lg font-semibold">Previous results</h3>
-							<p className="text-xs text-muted-foreground">Reset by the vendor after the test case was corrected.</p>
+							<p className="text-xs text-muted-foreground">Reset by the Development Team after the test case was corrected.</p>
 						</div>
 					</div>
 					{testCase.archives!.map((archive) => (

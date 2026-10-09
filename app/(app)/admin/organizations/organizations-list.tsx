@@ -11,7 +11,8 @@ import type { organization, orgRole, orgType } from "@/lib/supabase/organization
 
 const ALL = "__all__";
 
-export function OrganizationsList({ organizations, roles }: { organizations: organization[]; roles: orgRole[] }) {
+// testerCounts: Internal/External accounts per org id (getTesterCountsByOrg).
+export function OrganizationsList({ organizations, roles, testerCounts }: { organizations: organization[]; roles: orgRole[]; testerCounts: Record<string, number> }) {
 	const [orgType, setOrgType] = useState<string>(ALL);
 	const [search, setSearch] = useState("");
 
@@ -19,7 +20,7 @@ export function OrganizationsList({ organizations, roles }: { organizations: org
 	const rows = organizations
 		.filter((org) => orgType === ALL || org.type === orgType)
 		.filter((org) => !query || org.name.toLowerCase().includes(query))
-		.map((org) => ({ ...org, roles: roles.filter((r) => r.organizationId === org.id) }));
+		.map((org) => ({ ...org, roles: roles.filter((r) => r.organizationId === org.id), testerCount: testerCounts[org.id] ?? 0 }));
 
 	return (
 		<>

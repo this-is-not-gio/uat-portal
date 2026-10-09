@@ -42,7 +42,7 @@ const STATUS_FILTERS: { value: statusFilter; label: string; icon: LucideIcon; ma
 function changeLabel(row: testResultRow): string | null {
 	if (row.syncKind === "added") return "Added mid-round.";
 	if (row.syncKind === "updated") return "Updated mid-round.";
-	if (row.syncKind === "force_reset") return `Results reset by the vendor${row.archives[0]?.reason ? `: ${row.archives[0].reason}` : "."}`;
+	if (row.syncKind === "force_reset") return `Results reset by the Development Team${row.archives[0]?.reason ? `: ${row.archives[0].reason}` : "."}`;
 	return null;
 }
 

@@ -1,18 +1,14 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Plus, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createOrgRole, deleteOrgRole, renameOrg } from "@/lib/supabase/admin-actions";
-import { Constants } from "@/lib/supabase/database.types";
 import type { organization, orgRole } from "@/lib/supabase/organizations";
 
 // Role Assignee values offered as suggestions, so a role's name lines up with the test cases
-// it should pre-filter (matching ignores case and dashes, see lib/auth/test-role.ts).
-const ROLE_SUGGESTIONS = Constants.public.Enums.role_assignee_type;
-
 export function OrgNameEditor({ org }: { org: organization }) {
 	const [name, setName] = useState(org.name);
 	const [error, setError] = useState<string | null>(null);
@@ -37,7 +33,6 @@ export function OrgNameEditor({ org }: { org: organization }) {
 }
 
 export function OrgRolesEditor({ organizationId, roles }: { organizationId: string; roles: orgRole[] }) {
-	const listId = useId();
 	const [name, setName] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
@@ -75,10 +70,7 @@ export function OrgRolesEditor({ organizationId, roles }: { organizationId: stri
 					e.preventDefault();
 					run(() => createOrgRole({ organizationId, name }), () => setName(""));
 				}}>
-				<Input className="h-8 w-full" placeholder="Add role" list={listId} value={name} onChange={(e) => setName(e.target.value)} required />
-				<datalist id={listId}>
-					{ROLE_SUGGESTIONS.filter((s) => !roles.some((r) => r.name === s)).map((s) => <option key={s} value={s} />)}
-				</datalist>
+				<Input className="h-8 w-full" placeholder="Add role" value={name} onChange={(e) => setName(e.target.value)} required />
 				<Button size="sm" variant="outline" type="submit" disabled={pending}><Plus/>Add Role</Button>
 				{error && <span className="text-sm text-destructive">{error}</span>}
 			</form>

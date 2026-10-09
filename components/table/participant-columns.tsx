@@ -30,8 +30,7 @@ export function participantColumns(roles: orgRole[]) {
 				const org = info.row.original.organization
 				return org ? (
 					<div>
-						<p className="text-xs">{org.name}</p>
-						<p className="text-xs text-muted-foreground font-mono">{ORG_TYPE_LABELS[org.type]}</p>
+						<p className="text-xs font-semibold">{org.name} - <span className="font-mono text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</span></p>
 					</div>
 				) : "—"
 			},

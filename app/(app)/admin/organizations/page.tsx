@@ -1,4 +1,4 @@
-import { getOrganizationRoles, getOrganizations, ORG_TYPE_LABELS } from "@/lib/supabase/organizations";
+import { getOrganizationRoles, getOrganizations, getTesterCountsByOrg, ORG_TYPE_LABELS } from "@/lib/supabase/organizations";
 import { CreateOrgForm } from "./create-org-form";
 import { OrgNameEditor } from "./org-roles-editor";
 import { OrganizationsList } from "./organizations-list";
@@ -8,7 +8,7 @@ import { Building2 } from "lucide-react";
 
 // Test roles are managed per org in the Create and Edit organization dialogs.
 export default async function AdminOrganizationsPage() {
-	const [organizations, roles] = await Promise.all([getOrganizations(), getOrganizationRoles()]);
+	const [organizations, roles, testerCounts] = await Promise.all([getOrganizations(), getOrganizationRoles(), getTesterCountsByOrg()]);
 
 	return (
 		<>
@@ -45,7 +45,7 @@ export default async function AdminOrganizationsPage() {
 					</div>
 					<CreateOrgDialog />
 				</div>
-				<OrganizationsList organizations={organizations} roles={roles} />
+				<OrganizationsList organizations={organizations} roles={roles} testerCounts={testerCounts} />
 			</div>
 		</>
 	);

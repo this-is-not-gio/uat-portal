@@ -354,7 +354,7 @@ export function AcknowledgeSignOffDialog({ suiteId, signOff, reportHref, trigger
 				<DialogHeader>
 					<DialogTitle>Acknowledge sign-off</DialogTitle>
 					<DialogDescription>
-						{signOff.signedOffBy ?? "The vendor"} issued the sign-off based on {signOff.iterationName}. Acknowledging it closes the suite.
+						{signOff.signedOffBy ?? "The Development Team"} issued the sign-off based on {signOff.iterationName}. Acknowledging it closes the suite.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-4">
@@ -384,7 +384,7 @@ export function AcknowledgeSignOffDialog({ suiteId, signOff, reportHref, trigger
 					</div>
 					{/* {signOff.note && (
 						<div className="flex flex-col gap-1">
-							<Label>Vendor note</Label>
+							<Label>Development Team note</Label>
 							<p className="text-sm">{signOff.note}</p>
 						</div>
 					)} */}
@@ -428,7 +428,7 @@ export function RejectSignOffDialog({ suiteId, signOff, trigger }: { suiteId: st
 				<DialogHeader>
 					<DialogTitle>Reject sign-off</DialogTitle>
 					<DialogDescription>
-						{signOff.signedOffBy ?? "The vendor"} issued the sign-off based on {signOff.iterationName}. Tell them why it can&apos;t be accepted; they can reopen testing or prepare a new report.
+						{signOff.signedOffBy ?? "The Development Team"} issued the sign-off based on {signOff.iterationName}. Tell them why it can&apos;t be accepted; they can reopen testing or prepare a new report.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-2">

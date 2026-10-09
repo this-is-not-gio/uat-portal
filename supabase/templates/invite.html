@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light only" />
+    <title>You've been invited to UAT Portal</title>
+    <!-- Web fonts load in Apple Mail, iOS Mail, Outlook.com and others; Gmail falls back to Arial -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Raleway:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Raleway:wght@400;500;600&display=swap');
+    </style>
+  </head>
+  <body style="margin:0; padding:0; background-color:#eff6ff; font-family:'Raleway', Helvetica, Arial, sans-serif; color:#0f172a;">
+    <!-- Preheader (inbox preview text) -->
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">
+      Your UAT Portal account is ready. Set your password to get started.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eff6ff;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+
+            <!-- Brand -->
+            <tr>
+              <td align="left" style="padding:0 4px 20px 4px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding-left:10px; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:16px; font-weight:700; color:#0f172a;">
+                      User Acceptance Testing 
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-left:10px; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:12px; color:#0f172a;">
+                        Licensing Project
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Card -->
+            <tr>
+              <td style="background-color:#ffffff; border:1px solid #dbeafe; border-radius:12px; overflow:hidden;">
+                <!-- Accent bar -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr><td style="height:4px; background-color:#2563eb; font-size:0; line-height:0;">&nbsp;</td></tr>
+                </table>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:36px 36px 8px 36px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px 0;">
+                        <tr>
+                          <td style="vertical-align:middle; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:12px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#2563eb;">
+                            {{ if .Data.full_name }}Good day, {{ .Data.full_name }}!{{ else }}Good day!{{ end }}
+                          </td>
+                        </tr>
+                      </table>
+                      <h1 style="margin:0 0 16px 0; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:24px; line-height:1.3; font-weight:700; color:#0f172a;">
+                        You've been invited to Participant
+                      </h1>
+
+                      <p style="margin:0 0 24px 0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:15px; line-height:1.6; font-weight:500; color:#334155;">
+                        An account has been created for you so you can take part in user acceptance testing for licensing project. You'll run assigned test cases, record results, and help sign off releases.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- Button -->
+                  <tr>
+                    <td style="padding:0 36px 28px 36px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                          <td align="center" style="background-color:#2563eb; border-radius:8px;">
+                            <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/set-password"
+                               target="_blank"
+                               style="display:inline-block; padding:13px 28px; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; border-radius:8px;">
+                              Accept invitation &amp; set password
+                            </a>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <!-- Steps -->
+                  <tr>
+                    <td style="padding:0 36px 28px 36px;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8fbff; border:1px solid #dbeafe; border-radius:8px;">
+                        <tr>
+                          <td style="padding:18px 20px;">
+                            <p style="margin:0 0 14px 0; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:13px; font-weight:700; color:#0f172a;">What happens next</p>
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                              <tr>
+                                <td valign="top" style="padding:0 12px 12px 0;">
+                                  <div style="width:20px; height:20px; line-height:20px; border-radius:10px; background-color:#2563eb; color:#ffffff; text-align:center; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:11px; font-weight:700;">1</div>
+                                </td>
+                                <td style="padding:0 0 12px 0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:13px; line-height:1.5; font-weight:500; color:#334155;">Click the button above to confirm your invite.</td>
+                              </tr>
+                              <tr>
+                                <td valign="top" style="padding:0 12px 12px 0;">
+                                  <div style="width:20px; height:20px; line-height:20px; border-radius:10px; background-color:#2563eb; color:#ffffff; text-align:center; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:11px; font-weight:700;">2</div>
+                                </td>
+                                <td style="padding:0 0 12px 0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:13px; line-height:1.5; font-weight:500; color:#334155;">Choose a password for your account.</td>
+                              </tr>
+                              <tr>
+                                <td valign="top" style="padding:0 12px 0 0;">
+                                  <div style="width:20px; height:20px; line-height:20px; border-radius:10px; background-color:#2563eb; color:#ffffff; text-align:center; font-family:'Montserrat', Helvetica, Arial, sans-serif; font-size:11px; font-weight:700;">3</div>
+                                </td>
+                                <td style="padding:0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:13px; line-height:1.5; font-weight:500; color:#334155;">Open your dashboard to see the testing suites assigned to you.</td>
+                              </tr>
+                            </table>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+
+                  <!-- Fallback link -->
+                  <tr>
+                    <td style="padding:0 36px 32px 36px; border-top:1px solid #dbeafe;">
+                      <p style="margin:20px 0 6px 0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:12px; line-height:1.5; color:#64748b;">
+                        Button not working? Copy and paste this link into your browser:
+                      </p>
+                      <p style="margin:0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:12px; line-height:1.5; word-break:break-all;">
+                        <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/set-password" style="color:#2563eb; text-decoration:underline;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite&amp;next=/set-password</a>
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td align="center" style="padding:24px 16px 0 16px;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 4px auto;">
+                  <tr>
+                    <td style="vertical-align:middle; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:12px; line-height:1.5; color:#94a3b8;">
+                      This invitation link can only be used once and will expire.
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0; font-family:'Raleway', Helvetica, Arial, sans-serif; font-size:12px; line-height:1.5; color:#94a3b8;">
+                  If you weren't expecting this email, you can safely ignore it.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

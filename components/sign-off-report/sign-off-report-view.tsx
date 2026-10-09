@@ -124,7 +124,7 @@ export function ReportHeaderSection({ frozen, draft = false, templates = [] }: {
 			)}
 			{frozen.note && (
 				<div className="flex flex-col gap-1 rounded-md border p-3 print:break-inside-avoid">
-					<p className="text-xs font-semibold text-muted-foreground">Vendor note</p>
+					<p className="text-xs font-semibold text-muted-foreground">Development Team note</p>
 					<p className="whitespace-pre-wrap break-words text-sm">{frozen.note}</p>
 				</div>
 			)}
@@ -671,7 +671,7 @@ function ObservationsSection({ report }: { report: SignOffReport }) {
 	return (
 		<Section
 			title="Tester observations"
-			description="Written by the vendor when issuing the sign-off. Each observation cites the tester remarks it is based on."
+			description="Written by the Development Team when issuing the sign-off. Each observation cites the tester remarks it is based on."
 			className="print:break-before-page"
 		>
 			<ol className="flex flex-col gap-6">

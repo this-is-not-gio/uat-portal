@@ -210,7 +210,7 @@ export default async function DashboardPage() {
 						<CardHeader>
 							<CardTitle className="text-sm">Waiting for your sign-off</CardTitle>
 							<CardDescription className="text-xs">
-								The vendor issued {awaitingMySignOff.length === 1 ? "a sign-off" : `${awaitingMySignOff.length} sign-offs`}. Read the report, then acknowledge or reject it.
+								The Development Team issued {awaitingMySignOff.length === 1 ? "a sign-off" : `${awaitingMySignOff.length} sign-offs`}. Read the report, then acknowledge or reject it.
 							</CardDescription>
 						</CardHeader>
 						<CardContent>

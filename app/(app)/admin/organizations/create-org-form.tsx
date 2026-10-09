@@ -28,7 +28,7 @@ export function CreateOrgForm() {
 			<select className="rounded-md border px-2 py-1 text-sm" value={type} onChange={(e) => setType(e.target.value as orgType)}>
 				<option value="external">External</option>
 				<option value="client">Internal</option>
-				<option value="vendor">Vendor</option>
+				<option value="vendor">Development Team</option>
 			</select>
 			<Button type="submit" disabled={pending}>{pending ? "Adding..." : "Add organization"}</Button>
 			{error && <p className="text-sm text-destructive">{error}</p>}

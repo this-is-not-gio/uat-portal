@@ -7,7 +7,7 @@ import { getParticipantOptions } from "@/lib/supabase/iteration-actions";
 import type { organization, orgType } from "@/lib/supabase/organizations";
 
 export const ORG_TYPE_LABELS: Record<orgType, string> = {
-	vendor: "Vendor",
+	vendor: "Development Team",
 	client: "Client",
 	external: "External company",
 };

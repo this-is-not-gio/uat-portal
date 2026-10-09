@@ -14,6 +14,7 @@ export default function UserTabShell() {
 				<TabsList variant="line" className="w-fit">
 					<TabsTrigger value="users" className="text-xs"><Users data-icon="inline-start" />Participants</TabsTrigger>
 					<TabsTrigger value="organizations" className="text-xs"><Building2 data-icon="inline-start" />Organization</TabsTrigger>
+					<TabsTrigger value="roles" className="text-xs"><IdCard data-icon="inline-start" />Tester Roles</TabsTrigger>
 				</TabsList>
 			</Tabs>
 		</div>

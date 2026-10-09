@@ -22,9 +22,9 @@ export const RESULT_CHANGE_FLAG_ORDER: resultChangeFlag[] = ["removed", "audienc
 export const RESULT_CHANGE_FLAG_STYLES: Record<resultChangeFlag, { label: string; description: string; className: string; icon: LucideIcon }> = {
 	removed: { label: "Removed", description: "The test case was deleted from the suite. It's out of this round; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: Trash2 },
 	audience_changed: { label: "Audience changed", description: "The test case is no longer meant for this organization. It's out of this round; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: UserX },
-	force_reset: { label: "Reset by vendor", description: "The vendor reset this case's results mid-round.", className: "bg-red-50 text-red-800 border-red-600/40", icon: RotateCcw },
+	force_reset: { label: "Reset by Development Team", description: "The Development Team reset this case's results mid-round.", className: "bg-red-50 text-red-800 border-red-600/40", icon: RotateCcw },
 	changed: { label: "Outdated · retest next round", description: "The test case was edited after it was tested; the new version comes in the next iteration.", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitPullRequest },
-	updated: { label: "Updated", description: "The vendor synced a newer version of this case into the round.", className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: RefreshCw },
+	updated: { label: "Updated", description: "The Development Team synced a newer version of this case into the round.", className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: RefreshCw },
 	added: { label: "Added mid-round", description: "The case was added to the round after it started.", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: SquarePlus },
 }
 
@@ -37,7 +37,7 @@ function SyncBadges({ row }: { row: testResultRow }) {
 			{row.syncKind === "updated" && <Badge variant="outline" className="text-xs border-amber-600/40 bg-amber-50 text-amber-800">Updated</Badge>}
 			{row.syncKind === "force_reset" && (
 				<Badge variant="outline" className="text-xs border-red-600/40 bg-red-50 text-red-800" title={resetReason ? `Reason: ${resetReason}` : undefined}>
-					Reset by vendor{resetReason ? `: ${resetReason}` : ""}
+					Reset by Development Team{resetReason ? `: ${resetReason}` : ""}
 				</Badge>
 			)}
 			{row.pendingChange === "changed" && (

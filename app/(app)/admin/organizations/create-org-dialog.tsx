@@ -8,15 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createOrg, createOrgRole } from "@/lib/supabase/admin-actions";
-import { Constants } from "@/lib/supabase/database.types";
 import { ORG_TYPE_LABELS } from "@/lib/org-type-labels";
 import type { orgType } from "@/lib/supabase/organizations";
 import { sameRoleName } from "@/lib/auth/test-role";
 
 // Internal first: that's the org type being set up now (External is deferred).
 const TYPE_OPTIONS: orgType[] = ["client", "external", "vendor"];
-const ROLE_SUGGESTIONS = Constants.public.Enums.role_assignee_type;
-
 export function CreateOrgDialog() {
 	const [open, setOpen] = useState(false);
 	return (
@@ -94,37 +91,6 @@ function CreateOrgForm({ onDone }: { onDone: () => void }) {
 					</Select>
 				</div>
 			</form>
-			{hasRoles && (
-				<div className="flex flex-col gap-2">
-					<Label className="text-xs">Test roles</Label>
-					<div className="flex flex-wrap gap-1">
-						{roleNames.length === 0 && <span className="text-xs text-muted-foreground">No roles yet. You can also add them later.</span>}
-						{roleNames.map((roleName) => (
-							<span key={roleName} className="flex items-center gap-1 rounded-md bg-gray-600/5 py-0.5 pl-1.5 pr-1 text-xs text-gray-800">
-								{roleName}
-								<button type="button" aria-label={`Remove ${roleName}`} className="rounded-sm opacity-60 hover:opacity-100" onClick={() => setRoleNames(roleNames.filter((r) => r !== roleName))}>
-									<XIcon className="size-3" />
-								</button>
-							</span>
-						))}
-					</div>
-					{/* Outside the form: Enter adds the chip instead of submitting the dialog. */}
-					<div className="flex items-center gap-2">
-						<Input
-							className="h-8 text-xs md:text-xs"
-							placeholder="Add role"
-							list={`${formId}-roles`}
-							value={roleInput}
-							onChange={(e) => setRoleInput(e.target.value)}
-							onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRole(); } }}
-						/>
-						<datalist id={`${formId}-roles`}>
-							{ROLE_SUGGESTIONS.filter((s) => !roleNames.some((r) => sameRoleName(r, s))).map((s) => <option key={s} value={s} />)}
-						</datalist>
-						<Button size="sm" variant="outline" type="button" onClick={addRole}>Add</Button>
-					</div>
-				</div>
-			)}
 			{error && <p className="text-sm text-destructive">{error}</p>}
 			<DialogFooter>
 				<DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancel</DialogClose>
