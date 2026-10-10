@@ -52,6 +52,7 @@ import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
 import type { caseCopy, resultArchive } from "@/lib/supabase/test-iterations";
+import { RESULT_CHANGE_FLAG_STYLES } from "@/components/table/test-result-columns";
 import { humanizeTimestamp } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -151,8 +152,13 @@ function TesterBreakdown({ copies }: { copies: caseCopy[] }) {
 			<ul className="border rounded-md divide-y">
 				{sorted.map((copy) => (
 					<li key={copy.id} className="flex flex-row items-center justify-between gap-2 px-3 py-2">
-						<p className="text-sm">{copy.testerName ?? "Unknown tester"}</p>
+						<p className={cn("text-sm", copy.dropped && "text-muted-foreground")}>{copy.testerName ?? "Unknown tester"}</p>
 						<div className="flex flex-row items-center gap-2">
+							{copy.dropped && (
+								<Badge variant="outline" className={RESULT_CHANGE_FLAG_STYLES.tester_dropped.className} title="Dropped from the round: this copy is frozen and doesn't count towards the result. Its results stay, view only.">
+									Dropped
+								</Badge>
+							)}
 							{copy.completedAt && <p className="text-xs text-muted-foreground">{humanizeTimestamp(copy.completedAt)}</p>}
 							<Badge variant="outline" className={copy_status_classnames[copy.status]}>{copy.status}</Badge>
 						</div>

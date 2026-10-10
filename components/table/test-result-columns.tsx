@@ -17,11 +17,12 @@ export type { testResultRow }
 export type resultChangeFlag = NonNullable<testResultRow["syncKind"]> | NonNullable<testResultRow["pendingChange"]>
 
 // Highest priority first, for picking the one to show when a row has several.
-export const RESULT_CHANGE_FLAG_ORDER: resultChangeFlag[] = ["removed", "audience_changed", "force_reset", "changed", "updated", "added"]
+export const RESULT_CHANGE_FLAG_ORDER: resultChangeFlag[] = ["removed", "audience_changed", "tester_dropped", "force_reset", "changed", "updated", "added"]
 
 export const RESULT_CHANGE_FLAG_STYLES: Record<resultChangeFlag, { label: string; description: string; className: string; icon: LucideIcon }> = {
 	removed: { label: "Removed", description: "The test case was deleted from the suite. It's out of this round; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: Trash2 },
 	audience_changed: { label: "Role changed", description: "This organization no longer tests the test case's role. It's out of this round; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: UserX },
+	tester_dropped: { label: "Tester dropped", description: "This tester no longer holds the role, so they were dropped from the round. Their copy is frozen; any results stay, view only.", className: "bg-red-50 text-red-800 border-red-600/40", icon: UserX },
 	force_reset: { label: "Reset by Development Team", description: "The Development Team reset this case's results mid-round.", className: "bg-red-50 text-red-800 border-red-600/40", icon: RotateCcw },
 	changed: { label: "Outdated · retest next round", description: "The test case was edited after it was tested; the new version comes in the next iteration.", className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitPullRequest },
 	updated: { label: "Updated", description: "The Development Team synced a newer version of this case into the round.", className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: RefreshCw },

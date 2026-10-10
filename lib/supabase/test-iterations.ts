@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { expectedResult, preCondition, profile, testCase, testCaseStatus } from "./test-cases";
 import { compareOrganizations, type organization } from "./organizations";
 import { caseKeyOf, getCaseVerdicts, verdictOfCase, type roundVerdicts } from "./case-verdicts";
+import { isRemovedFromRound } from "./case-states";
 
 // not_started (planned) -> in_progress -> completed | stopped (ended early; never used for sign-off).
 export type iterationStatus = "not_started" | "in_progress" | "completed" | "stopped";
@@ -22,10 +23,11 @@ export type testIteration = {
 
 // How a row got into (or was changed within) a running iteration by vendor sync.
 // removed / audience_changed: taken out mid-round by Sync, see isRemovedFromRound (0036).
-export type syncKind = "added" | "updated" | "force_reset" | "removed" | "audience_changed";
+// tester_dropped: the copy's tester was dropped by roster sync (0061); frozen the same way.
+export type syncKind = "added" | "updated" | "force_reset" | "removed" | "audience_changed" | "tester_dropped";
 
 // One rostered tester (0058): fixed at Start with their catalog role and org. Each gets their
-// own copy of every in-scope case of their role. dropped: reserved for roster sync (#12).
+// own copy of every in-scope case of their role. dropped: taken off by roster sync (0061), copies frozen.
 export type iterationTester = {
     userId: string;
     fullName: string | null;
@@ -79,16 +81,26 @@ export type resultArchive = {
 // incomplete (changed rows only): the live case has test_case_issues, so
 // neither sync nor force refresh will copy it until it's fixed.
 export type iterationChange = {
-    change: "added" | "changed" | "removed";
+    // tester_joined / tester_dropped: roster drift of a running round (0061, staff only).
+    change: "added" | "changed" | "removed" | "tester_joined" | "tester_dropped";
     testCaseId: string | null;
     testCaseResultId: string | null;
     code: string | null;
+    // Roster rows: the tester's name.
     title: string;
+    // Dropped testers: whether they have results, which are kept.
     hasResults: boolean;
     incomplete: boolean;
     // removed rows only: the case still exists but now belongs to another role.
     audienceChanged: boolean;
+    // Roster rows only: who, in which org, and the role they joined with or dropped from.
+    userId: string | null;
+    organizationName: string | null;
+    testRoleName: string | null;
 };
+
+// A change to a case (not to the roster); see isCaseChange in case-states.ts.
+export type caseChange = iterationChange & { change: "added" | "changed" | "removed" };
 
 // A test case as it was frozen into one iteration. `id` is the
 // test_case_results id (unique per iteration); `testCaseId` points back to
@@ -112,7 +124,7 @@ export type testResultRow = testCase & {
     // Newest first.
     archives: resultArchive[];
     // Set by the Test Results tab from getIterationChanges while the round runs.
-    pendingChange?: iterationChange["change"];
+    pendingChange?: caseChange["change"];
     // Only on rolled-up rows (getRolledUpResults): every tester's copy of this case, for the breakdown.
     copies?: caseCopy[];
 };
@@ -125,6 +137,8 @@ export type caseCopy = {
     organizationId: string | null;
     status: testCaseStatus;
     completedAt: string | null;
+    // The tester was dropped by roster sync: this copy is frozen, out of the verdict.
+    dropped: boolean;
 };
 
 const ITERATION_SELECT = "id, name, slug, iteration_number, status, started_at, completed_at, planned_end_date" as const;
@@ -490,7 +504,10 @@ export function rollUpCopies(
         const copies = groups.get(item)!;
         const verdict = verdictOfCase(verdicts, caseKeyOf(copies[0]), perOrg ? copies[0].organizationId : scopeOrgId);
         const status = verdict ?? copies[0].status;
-        const rep = copies.find((c) => c.testerId === viewerId) ?? copies.find((c) => c.status === status) ?? copies[0];
+        // A dropped tester's frozen copy only stands for the case when every copy is frozen.
+        const running = copies.filter((c) => !isRemovedFromRound(c));
+        const pool = running.length > 0 ? running : copies;
+        const rep = pool.find((c) => c.testerId === viewerId) ?? pool.find((c) => c.status === status) ?? pool[0];
         return {
             ...rep,
             status,
@@ -501,6 +518,7 @@ export function rollUpCopies(
                 organizationId: c.organizationId,
                 status: c.status,
                 completedAt: c.completedAt,
+                dropped: c.syncKind === "tester_dropped",
             })),
         };
     });
@@ -520,6 +538,9 @@ export async function getIterationChanges(iterationId: string): Promise<iteratio
         hasResults: row.has_results,
         incomplete: row.incomplete,
         audienceChanged: row.audience_changed,
+        userId: row.user_id,
+        organizationName: row.organization_name,
+        testRoleName: row.test_role_name,
     }));
 }
 

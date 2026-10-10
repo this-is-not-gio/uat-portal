@@ -20,9 +20,10 @@ import {
 import { cn } from "@/lib/utils";
 import { applyIterationSync, forceRefreshCaseResult, getSyncDiff, type caseContent } from "@/lib/supabase/sync-actions";
 import type { iterationChange } from "@/lib/supabase/test-iterations";
+import { isRosterChange } from "@/lib/supabase/case-states";
 
 function changeKey(change: iterationChange): string {
-	return `${change.change}:${change.testCaseResultId ?? change.testCaseId}`;
+	return `${change.change}:${change.userId ?? change.testCaseResultId ?? change.testCaseId}`;
 }
 
 // Banner + dialog on the vendor's Test Cases tab while a round is running.
@@ -44,12 +45,19 @@ export default function SyncBanner({ iteration, changes }: { iteration: { id: st
 		{ title: "Changed — incomplete", hint: "Fix the test case before it can be synced", rows: changes.filter((c) => c.change === "changed" && c.incomplete), locked: true },
 		{ title: "Removed", hint: "Deleted from the suite; taken out of the round and flagged for testers, results kept", rows: changes.filter((c) => c.change === "removed" && !c.audienceChanged), locked: false },
 		{ title: "Role changed", hint: "That organization no longer tests the case's role; taken out of its round and flagged, results kept", rows: changes.filter((c) => c.change === "removed" && c.audienceChanged), locked: false },
+		{ title: "Testers joined", hint: "Now hold a role this round tests; added with their own copies of that role's cases", rows: changes.filter((c) => c.change === "tester_joined"), locked: false },
+		{ title: "Testers dropped", hint: "Lost the role or were deactivated; their copies are frozen and flagged, results kept", rows: changes.filter((c) => c.change === "tester_dropped"), locked: false },
 	];
 
-	function toggle(key: string) {
+	// A tester who switched role has a drop and a join, which only apply together.
+	function toggle(change: iterationChange) {
+		const keys = isRosterChange(change)
+			? changes.filter((c) => isRosterChange(c) && c.userId === change.userId).map(changeKey)
+			: [changeKey(change)];
 		setSelected((current) => {
 			const next = new Set(current);
-			if (next.has(key)) next.delete(key); else next.add(key);
+			const on = !next.has(changeKey(change));
+			for (const key of keys) if (on) next.add(key); else next.delete(key);
 			return next;
 		});
 	}
@@ -63,6 +71,8 @@ export default function SyncBanner({ iteration, changes }: { iteration: { id: st
 				add: chosen.filter((c) => c.change === "added").map((c) => c.testCaseId!),
 				refreshIds: chosen.filter((c) => c.change === "changed").map((c) => c.testCaseResultId!),
 				remove: chosen.filter((c) => c.change === "removed").map((c) => c.testCaseResultId!),
+				join: chosen.filter((c) => c.change === "tester_joined").map((c) => c.userId!),
+				drop: chosen.filter((c) => c.change === "tester_dropped").map((c) => c.userId!),
 			});
 			if (!result.ok) {
 				setError(result.error);
@@ -108,7 +118,7 @@ export default function SyncBanner({ iteration, changes }: { iteration: { id: st
 										change={change}
 										locked={group.locked}
 										checked={selected.has(changeKey(change))}
-										onToggle={() => toggle(changeKey(change))}
+										onToggle={() => toggle(change)}
 										disabled={isPending}
 									/>
 								))}
@@ -142,6 +152,14 @@ function ChangeRow({ change, locked, checked, onToggle, disabled }: { change: it
 				)}
 				<span className="font-mono text-xs">{change.code}</span>
 				<span className="text-sm truncate flex-1">{change.title}</span>
+				{isRosterChange(change) && (
+					<span className="text-xs text-muted-foreground truncate">
+						{change.organizationName} · {change.change === "tester_dropped" ? "was " : ""}{change.testRoleName}
+					</span>
+				)}
+				{change.change === "tester_dropped" && change.hasResults && (
+					<Badge variant="outline" className="text-xs">Results kept</Badge>
+				)}
 				{change.audienceChanged && <span className="text-xs text-muted-foreground">Role changed</span>}
 				{locked && (
 					<Badge variant="outline" className={cn("text-xs", change.incomplete && "border-amber-600/40 text-amber-900")}>

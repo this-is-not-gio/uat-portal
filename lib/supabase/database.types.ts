@@ -1114,7 +1114,9 @@ export type Database = {
         Args: {
           p_add?: string[]
           p_by?: string
+          p_drop?: string[]
           p_iteration_id: string
+          p_join?: string[]
           p_refresh?: string[]
           p_remove?: string[]
         }
@@ -1271,7 +1273,9 @@ export type Database = {
           organization_name: string
           test_case_id: string
           test_case_result_id: string
+          test_role_name: string
           title: string
+          user_id: string
         }[]
       }
       get_iteration_case_verdicts: {

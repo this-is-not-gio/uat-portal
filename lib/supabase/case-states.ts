@@ -1,13 +1,18 @@
 import type { testCaseStatus } from "./test-cases";
-import type { iterationStatus } from "./test-iterations";
+import type { caseChange, iterationChange, iterationStatus } from "./test-iterations";
 
 // Admin authoring view Status/Result (get_suite_case_states, migration 0021).
 // Client-safe: types + labels only, the fetch lives in test-sections.ts.
 
-// A round row the vendor took out mid-round via Sync (0036): kept with its results, out of the
-// run's counts, view only for testers.
+// A round row the vendor took out mid-round via Sync (0036), or a dropped tester's frozen copy
+// (0061): kept with its results, out of the run's counts, view only for testers.
 export const isRemovedFromRound = (row: { syncKind: string | null }) =>
-    row.syncKind === "removed" || row.syncKind === "audience_changed";
+    row.syncKind === "removed" || row.syncKind === "audience_changed" || row.syncKind === "tester_dropped";
+
+// A Sync change to a case, or to the round's roster (tester joined / dropped, 0061).
+export const isCaseChange = (change: iterationChange): change is caseChange =>
+    change.change === "added" || change.change === "changed" || change.change === "removed";
+export const isRosterChange = (change: iterationChange) => !isCaseChange(change);
 
 // Every tester has their own copy of a case (0058), so browsing a round lists each case once:
 // the viewer's own copy when they have one, otherwise its first copy. A deleted case's copies

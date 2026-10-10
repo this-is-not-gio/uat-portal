@@ -15,7 +15,8 @@ function fail(error: { message: string }): { ok: false; error: string } {
     return { ok: false, error: error.message };
 }
 
-export async function applyIterationSync({ iterationId, add, refreshIds, remove }: { iterationId: string; add: string[]; refreshIds: string[]; remove: string[] }): Promise<actionResult> {
+// join / drop: user ids of roster changes (running rounds only, 0061).
+export async function applyIterationSync({ iterationId, add, refreshIds, remove, join = [], drop = [] }: { iterationId: string; add: string[]; refreshIds: string[]; remove: string[]; join?: string[]; drop?: string[] }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "sync")) return denied("sync");
     const supabase = await createClient();
@@ -25,6 +26,8 @@ export async function applyIterationSync({ iterationId, add, refreshIds, remove 
         p_add: add,
         p_refresh: refreshIds,
         p_remove: remove,
+        p_join: join,
+        p_drop: drop,
     });
     if (error) return fail(error);
     refresh();

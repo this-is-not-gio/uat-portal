@@ -3,7 +3,7 @@ import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, S
 import { getIterationChanges, getIterationsBySuiteId, getRolledUpResults, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./result-leaf";
 import TreeCollapsible from "@/components/testsuite-layout/shared/tree-collapsible";
-import { isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
+import { isCaseChange, isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 import TestResultsComponents, { type participationStatus } from "./test-results-components";
 import StartIterationDialog from "@/components/testsuite-layout/shared/start-iteration-dialog";
 import { getCurrentUser } from "@/lib/supabase/auth";
@@ -110,7 +110,7 @@ export default async function TestResultsTab({
 	);
 	// Testers only need to know about edits the vendor can't sync into this round:
 	// tested rows whose live case changed ("Outdated") or was deleted ("Removed").
-	const pendingChanges = changes.filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults));
+	const pendingChanges = changes.filter(isCaseChange).filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults));
 	const pendingByCaseId = new Map(pendingChanges.filter((change) => change.testCaseId).map((change) => [change.testCaseId as string, change.change]));
 	const pendingByResultId = new Map(pendingChanges.map((change) => [change.testCaseResultId as string, change.change]));
 	// Only the cases planned into the round; left-out rows stay out of the table and scorecards.
