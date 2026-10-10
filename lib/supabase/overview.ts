@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getIterationParticipants, getIterationsBySuiteId, type iterationParticipant, type testIteration } from "./test-iterations";
 import type { organization } from "./organizations";
 import type { testCaseStatus } from "./test-cases";
+import { getCaseVerdicts, verdictStatuses } from "./case-verdicts";
 import type { Database } from "./database.types";
 import type { ThemeInput } from "@/lib/report/sign-off-remarks";
 import type { ReportSection } from "@/lib/report/report-details";
@@ -69,18 +70,10 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
     ]);
     if (casesResult.error) throw casesResult.error;
 
-    const statusesByIteration = new Map<string, testCaseStatus[]>();
-    if (iterations.length > 0) {
-        const { data, error } = await supabase
-            .from("test_case_results")
-            .select("iteration_id, status")
-            .in("iteration_id", iterations.map((i) => i.id))
-            .eq("included_in_run", true);
-        if (error) throw error;
-        for (const row of data) {
-            statusesByIteration.set(row.iteration_id, [...(statusesByIteration.get(row.iteration_id) ?? []), row.status]);
-        }
-    }
+    // Counted per case: each case's verdict rolled up from its testers' copies.
+    const statusesByIteration = new Map(
+        await Promise.all(iterations.map(async (iteration) => [iteration.id, verdictStatuses(await getCaseVerdicts(iteration.id))] as const))
+    );
 
     return {
         testCaseCount: casesResult.data.length,
@@ -191,26 +184,17 @@ export type participationProgress = iterationParticipant & { counts: statusCount
 // Per-org progress for one round (Participation panel). RLS already narrows both reads for
 // External (own participant row, own results), so this returns just their own row for them.
 export async function getParticipationProgress(iterationId: string): Promise<participationProgress[]> {
-    const supabase = await createClient();
-    const [participants, { data, error }] = await Promise.all([
-        getIterationParticipants(iterationId),
-        supabase.from("test_case_results").select("organization_id, status").eq("iteration_id", iterationId).eq("included_in_run", true),
-    ]);
-    if (error) throw error;
-    const statusesByOrg = new Map<string, testCaseStatus[]>();
-    for (const row of data) {
-        if (!row.organization_id) continue; // a planned round's scope rows belong to nobody yet
-        statusesByOrg.set(row.organization_id, [...(statusesByOrg.get(row.organization_id) ?? []), row.status]);
-    }
-    return participants.map((p) => ({ ...p, counts: countStatuses(statusesByOrg.get(p.organization.id) ?? []) }));
+    const [participants, verdicts] = await Promise.all([getIterationParticipants(iterationId), getCaseVerdicts(iterationId)]);
+    // Per case, rolled up across the org's testers.
+    return participants.map((p) => ({ ...p, counts: countStatuses(verdictStatuses(verdicts, p.organization.id)) }));
 }
 
 // What the Sign Off dialog needs: whether a round is still running, and the
 // latest completed round's counts (the one sign-off is based on).
 // unsubmittedOrgs: testing orgs in that round that never submitted (warn, don't block: 6.2).
 // currentIteration: the open round, else the newest one (isFallback), with its progress
-// (tested = Passed/Failed/Blocked). A participating org counts only its own rows; anyone
-// else (vendor) counts each case once, tested only when every org has tested it.
+// (tested = Passed/Failed/Blocked). A participating org counts its own cases; anyone else (vendor)
+// counts each case once. A case's status is its verdict, rolled up from its testers' copies.
 export type currentIterationProgress = {
     iteration: testIteration;
     isFallback: boolean;
@@ -246,26 +230,11 @@ export async function getSignOffContext(suiteId: string, orgId?: string): Promis
     const current = openIteration ?? iterations[0] ?? null;
     let currentIteration: currentIterationProgress | null = null;
     if (current) {
-        const [{ data, error }, currentParticipants] = await Promise.all([
-            supabase.from("test_case_results").select("id, organization_id, test_case_id, status").eq("iteration_id", current.id).eq("included_in_run", true),
-            getIterationParticipants(current.id),
-        ]);
-        if (error) throw error;
-        const ownRows = orgId ? data.filter((row) => row.organization_id === orgId) : [];
-        let statuses: testCaseStatus[];
-        if (ownRows.length > 0) {
-            statuses = ownRows.map((row) => row.status);
-        } else {
-            // One entry per case: its least-finished status across orgs. Deleted cases keep their own row.
-            const rank = (s: testCaseStatus) => (s === "Untested" ? 0 : s === "In Progress" ? 1 : 2);
-            const byCase = new Map<string, testCaseStatus>();
-            for (const row of data) {
-                const key = row.test_case_id ?? row.id;
-                const seen = byCase.get(key);
-                if (!seen || rank(row.status) < rank(seen)) byCase.set(key, row.status);
-            }
-            statuses = [...byCase.values()];
-        }
+        const [verdicts, currentParticipants] = await Promise.all([getCaseVerdicts(current.id), getIterationParticipants(current.id)]);
+        // A participating org counts its own cases; anyone else (vendor) counts every case once.
+        // Either way a case is its verdict, rolled up from its testers' copies.
+        const ownStatuses = orgId ? verdictStatuses(verdicts, orgId) : [];
+        const statuses = ownStatuses.length > 0 ? ownStatuses : verdictStatuses(verdicts);
         const currentCounts = countStatuses(statuses);
         const tested = currentCounts.passed + currentCounts.failed + currentCounts.blocked;
         const pending = unsubmittedParticipantOrgs(currentParticipants);
@@ -284,12 +253,8 @@ export async function getSignOffContext(suiteId: string, orgId?: string): Promis
     let counts = countStatuses([]);
     let unsubmittedOrgs: organization[] = [];
     if (latestCompleted) {
-        const [{ data, error }, participants] = await Promise.all([
-            supabase.from("test_case_results").select("status").eq("iteration_id", latestCompleted.id).eq("included_in_run", true),
-            getIterationParticipants(latestCompleted.id),
-        ]);
-        if (error) throw error;
-        counts = countStatuses(data.map((row) => row.status));
+        const [verdicts, participants] = await Promise.all([getCaseVerdicts(latestCompleted.id), getIterationParticipants(latestCompleted.id)]);
+        counts = countStatuses(verdictStatuses(verdicts));
         unsubmittedOrgs = unsubmittedParticipantOrgs(participants);
     }
     return {

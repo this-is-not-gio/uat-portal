@@ -36,6 +36,7 @@ import {
 	Bug,
 	Computer,
 	History,
+	Users,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -50,7 +51,7 @@ import {
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
-import type { resultArchive } from "@/lib/supabase/test-iterations";
+import type { caseCopy, resultArchive } from "@/lib/supabase/test-iterations";
 import { humanizeTimestamp } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -125,6 +126,43 @@ const selected_test_case_status_classnames: Record<testcase_status_option, { cla
 	},
 };
 
+const copy_status_classnames: Record<string, string> = {
+	Passed: "border-green-700 bg-green-100/60 text-green-700 dark:bg-green-950/40 dark:text-green-400",
+	Failed: "border-red-700 bg-red-100/60 text-red-700 dark:bg-red-950/40 dark:text-red-400",
+	Blocked: "border-foreground bg-muted text-foreground",
+	"In Progress": "border-blue-600/40 bg-blue-50 text-blue-800",
+	Untested: "text-muted-foreground",
+};
+
+// Each tester's copy of the case, so staff can see who passed, who failed and who hasn't started.
+function TesterBreakdown({ copies }: { copies: caseCopy[] }) {
+	const sorted = [...copies].sort((a, b) => (a.testerName ?? "").localeCompare(b.testerName ?? ""));
+	return (
+		<div className="flex flex-col px-4 md:px-8 py-4 gap-2">
+			<div className="flex flex-row items-center gap-2">
+				<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
+					<Users />
+				</div>
+				<div className="flex flex-col gap-0">
+					<h3 className="text-lg font-semibold">Testers</h3>
+					<p className="text-xs text-muted-foreground">The case result is rolled up from each tester&apos;s copy: any failure fails it, it passes once every copy has.</p>
+				</div>
+			</div>
+			<ul className="border rounded-md divide-y">
+				{sorted.map((copy) => (
+					<li key={copy.id} className="flex flex-row items-center justify-between gap-2 px-3 py-2">
+						<p className="text-sm">{copy.testerName ?? "Unknown tester"}</p>
+						<div className="flex flex-row items-center gap-2">
+							{copy.completedAt && <p className="text-xs text-muted-foreground">{humanizeTimestamp(copy.completedAt)}</p>}
+							<Badge variant="outline" className={copy_status_classnames[copy.status]}>{copy.status}</Badge>
+						</div>
+					</li>
+				))}
+			</ul>
+		</div>
+	);
+}
+
 const author_role_badge_classnames: Record<string, { className: string, Icon: LucideIcon }> = {
 	Internal: { className: "bg-blue-100/60 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-400 border-blue-700 dark:border-blue-400", Icon: User },
 	External: { className: "bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-40０", Icon: UserCheck },
@@ -136,7 +174,7 @@ const author_role_badge_classnames: Record<string, { className: string, Icon: Lu
 // canRemark:  show the remark box even in review mode (submitted org or closed round). Defaults to execute.
 export type testCaseSheetMode = "definition" | "execute" | "review";
 
-type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[] };
+type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[]; copies?: caseCopy[] };
 
 export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", canRemark = mode === "execute", footerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; canRemark?: boolean; footerActions?: React.ReactNode }) {
 	const showResults = mode !== "definition";
@@ -200,6 +238,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 				</div>
 			</SheetHeader>
+			{showResults && testCase.copies && testCase.copies.length > 0 && <TesterBreakdown copies={testCase.copies} />}
 			<div className="px-4 md:px-8">
 				<div className="flex flex-row items-center gap-2 pb-3 ">
 					<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">

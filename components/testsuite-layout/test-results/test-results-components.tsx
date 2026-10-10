@@ -7,6 +7,7 @@ import { DataTable } from "@/components/table/data-table";
 import { testResultColumns } from "@/components/table/test-result-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { useState } from "react";
+import { useCurrentUser } from "@/components/current-user-provider";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import { isRemovedFromRound } from "@/lib/supabase/case-states";
@@ -120,6 +121,7 @@ export default function TestResultsComponents({
 	// Create New Iteration / Issue Sign-off, each only when allowed (server tab renders them).
 	headerActions?: React.ReactNode;
 }) {
+	const currentUser = useCurrentUser();
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -239,7 +241,8 @@ export default function TestResultsComponents({
 					renderRowDetail={(row) => (
 						<TestCaseSheet
 							testCase={row}
-							mode={isRunning && !isLocked ? "execute" : "review"}
+							// A row is a roll-up of several testers' copies: only its own tester records on it.
+							mode={isRunning && !isLocked && !!currentUser && row.testerId === currentUser.id ? "execute" : "review"}
 							canRemark={canRemark}
 							onChangeTestCase={(updated) => {
 								setTestResultRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));

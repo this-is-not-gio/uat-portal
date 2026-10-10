@@ -1274,6 +1274,21 @@ export type Database = {
           title: string
         }[]
       }
+      get_iteration_case_verdicts: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          blocked: number
+          case_key: string
+          copies: number
+          failed: number
+          in_progress: number
+          organization_id: string
+          passed: number
+          test_case_id: string
+          untested: number
+          verdict: Database["public"]["Enums"]["test_case_status"]
+        }[]
+      }
       get_iteration_coverage: {
         Args: { p_iteration_id: string }
         Returns: Json

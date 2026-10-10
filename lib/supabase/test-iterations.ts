@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { expectedResult, preCondition, profile, testCase, testCaseStatus } from "./test-cases";
 import { compareOrganizations, type organization } from "./organizations";
+import { caseKeyOf, getCaseVerdicts, verdictOfCase, type roundVerdicts } from "./case-verdicts";
 
 // not_started (planned) -> in_progress -> completed | stopped (ended early; never used for sign-off).
 export type iterationStatus = "not_started" | "in_progress" | "completed" | "stopped";
@@ -112,6 +113,18 @@ export type testResultRow = testCase & {
     archives: resultArchive[];
     // Set by the Test Results tab from getIterationChanges while the round runs.
     pendingChange?: iterationChange["change"];
+    // Only on rolled-up rows (getRolledUpResults): every tester's copy of this case, for the breakdown.
+    copies?: caseCopy[];
+};
+
+// One tester's copy of a case: who it is and where they are.
+export type caseCopy = {
+    id: string;
+    testerId: string;
+    testerName: string | null;
+    organizationId: string | null;
+    status: testCaseStatus;
+    completedAt: string | null;
 };
 
 const ITERATION_SELECT = "id, name, slug, iteration_number, status, started_at, completed_at, planned_end_date" as const;
@@ -193,16 +206,10 @@ async function getPreviousRoundStatuses(iterationId: string, orgId?: string): Pr
     if (previousError) throw previousError;
     if (!previous) return new Map();
 
-    let rowsQuery = supabase
-        .from("test_case_results")
-        .select("test_case_id, status")
-        .eq("iteration_id", previous.id)
-        .not("test_case_id", "is", null);
-    if (orgId) rowsQuery = rowsQuery.eq("organization_id", orgId);
-    const { data: rows, error: rowsError } = await rowsQuery;
-    if (rowsError) throw rowsError;
-
-    return new Map(rows.map((row) => [row.test_case_id as string, row.status]));
+    // The case's verdict in that round, rolled up from its testers' copies.
+    const verdicts = await getCaseVerdicts(previous.id);
+    const rows = orgId ? verdicts.byOrg.get(orgId) ?? [] : verdicts.overall;
+    return new Map(rows.filter((row) => row.testCaseId).map((row) => [row.testCaseId as string, row.verdict]));
 }
 
 // Newest first, so the dropdown and the default selection lead with the latest round.
@@ -235,9 +242,9 @@ export async function getActiveIteration(testSuiteId: string): Promise<testItera
 // resultIds: every test_case_results row in this section for this
 // iteration — the ids apply_iteration_sync's `remove` argument needs to pull
 // the whole section back out of the round (it rejects rows with results).
-// includedCount/totalCount count each test case once, even though every org has its own row.
-// testedCount: included cases with a Passed/Failed/Blocked result. Scoped to orgId's rows
-// when given; otherwise a case counts once every participant has tested it.
+// includedCount/totalCount count each test case once, even though every tester has their own copy.
+// testedCount: included cases whose rolled-up verdict is Passed/Failed/Blocked. Scoped to orgId's
+// copies when given.
 export type iterationSection = { slug: string; name: string; includedCount: number; totalCount: number; testedCount: number; resultIds: string[] };
 
 // Lightweight per-iteration section list — just enough to build the sidebar's
@@ -254,10 +261,13 @@ export async function getSectionsByIteration(testSuiteId: string, orgId?: string
 
     let query = supabase
         .from("test_case_results")
-        .select("id, iteration_id, test_case_id, section_slug, section_name, section_order, included_in_run, status")
+        .select("id, iteration_id, test_case_id, code, title, section_slug, section_name, section_order, included_in_run")
         .in("iteration_id", iterations.map((i) => i.id));
     if (orgId) query = query.eq("organization_id", orgId);
-    const { data, error } = await query.order("section_order", { ascending: true });
+    const [{ data, error }, verdictsByIteration] = await Promise.all([
+        query.order("section_order", { ascending: true }),
+        Promise.all(iterations.map(async (i) => [i.id, await getCaseVerdicts(i.id)] as const)).then((entries) => new Map(entries)),
+    ]);
     if (error) throw error;
 
     const map = new Map<string, iterationSection[]>();
@@ -271,13 +281,15 @@ export async function getSectionsByIteration(testSuiteId: string, orgId?: string
             sections.push(section);
             caseIds.set(section, { all: new Set(), included: new Set(), untested: new Set() });
         }
-        // Rows of a since-deleted case have no test_case_id; count those rows on their own.
-        const caseKey = row.test_case_id ?? row.id;
+        // One entry per case however many testers have a copy (a deleted case is told apart by code + title).
+        const caseKey = caseKeyOf({ testCaseId: row.test_case_id, code: row.code, title: row.title });
         const ids = caseIds.get(section)!;
         ids.all.add(caseKey);
         if (row.included_in_run) {
             ids.included.add(caseKey);
-            if (row.status !== "Passed" && row.status !== "Failed" && row.status !== "Blocked") ids.untested.add(caseKey);
+            // Tested = the case's rolled-up verdict is final (a planned round has no verdicts yet).
+            const verdict = verdictOfCase(verdictsByIteration.get(row.iteration_id) as roundVerdicts, caseKey, orgId);
+            if (verdict !== "Passed" && verdict !== "Failed" && verdict !== "Blocked") ids.untested.add(caseKey);
         }
         section.resultIds.push(row.id);
         map.set(row.iteration_id, sections);
@@ -299,7 +311,8 @@ export type iterationTestSection = { slug: string; name: string; testCases: test
 // getIterationResults directly; this is for screens that just need what's
 // included (Test Cases tab's iteration browser).
 export async function getIterationTestSections(iterationId: string, orgId?: string): Promise<iterationTestSection[]> {
-    const results = await getIterationResults(iterationId, orgId);
+    // One row per case: the verdict rolled up from its testers' copies.
+    const results = await getRolledUpResults(iterationId, orgId, { perOrg: false });
     const bySlug = new Map<string, iterationTestSection>();
     for (const row of results) {
         if (!row.sectionSlug) continue;
@@ -426,6 +439,71 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
             })),
         })),
     }));
+}
+
+// getIterationResults with each case's copies collapsed into one row per (case, organization),
+// whose status is the verdict rolled up in the database. The row is one of the copies (the viewer's
+// own if they have one, else one that matches the verdict) so it still opens like a result; `copies`
+// lists every tester's copy for the per-tester breakdown (when asked for: staff). Scope rows (a planned round) stay as they are.
+export async function getRolledUpResults(iterationId: string, orgId?: string, options: rollUpOptions = {}): Promise<testResultRow[]> {
+    const [rows, verdicts, participants] = await Promise.all([
+        getIterationResults(iterationId, orgId),
+        getCaseVerdicts(iterationId),
+        getIterationParticipants(iterationId),
+    ]);
+    const names = new Map(participants.flatMap((p) => p.testers.map((t) => [t.userId, t.fullName] as const)));
+    return rollUpCopies(rows, verdicts, names, { ...options, scopeOrgId: orgId });
+}
+
+type rollUpOptions = {
+    // Prefer this tester's own copy as the row that stands for the case.
+    viewerId?: string;
+    // Attach every tester's copy as `copies` (staff).
+    breakdown?: boolean;
+    // false: one row per case across organizations instead of one per case and organization.
+    perOrg?: boolean;
+};
+
+export function rollUpCopies(
+    rows: testResultRow[],
+    verdicts: roundVerdicts,
+    testerNames: Map<string, string | null>,
+    { viewerId, breakdown = false, perOrg = true, scopeOrgId }: rollUpOptions & { scopeOrgId?: string } = {}
+): testResultRow[] {
+    const groups = new Map<string, testResultRow[]>();
+    const out: (testResultRow | string)[] = [];
+    for (const row of rows) {
+        if (!row.testerId) {
+            out.push(row);
+            continue;
+        }
+        const key = perOrg ? `${caseKeyOf(row)}|${row.organizationId}` : caseKeyOf(row);
+        const group = groups.get(key);
+        if (group) group.push(row);
+        else {
+            groups.set(key, [row]);
+            out.push(key); // placeholder, keeps the rows' order
+        }
+    }
+    return out.map((item) => {
+        if (typeof item !== "string") return item;
+        const copies = groups.get(item)!;
+        const verdict = verdictOfCase(verdicts, caseKeyOf(copies[0]), perOrg ? copies[0].organizationId : scopeOrgId);
+        const status = verdict ?? copies[0].status;
+        const rep = copies.find((c) => c.testerId === viewerId) ?? copies.find((c) => c.status === status) ?? copies[0];
+        return {
+            ...rep,
+            status,
+            copies: !breakdown ? undefined : copies.map((c) => ({
+                id: c.id,
+                testerId: c.testerId as string,
+                testerName: testerNames.get(c.testerId as string) ?? null,
+                organizationId: c.organizationId,
+                status: c.status,
+                completedAt: c.completedAt,
+            })),
+        };
+    });
 }
 
 // Testers only get the cases their org has copies of (the RPC filters them).

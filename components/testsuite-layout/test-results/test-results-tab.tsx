@@ -1,6 +1,6 @@
 import { CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
-import { getIterationChanges, getIterationResults, getIterationsBySuiteId, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
+import { getIterationChanges, getIterationsBySuiteId, getRolledUpResults, getSectionsByIteration, type iterationSection, type testIteration, type testResultRow } from "@/lib/supabase/test-iterations";
 import ResultLeaf from "./result-leaf";
 import TreeCollapsible from "@/components/testsuite-layout/shared/tree-collapsible";
 import { isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
@@ -96,7 +96,7 @@ export default async function TestResultsTab({
 	const showSyncBanner = selectedIteration?.status === "in_progress" && can(currentUser, "sync");
 	const [rawResults, changes, orgSectionsByIteration, allChanges] = selectedIteration
 		? await Promise.all([
-			getIterationResults(selectedIteration.id, selectedOrg?.id),
+			getRolledUpResults(selectedIteration.id, selectedOrg?.id, { viewerId: currentUser?.id, breakdown: can(currentUser, "view_all_results") }),
 			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
 			selectedOrg ? getSectionsByIteration(testSuiteId, selectedOrg.id) : Promise.resolve(null),
 			showSyncBanner ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
@@ -110,16 +110,20 @@ export default async function TestResultsTab({
 	);
 	// Testers only need to know about edits the vendor can't sync into this round:
 	// tested rows whose live case changed ("Outdated") or was deleted ("Removed").
-	const pendingByResultId = new Map(
-		changes
-			.filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults))
-			.map((change) => [change.testCaseResultId as string, change.change])
-	);
+	const pendingChanges = changes.filter((change) => change.testCaseResultId && (change.change === "removed" || change.hasResults));
+	const pendingByCaseId = new Map(pendingChanges.filter((change) => change.testCaseId).map((change) => [change.testCaseId as string, change.change]));
+	const pendingByResultId = new Map(pendingChanges.map((change) => [change.testCaseResultId as string, change.change]));
 	// Only the cases planned into the round; left-out rows stay out of the table and scorecards.
 	// Rows removed mid-round stay listed (flagged, kept out of the scorecards).
 	const results = rawResults
 		.filter((row) => row.includedInRun || isRemovedFromRound(row))
-		.map((row) => ({ ...row, pendingChange: pendingByResultId.get(row.id) }));
+		// A case's change is reported against one of its copies; every row of the case shows it.
+		.map((row) => ({
+			...row,
+			pendingChange: (row.testCaseId ? pendingByCaseId.get(row.testCaseId) : undefined)
+				?? pendingByResultId.get(row.id)
+				?? row.copies?.map((copy) => pendingByResultId.get(copy.id)).find(Boolean),
+		}));
 	const iterationHasResults = results.some((row) =>
 		row.status !== "Untested" || (row.stepsToExecute ?? []).some((step) => step.status !== "Untested" || (step.remarks?.length ?? 0) > 0)
 	);

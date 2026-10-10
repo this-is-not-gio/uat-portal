@@ -4,7 +4,7 @@ import { countStatuses, type statusCounts } from "./overview";
 import { compareOrganizations, type organization } from "./organizations";
 import {
     getIterationParticipants,
-    getIterationResults,
+    getRolledUpResults,
     getIterationsBySuiteId,
     type iterationParticipant,
     type testIteration,
@@ -432,7 +432,7 @@ async function backfillCaseAudit(history: RoundHistory): Promise<CaseAuditEntry[
     const rounds = await Promise.all(
         history.rounds.map(async (round) => ({
             name: round.name,
-            rows: (await getIterationResults(round.iterationId)).filter((row) => row.includedInRun && !isRemovedFromRound(row)),
+            rows: (await getRolledUpResults(round.iterationId)).filter((row) => row.includedInRun && !isRemovedFromRound(row)),
         }))
     );
     return buildCaseAudit(rounds);
@@ -578,7 +578,8 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
 function loadRounds(iterations: testIteration[]): Promise<ReportRound[]> {
     return Promise.all(
         iterations.map(async (iteration) => {
-            const [rows, participants] = await Promise.all([getIterationResults(iteration.id), getIterationParticipants(iteration.id)]);
+            // One row per case and organization: its testers' copies rolled up (0059).
+            const [rows, participants] = await Promise.all([getRolledUpResults(iteration.id), getIterationParticipants(iteration.id)]);
             return { iteration, rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)), participants };
         })
     );
