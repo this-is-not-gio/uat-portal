@@ -13,7 +13,7 @@ import { can } from "@/lib/auth/permissions";
 import type { suiteStatus } from "@/lib/supabase/Init";
 import ResultOrgPicker from "./result-org-picker";
 import TesterTestCasesComponents from "./tester-test-cases-components";
-import { isRemovedFromRound, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
+import { isRemovedFromRound, oneRowPerCase, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 
 // Internal/External "Test Cases": the viewer's own round rows (test_case_results), never the
 // live template. Everything here — rounds, sections, counts — comes from the lens org's rows.
@@ -88,9 +88,11 @@ export default async function TesterTestCasesTab({
 
 	const isOwnOrgSubmitted = isOwnLens && !!ownParticipation?.submittedAt;
 	const suiteIsOpen = suiteStatus === "in_testing";
+	// Per row, the sheet also needs the viewer's own copy (0060); the components check that.
 	const canExecute = isRunning && suiteIsOpen && isOwnLens && !isOwnOrgSubmitted && can(currentUser, "execute");
-	// Remarks outlive the lock (0020): submitted or closed rounds still take remarks on own-org rows.
-	const canRemark = selectedIteration.status !== "not_started" && isOwnLens && can(currentUser, "execute");
+	// Remarks outlive the lock (0020) and aren't limited by role or org: anyone who can see a
+	// case can remark on it (0060).
+	const canRemark = selectedIteration.status !== "not_started" && can(currentUser, "execute");
 	// Only while the round runs (it carries Withdraw); once it ends, the notice shows the submission date.
 	const showSubmission = isRunning && isOwnLens && !!ownParticipation && can(currentUser, "submit");
 	// Until an Admin/Internal user completes or stops the round (0019).
@@ -110,6 +112,9 @@ export default async function TesterTestCasesTab({
 		return `${testCasesHref(testSuiteSlug, section)}?${params.toString()}`;
 	};
 	const isTested = (status: string) => status !== "Untested" && status !== "In Progress";
+	// Sidebar progress: the viewer's own copies when they have any, otherwise each case once.
+	const ownCopies = isOwnLens ? results.filter((row) => row.testerId === currentUser.id) : [];
+	const progressRows = ownCopies.length > 0 ? ownCopies : oneRowPerCase(results, currentUser.id);
 
 	return (
 		<>
@@ -124,7 +129,7 @@ export default async function TesterTestCasesTab({
 									const isSelected = iteration.id === selectedIteration.id;
 									const sections: { slug: string; name: string; tested?: number; total?: number }[] = isSelected
 										? selectedSections.map(([slug, name]) => {
-											const rows = results.filter((row) => row.sectionSlug === slug && !isRemovedFromRound(row));
+											const rows = progressRows.filter((row) => row.sectionSlug === slug && !isRemovedFromRound(row));
 											return { slug, name, tested: rows.filter((row) => isTested(row.status)).length, total: rows.length };
 										})
 										: (sectionsByIteration.get(iteration.id) ?? []).filter((section) => section.includedCount > 0).map((section) => ({ slug: section.slug, name: section.name }));

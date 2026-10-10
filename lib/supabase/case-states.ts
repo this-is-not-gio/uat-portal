@@ -9,6 +9,18 @@ import type { iterationStatus } from "./test-iterations";
 export const isRemovedFromRound = (row: { syncKind: string | null }) =>
     row.syncKind === "removed" || row.syncKind === "audience_changed";
 
+// Every tester has their own copy of a case (0058), so browsing a round lists each case once:
+// the viewer's own copy when they have one, otherwise its first copy. A deleted case's copies
+// have no test_case_id, so they group on code + title.
+export function oneRowPerCase<T extends { testCaseId: string | null; testerId: string | null; code?: string | null; title: string }>(rows: T[], userId: string | undefined): T[] {
+    const byCase = new Map<string, T>();
+    for (const row of rows) {
+        const key = row.testCaseId ?? `${row.code ?? ""}|${row.title}`;
+        if (!byCase.has(key) || (userId && row.testerId === userId)) byCase.set(key, row);
+    }
+    return [...byCase.values()];
+}
+
 export type caseStatus = "in_testing" | "for_testing" | "not_ready" | "tested" | "ready";
 
 // Ordered highest priority first by the RPC, so flags[0] is the one to show.

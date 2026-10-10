@@ -18,7 +18,7 @@ import { ChangeFlagsCell, RemarkCountCell, ResultSummaryCell } from "@/component
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import type { testRole } from "@/lib/supabase/organizations";
-import { isRemovedFromRound } from "@/lib/supabase/case-states";
+import { isRemovedFromRound, oneRowPerCase } from "@/lib/supabase/case-states";
 import { cn } from "@/lib/utils";
 import { SubmitDialog, WithdrawButton, type untestedCase } from "@/components/testsuite-layout/shared/submission-bar";
 import { Progress } from "@/components/ui/progress";
@@ -26,6 +26,7 @@ import { useCurrentUser } from "@/components/current-user-provider";
 
 type statusFilter = "all" | "untested" | "failed" | "changed";
 const ALL_ROLES = "__all__";
+const MY_CASES = "__mine__";
 
 // Removed rows (0036) are out of the run: never "untested", never counted.
 const isUntested = (row: testResultRow) => !isRemovedFromRound(row) && (row.status === "Untested" || row.status === "In Progress");
@@ -148,12 +149,14 @@ export default function TesterTestCasesComponents({
 	const router = useRouter();
 	const [rows, setRows] = useState<testResultRow[]>(results);
 	const [statusFilter, setStatusFilter] = useState<statusFilter>("all");
-	// On their own org's rows, testers start on their test role's cases (matched by catalog
-	// role ID); "All roles" shows the rest. `role` is a catalog role ID or ALL_ROLES.
-	const testRole = useCurrentUser()?.testRole;
-	const [role, setRole] = useState<string>(
-		() => (isOwnLens && testRole && results.some((row) => row.testRoleId === testRole.id) ? testRole.id : ALL_ROLES)
-	);
+	// Testers start on their own copies (#9). Browsing (all roles, or one role) lists each case
+	// once and is view only; results are recorded only on your own copy (0060).
+	// `view` is MY_CASES, ALL_ROLES or a catalog role ID.
+	const currentUser = useCurrentUser();
+	const testRole = currentUser?.testRole;
+	const isOwnCopy = (row: testResultRow) => !!currentUser && row.testerId === currentUser.id;
+	const hasOwnCopies = isOwnLens && rows.some(isOwnCopy);
+	const [view, setView] = useState<string>(() => (hasOwnCopies ? MY_CASES : ALL_ROLES));
 	const [search, setSearch] = useState("");
 
 	const roles = useMemo(
@@ -163,16 +166,21 @@ export default function TesterTestCasesComponents({
 		[rows]
 	);
 	const roleLabel = (r: testRole) => (r.id === testRole?.id ? `${r.name} (my role)` : r.name);
-	const inRun = rows.filter((row) => !isRemovedFromRound(row));
+	const viewLabel = view === MY_CASES ? `My cases${testRole ? ` (${testRole.name})` : ""}`
+		: view === ALL_ROLES ? "All roles"
+			: roleLabel(roles.find((r) => r.id === view) ?? { id: view, name: "" });
+	const viewRows = view === MY_CASES
+		? rows.filter(isOwnCopy)
+		: oneRowPerCase(rows, currentUser?.id).filter((row) => view === ALL_ROLES || row.testRoleId === view);
+	const inRun = viewRows.filter((row) => !isRemovedFromRound(row));
 	const tested = inRun.filter((row) => !isUntested(row)).length;
 	const passed = inRun.filter((row) => row.status === "Passed").length;
 	const failed = inRun.filter((row) => row.status === "Failed").length;
 
 	const query = search.trim().toLowerCase();
 	const activeFilter = STATUS_FILTERS.find((f) => f.value === statusFilter) ?? STATUS_FILTERS[0];
-	const visibleRows = rows
+	const visibleRows = viewRows
 		.filter(activeFilter.match)
-		.filter((row) => role === ALL_ROLES || row.testRoleId === role)
 		.filter((row) => !query || row.title.toLowerCase().includes(query) || (row.code ?? "").toLowerCase().includes(query));
 
 	// Why the sheet opens read-only, if it does. Once the round is over it also wraps up when
@@ -189,7 +197,9 @@ export default function TesterTestCasesComponents({
 					"Results are view only.",
 				].join(" ")
 					: submittedNote ? `${submittedNote} Results are view only${canWithdraw ? "; withdraw the submission to make changes until the round is completed" : ""}.`
-						: null;
+						: canExecute && !hasOwnCopies ? "You have no test cases of your own in this round, so these are view only."
+							: canExecute && view !== MY_CASES ? "Other testers' cases are view only. Switch to My cases to record results."
+								: null;
 	// Submitted while the round runs gets the green "done" look.
 	const isSubmittedNotice = isOwnLens && !hasEnded && !!submittedNote;
 
@@ -262,16 +272,17 @@ export default function TesterTestCasesComponents({
 								>
 									<Icon size={15} className="mr-1" />
 									<p className="text-xs">{filter.label}</p>
-									<span className={cn("font-mono text-xs", statusFilter === filter.value ? "" : "text-muted-foreground")}>{rows.filter(filter.match).length}</span>
+									<span className={cn("font-mono text-xs", statusFilter === filter.value ? "" : "text-muted-foreground")}>{viewRows.filter(filter.match).length}</span>
 								</Button>
 							)
 						})}
 					</div>
-					<Select value={role} onValueChange={(value) => setRole(value ?? ALL_ROLES)}>
+					<Select value={view} onValueChange={(value) => setView(value ?? ALL_ROLES)}>
 						<SelectTrigger size="sm" className="w-full text-xs md:w-48 md:text-sm">
-							<SelectValue>{role === ALL_ROLES ? "All roles" : roleLabel(roles.find((r) => r.id === role) ?? { id: role, name: "" })}</SelectValue>
+							<SelectValue>{viewLabel}</SelectValue>
 						</SelectTrigger>
 						<SelectContent alignItemWithTrigger={false}>
+							{hasOwnCopies && <SelectItem value={MY_CASES} className="text-xs md:text-sm">My cases</SelectItem>}
 							<SelectItem value={ALL_ROLES} className="text-xs md:text-sm">All roles</SelectItem>
 							{roles.map((r) => <SelectItem key={r.id} value={r.id} className="text-xs md:text-sm">{roleLabel(r)}</SelectItem>)}
 						</SelectContent>
@@ -293,7 +304,7 @@ export default function TesterTestCasesComponents({
 						renderRowDetail={(row) => (
 							<TestCaseSheet
 								testCase={row}
-								mode={canExecute && !isRemovedFromRound(row) ? "execute" : "review"}
+								mode={canExecute && isOwnCopy(row) && !isRemovedFromRound(row) ? "execute" : "review"}
 								canRemark={canRemark}
 								onChangeTestCase={(updated) => {
 									setRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));

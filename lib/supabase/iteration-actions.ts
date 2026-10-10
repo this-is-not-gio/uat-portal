@@ -22,6 +22,9 @@ function fail(error: { message: string }): { ok: false; error: string } {
     return { ok: false, error: error.message };
 }
 
+// Results are recorded only on your own copy of a case (0060).
+const NOT_OWN_COPY = "You can only record results on your own copy of a test case.";
+
 export type caseResultState = {
     status: testCaseStatus;
     statusOverridden: boolean;
@@ -392,12 +395,16 @@ export async function updateIterationDetails({ iterationId, name, plannedEndDate
 export async function setStepResultStatus({ caseResultId, stepResultId, status }: { caseResultId: string; stepResultId: string; status: testStepStatus }): Promise<actionResult<caseResultState>> {
     const user = await requireUser();
     const supabase = await createClient();
-    const { error } = await supabase
+    // RLS (0060) only lets a tester write their own copy; a blocked update matches no rows
+    // instead of erroring, so check that it landed.
+    const { data: updated, error } = await supabase
         .from("test_step_results")
         .update({ status })
         .eq("id", stepResultId)
-        .eq("test_case_result_id", caseResultId);
+        .eq("test_case_result_id", caseResultId)
+        .select("id");
     if (error) return fail(error);
+    if (updated.length === 0) return { ok: false, error: NOT_OWN_COPY };
 
     // Last write wins: whoever touched a step is the case's executor.
     const { error: executorError } = await supabase
@@ -413,7 +420,7 @@ export async function setStepResultStatus({ caseResultId, stepResultId, status }
 export async function setCaseResultStatus({ caseResultId, status }: { caseResultId: string; status: testCaseStatus }): Promise<actionResult<caseResultState>> {
     const user = await requireUser();
     const supabase = await createClient();
-    const { error } = await supabase
+    const { data: updated, error } = await supabase
         .from("test_case_results")
         .update({
             status,
@@ -421,8 +428,10 @@ export async function setCaseResultStatus({ caseResultId, status }: { caseResult
             executed_by: user.id,
             completed_at: new Date().toISOString(),
         })
-        .eq("id", caseResultId);
+        .eq("id", caseResultId)
+        .select("id");
     if (error) return fail(error);
+    if (updated.length === 0) return { ok: false, error: NOT_OWN_COPY };
     return readCaseResultState(caseResultId);
 }
 
@@ -439,6 +448,7 @@ export async function setCaseResultInclusion({ caseResultIds, included }: { case
 export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: string }): Promise<actionResult<caseResultState>> {
     const supabase = await createClient();
     const { error } = await supabase.rpc("recompute_case_result_status", { p_case_result_id: caseResultId });
+    if (error?.code === "42501") return { ok: false, error: NOT_OWN_COPY };
     if (error) return fail(error);
     return readCaseResultState(caseResultId);
 }
