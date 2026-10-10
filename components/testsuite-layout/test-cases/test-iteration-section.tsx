@@ -3,7 +3,6 @@ import { ClipboardList, FolderClock, Lock } from "lucide-react";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getIterationTestSections, getIterationParticipants } from "@/lib/supabase/test-iterations";
-import { getTesterCountsByOrg } from "@/lib/supabase/organizations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 import { IterationTestCaseList } from "./iteration-test-case-list";
 import IterationSectionHeaderMenu from "./iteration-section-header-menu";
@@ -24,12 +23,12 @@ export async function TestIterationSection({
 	iteration: testIteration | null;
 	sectionSlug?: string;
 }): Promise<import("react").JSX.Element> {
-	const [sections, participants, testerCounts] = iteration
-		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id), getTesterCountsByOrg()])
-		: [[], [], {}];
+	const [sections, participants] = iteration
+		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id)])
+		: [[], []];
 	const section = sections.find((s) => s.slug === sectionSlug);
 	const testCases = section?.testCases ?? [];
-	// Rows are one per case per org, so count distinct cases (as the list and sidebar do).
+	// Rows are one per case per tester, so count distinct cases (as the list and sidebar do).
 	const allCaseIds = new Set(testCases.map((tc) => tc.testCaseId ?? tc.id));
 	const includedCaseIds = new Set(testCases.filter((tc) => tc.includedInRun).map((tc) => tc.testCaseId ?? tc.id));
 	const caseFlags = iteration ? await getRoundCaseFlags(iteration, testCases, testSuiteId) : {};
@@ -99,7 +98,7 @@ export async function TestIterationSection({
 						</div>
 					</div>
 				) : (
-					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} testerCounts={testerCounts} caseFlags={caseFlags} />
+					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} caseFlags={caseFlags} />
 				)}
 			</div>
 		</ScrollArea>

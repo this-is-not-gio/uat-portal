@@ -199,6 +199,7 @@ export async function getParticipationProgress(iterationId: string): Promise<par
     if (error) throw error;
     const statusesByOrg = new Map<string, testCaseStatus[]>();
     for (const row of data) {
+        if (!row.organization_id) continue; // a planned round's scope rows belong to nobody yet
         statusesByOrg.set(row.organization_id, [...(statusesByOrg.get(row.organization_id) ?? []), row.status]);
     }
     return participants.map((p) => ({ ...p, counts: countStatuses(statusesByOrg.get(p.organization.id) ?? []) }));

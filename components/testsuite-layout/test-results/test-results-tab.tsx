@@ -97,7 +97,7 @@ export default async function TestResultsTab({
 	const [rawResults, changes, orgSectionsByIteration, allChanges] = selectedIteration
 		? await Promise.all([
 			getIterationResults(selectedIteration.id, selectedOrg?.id),
-			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id, selectedOrg?.id) : Promise.resolve([]),
+			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
 			selectedOrg ? getSectionsByIteration(testSuiteId, selectedOrg.id) : Promise.resolve(null),
 			showSyncBanner ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
 		])

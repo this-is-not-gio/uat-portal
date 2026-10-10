@@ -63,20 +63,24 @@ begin
 
   -- Round sync by ID
   v_round := pg_temp.t_round(v_suite);
-  perform pg_temp.t_succeeds_as('staff add the org to a round with its Approver instance', v_admin,
-    format('select public.add_iteration_participant(%L, %L, array[%L]::uuid[])', v_round, v_ext, v_ext_approver));
-  perform pg_temp.t_eq('the round snapshots exactly the complete cases of that catalog role',
-    (select count(*)::int from public.test_case_results where iteration_id = v_round and organization_id = v_ext), 2);
+  perform pg_temp.t_succeeds_as('staff add the suite''s cases to a round', v_admin,
+    format('select public.apply_iteration_sync(%L, null, array[%L, %L, %L]::uuid[])', v_round, v_approve, v_encode, v_draft));
+  perform pg_temp.t_eq('the round snapshots exactly the complete cases',
+    (select count(*)::int from public.test_case_results where iteration_id = v_round), 2);
   perform pg_temp.t_eq('the snapshots carry the catalog role ID',
     (select count(*)::int from public.test_case_results where iteration_id = v_round and test_role_id = v_approver), 2);
 
   -- Everything in this transaction shares one now(), so date the late case after the round.
   v_new := pg_temp.t_case(v_section, 'Late approver case', '[t] Approver (renamed)');
   update public.test_cases set created_at = now() + interval '1 minute' where id = v_new;
-  perform pg_temp.t_eq('a new case of that role shows up as a sync change for the org',
-    pg_temp.t_count_as(v_admin, format('select 1 from public.get_iteration_changes(%L) c where c.test_case_id = %L and c.change = ''added'' and c.organization_id = %L', v_round, v_new, v_ext)), 1);
+  perform pg_temp.t_eq('a new case shows up as a sync change',
+    pg_temp.t_count_as(v_admin, format('select 1 from public.get_iteration_changes(%L) c where c.test_case_id = %L and c.change = ''added''', v_round, v_new)), 1);
+
+  perform pg_temp.t_succeeds_as('the round starts with the Approver tester', v_admin, format('select public.begin_iteration(%L)', v_round));
+  perform pg_temp.t_eq('the tester gets copies matched by catalog role ID',
+    (select count(*)::int from public.test_case_results where iteration_id = v_round and tester_id = v_tester and test_role_id = v_approver), 2);
 
   update public.test_cases set test_role_id = v_encoder where id = v_approve;
-  perform pg_temp.t_eq('moving a case to a role the org does not test shows it as removed',
+  perform pg_temp.t_eq('moving a case to a role its testers were not rostered for shows it as removed',
     pg_temp.t_count_as(v_admin, format('select 1 from public.get_iteration_changes(%L) c where c.test_case_id = %L and c.change = ''removed''', v_round, v_approve)), 1);
 end $$;

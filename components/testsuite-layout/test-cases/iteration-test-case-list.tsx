@@ -5,7 +5,7 @@ import { Check, ChevronDown, CircleCheck, ClipboardIcon, ClipboardList, ListChec
 import { cn } from "@/lib/utils";
 import { type filterToken } from "./search-filter-combox";
 import type { testCase } from "@/lib/supabase/test-cases";
-import type { iterationParticipant, testIteration, testResultRow } from "@/lib/supabase/test-iterations";
+import type { iterationParticipant, roundCoverage, testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import { DataTable } from "@/components/table/data-table";
 import { createIterationTestCaseColumns, type iterationCaseRow } from "@/components/table/iteration-test-cases-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
@@ -13,9 +13,8 @@ import IterationParticipantsTable from "./iteration-participants-table";
 import { setCaseResultInclusion } from "@/lib/supabase/iteration-actions";
 import { useIterationSelection } from "@/components/testsuite-layout/shared/iteration-selection-context";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import SectionDialog, { type notIncludedSection } from "./section-dialog";
-import AddParticipantDialog from "./add-participant-dialog";
+import CoveragePanel from "./coverage-panel";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -44,7 +43,8 @@ function matchesFilter(testCase: testCase, filter: filterToken): boolean {
 	return filter.operator === "is" ? matches : !matches;
 }
 
-// Collapse the round's one-row-per-case-per-org results into one row per case.
+// Collapse the round's rows (one scope row per case while planned, one copy per tester once
+// started; rows left out at Start keep no tester) into one row per case.
 function groupByCase(rows: testResultRow[], orgNames: Map<string, string>, caseFlags: Record<string, roundCaseFlag[]>): iterationCaseRow[] {
 	const byCase = new Map<string, iterationCaseRow>();
 	for (const row of rows) {
@@ -53,7 +53,7 @@ function groupByCase(rows: testResultRow[], orgNames: Map<string, string>, caseF
 		group.orgResults.push({
 			resultId: row.id,
 			organizationId: row.organizationId,
-			organizationName: orgNames.get(row.organizationId) ?? "Unknown org",
+			organizationName: row.organizationId ? orgNames.get(row.organizationId) ?? "Unknown org" : "No tester",
 			status: row.status,
 			includedInRun: row.includedInRun,
 		});
@@ -70,7 +70,7 @@ export function IterationTestCaseList({
 	sectionSlug,
 	roundActions,
 	participants = [],
-	testerCounts = {},
+	coverage,
 	caseFlags = EMPTY_FLAGS,
 }: {
 	testCases: testResultRow[];
@@ -81,20 +81,19 @@ export function IterationTestCaseList({
 	// Checkboxes still show which cases run, but can't change (a started round's case set is locked).
 	locked?: boolean;
 	sectionSlug?: string;
-	// Set only while the round is planned/running: shows Add Section / Add Participant.
+	// Set only while the round is planned/running: shows Add Section.
 	roundActions?: { suiteId: string; testSuiteSlug: string; sectionsNotIncluded: notIncludedSection[] };
-	// Orgs taking part in this round (Participants tab).
+	// Orgs taking part in this round (its roster by org; empty until it starts).
 	participants?: iterationParticipant[];
-	testerCounts?: Record<string, number>;
+	// A planned round's coverage: replaces the participants list with the tester picker.
+	coverage?: roundCoverage;
 	// Per-case flags for this round (getRoundCaseFlags), keyed by testCaseId ?? result id.
 	caseFlags?: Record<string, roundCaseFlag[]>;
 }) {
 	const [addSectionOpen, setAddSectionOpen] = useState(false);
-	const [addParticipantOpen, setAddParticipantOpen] = useState(false);
-	// Read once at mount: Base UI warns if an uncontrolled Collapsible's defaultOpen changes later
-	// (e.g. after adding a participant refreshes the list).
+	// Read once at mount: Base UI warns if an uncontrolled Collapsible's defaultOpen changes later.
 	const [participantsDefaultOpen] = useState(participants.length > 0);
-	// A started round's case set is locked (apply_iteration_sync, 0023); new orgs can still join it.
+	// A started round's case set is locked (apply_iteration_sync, 0023).
 	const canAddSection = !!roundActions && iteration?.status === "not_started";
 
 	// Filter UI is parked (see commented combobox below); matching still applies.
@@ -109,7 +108,7 @@ export function IterationTestCaseList({
 	const { setCount } = useIterationSelection();
 	useEffect(() => {
 		if (iteration && sectionSlug) {
-			// One row per org, so count cases (like getSectionsByIteration) to match the sidebar.
+			// One row per tester copy, so count cases (like getSectionsByIteration) to match the sidebar.
 			const selectedCases = new Set(testCases.filter((tc) => selectedIds.has(tc.id)).map((tc) => tc.testCaseId ?? tc.id));
 			setCount(`${iteration.id}:${sectionSlug}`, selectedCases.size);
 		}
@@ -183,9 +182,9 @@ export function IterationTestCaseList({
 				</Badge>
 			</div> */}
 			{/* <DataTable columns={columns} data={visibleTestCases} /> */}
-			{/* A single section only needs its case table; participants are a round-wide concern. */}
-			{/* Start open when empty so the "Add Participant" action is visible. */}
-			{!sectionSlug && <Collapsible defaultOpen={participantsDefaultOpen}>
+			{/* A single section only needs its case table; testers are a round-wide concern. */}
+			{!sectionSlug && coverage && iteration && <CoveragePanel iterationId={iteration.id} coverage={coverage} />}
+			{!sectionSlug && !coverage && <Collapsible defaultOpen={participantsDefaultOpen}>
 				<div className="border rounded-md overflow-hidden">
 					<div className="p-4 bg-gray-200/10 flex flex-row items-center justify-between gap-2">
 						<div className="flex flex-row items-center gap-4 w-full">
@@ -201,12 +200,6 @@ export function IterationTestCaseList({
 								</div>
 							</div>
 						</div>
-						{roundActions && (
-							<Button onClick={() => setAddParticipantOpen(true)}>
-								<Plus className="h-3.5 w-3.5" />
-								<p className="text-xs">Add Participant</p>
-							</Button>
-						)}
 						<CollapsibleTrigger
 							render={<Button variant="ghost" size="icon-sm" className="group" aria-label="Toggle participants" />}
 						>
@@ -218,10 +211,10 @@ export function IterationTestCaseList({
 							<IterationEmptyState
 								icon={<UsersRound size={45} className="text-muted-foreground" />}
 								title="No participants yet"
-								description="Add the organizations that will record results in this round."
+								description="Nobody took part in this round."
 							/>
 						) : (
-							<IterationParticipantsTable participants={participants} testCases={testCases} testerCounts={testerCounts} iterationId={roundActions ? iteration?.id : undefined} iterationNumber={iteration?.iterationNumber} bordered={false} />
+							<IterationParticipantsTable participants={participants} testCases={testCases} iterationNumber={iteration?.iterationNumber} bordered={false} />
 						)}
 					</CollapsibleContent>
 				</div>
@@ -279,7 +272,7 @@ export function IterationTestCaseList({
 							<ClipboardIcon className="size-5" />
 							<div className="flex flex-row items-center gap-2">
 								<p className="text-xs font-medium">Test Cases</p>
-								{/* caseRows is one row per case; testCases has a copy per org. */}
+								{/* caseRows is one row per case; testCases has a copy per tester. */}
 								{
 									caseRows.length === 0 ?
 									<Badge variant="secondary" className="text-xs">No test cases</Badge>
@@ -297,30 +290,16 @@ export function IterationTestCaseList({
 				)}
 				<div className={sectionSlug ? undefined : "border-t"}>
 					{!sectionSlug && caseRows.length === 0 ? (
-						// Rows are copied per participant, so a section can only be added once an org takes part.
 						<IterationEmptyState
 							icon={<ClipboardList size={45} className="text-muted-foreground" />}
 							title="No sections yet"
-							description={participants.length === 0
-								? "Add a participant first, then add the sections this round will test."
-								: `Add the sections ${iteration?.name ?? "this iteration"} will test.`}
-							action={canAddSection && (participants.length === 0 ? (
-								// A disabled button gets no pointer events, so the span carries the tooltip.
-								<Tooltip>
-									<TooltipTrigger render={<span className="inline-flex" />}>
-										<Button disabled>
-											<Plus className="h-3.5 w-3.5" />
-											<p className="text-xs">Add Section</p>
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Add a participant organization first</TooltipContent>
-								</Tooltip>
-							) : (
+							description={`Add the sections ${iteration?.name ?? "this iteration"} will test.`}
+							action={canAddSection && (
 								<Button onClick={() => setAddSectionOpen(true)}>
 									<Plus className="h-3.5 w-3.5" />
 									<p className="text-xs">Add Section</p>
 								</Button>
-							))}
+							)}
 						/>
 					) : (
 						<DataTable
@@ -332,18 +311,15 @@ export function IterationTestCaseList({
 					)}
 				</div>
 			</div>
-			{roundActions && iteration && (
-				<>
-					{canAddSection && <SectionDialog
-						suiteId={roundActions.suiteId}
-						testSuiteSlug={roundActions.testSuiteSlug}
-						open={addSectionOpen}
-						onOpenChange={setAddSectionOpen}
-						sectionsNotIncluded={roundActions.sectionsNotIncluded}
-						iterationId={iteration.id}
-					/>}
-					<AddParticipantDialog iteration={iteration} open={addParticipantOpen} onOpenChange={setAddParticipantOpen} />
-				</>
+			{roundActions && iteration && canAddSection && (
+				<SectionDialog
+					suiteId={roundActions.suiteId}
+					testSuiteSlug={roundActions.testSuiteSlug}
+					open={addSectionOpen}
+					onOpenChange={setAddSectionOpen}
+					sectionsNotIncluded={roundActions.sectionsNotIncluded}
+					iterationId={iteration.id}
+				/>
 			)}
 		</div>
 	);

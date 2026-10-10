@@ -23,16 +23,39 @@ export type testIteration = {
 // removed / audience_changed: taken out mid-round by Sync, see isRemovedFromRound (0036).
 export type syncKind = "added" | "updated" | "force_reset" | "removed" | "audience_changed";
 
-// An org taking part in a round. Each participant gets its own result rows: the cases whose
-// Role Assignee is one of the test roles it picked for the round (`roles`, 0054). Every query
-// below takes an optional `orgId`: omit it to get all participants' rows (one per case per
-// org), pass it for a single org's view.
-// withdrawnAt: last withdrawal, cleared when the org submits again (0031).
+// One rostered tester (0058): fixed at Start with their catalog role and org. Each gets their
+// own copy of every in-scope case of their role. dropped: reserved for roster sync (#12).
+export type iterationTester = {
+    userId: string;
+    fullName: string | null;
+    testRole: { id: string; name: string };
+    status: "active" | "dropped";
+};
+
+// An org taking part in a round: its rostered testers grouped by org. Submission is still per
+// org (stamped on every active tester). Every query below takes an optional `orgId`: omit it to
+// get all rows, pass it for a single org's view.
+// roles: catalog roles its testers hold. withdrawnAt: last withdrawal, cleared on resubmit (0031).
 export type iterationParticipant = {
     organization: organization;
     roles: { id: string; name: string }[];
+    testers: iterationTester[];
     submittedAt: string | null;
     withdrawnAt: string | null;
+};
+
+// What a round's scope needs (get_iteration_coverage / get_round_coverage, 0058): the roles its
+// cases need with the orgs and users holding each (ticked unless staff unticked them), and what
+// blocks Start.
+export type coverageUser = { userId: string; fullName: string | null; ticked: boolean };
+export type coverageOrg = { organizationId: string; name: string; type: organization["type"]; users: coverageUser[] };
+export type coverageRole = { testRoleId: string; name: string; caseCount: number; availableCount: number; tickedCount: number; orgs: coverageOrg[] };
+export type roundCoverage = {
+    roles: coverageRole[];
+    casesWithoutRole: { testCaseId: string; code: string | null; title: string }[];
+    rolesWithoutUsers: { testRoleId: string; name: string }[];
+    rolesWithoutTesters: { testRoleId: string; name: string }[];
+    canStart: boolean;
 };
 
 // Results wiped by a vendor force refresh, kept as a frozen copy.
@@ -49,9 +72,9 @@ export type resultArchive = {
 
 // A difference between the running iteration and the live suite.
 // added: live case not in the round; changed: edited since it was copied;
-// removed: copied case no longer exists live, or the org no longer tests its role.
-// One row per case per org. hasResults rows are never
-// refreshed/removed by sync (only a vendor force refresh resets them).
+// removed: copied case no longer exists live, or its role is no longer the one its testers
+// were rostered for. One row per case (sync applies to every tester's copy, 0058).
+// hasResults (any copy has results) needs a vendor force refresh.
 // incomplete (changed rows only): the live case has test_case_issues, so
 // neither sync nor force refresh will copy it until it's fixed.
 export type iterationChange = {
@@ -62,10 +85,8 @@ export type iterationChange = {
     title: string;
     hasResults: boolean;
     incomplete: boolean;
-    // removed rows only: the case still exists but this org no longer tests its role (0054).
+    // removed rows only: the case still exists but now belongs to another role.
     audienceChanged: boolean;
-    organizationId: string;
-    organizationName: string;
 };
 
 // A test case as it was frozen into one iteration. `id` is the
@@ -73,8 +94,9 @@ export type iterationChange = {
 // the live test case and is null once that case has been deleted.
 export type testResultRow = testCase & {
     testCaseId: string | null;
-    // The participating org this row's results belong to.
-    organizationId: string;
+    // The tester whose copy this is and their org; both null on a planned round's scope rows.
+    testerId: string | null;
+    organizationId: string | null;
     sectionName: string | null;
     sectionSlug: string | null;
     executor?: profile;
@@ -97,6 +119,7 @@ const ITERATION_SELECT = "id, name, slug, iteration_number, status, started_at, 
 const RESULT_SELECT = `
   id,
   test_case_id,
+  tester_id,
   organization_id,
   code,
   title,
@@ -362,6 +385,7 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
     return data.map((row) => ({
         id: row.id,
         testCaseId: row.test_case_id,
+        testerId: row.tester_id,
         organizationId: row.organization_id,
         code: row.code,
         title: row.title,
@@ -404,11 +428,12 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
     }));
 }
 
-export async function getIterationChanges(iterationId: string, orgId?: string): Promise<iterationChange[]> {
+// Testers only get the cases their org has copies of (the RPC filters them).
+export async function getIterationChanges(iterationId: string): Promise<iterationChange[]> {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("get_iteration_changes", { p_iteration_id: iterationId });
     if (error) throw error;
-    return data.filter((row) => !orgId || row.organization_id === orgId).map((row) => ({
+    return data.map((row) => ({
         change: row.change as iterationChange["change"],
         testCaseId: row.test_case_id,
         testCaseResultId: row.test_case_result_id,
@@ -417,27 +442,50 @@ export async function getIterationChanges(iterationId: string, orgId?: string): 
         hasResults: row.has_results,
         incomplete: row.incomplete,
         audienceChanged: row.audience_changed,
-        organizationId: row.organization_id,
-        organizationName: row.organization_name,
     }));
 }
 
-// Who takes part in this round, in compareOrganizations order.
+// Who takes part in this round (its roster grouped by org), in compareOrganizations order.
+// Empty until the round starts. An org counts as submitted once all its active testers have.
 export async function getIterationParticipants(iterationId: string): Promise<iterationParticipant[]> {
     const supabase = await createClient();
     const { data, error } = await supabase
-        .from("iteration_participants")
-        .select("submitted_at, withdrawn_at, organization:organizations ( id, name, type ), iteration_participant_roles ( role:organization_roles ( id, test_role:test_roles ( name ) ) )")
+        .from("iteration_testers")
+        .select("user_id, status, submitted_at, withdrawn_at, organization:organizations ( id, name, type ), test_role:test_roles ( id, name ), profile:profiles ( full_name )")
         .eq("iteration_id", iterationId);
     if (error) throw error;
-    return data
-        .map((row) => ({
-            organization: row.organization,
-            roles: row.iteration_participant_roles.map((r) => ({ id: r.role.id, name: r.role.test_role.name })).sort((a, b) => a.name.localeCompare(b.name)),
-            submittedAt: row.submitted_at,
-            withdrawnAt: row.withdrawn_at,
-        }))
+
+    const byOrg = new Map<string, { organization: organization; rows: typeof data }>();
+    for (const row of data) {
+        const entry = byOrg.get(row.organization.id) ?? { organization: row.organization, rows: [] };
+        entry.rows.push(row);
+        byOrg.set(row.organization.id, entry);
+    }
+    const latest = (values: (string | null)[]) => values.filter((v): v is string => !!v).sort().at(-1) ?? null;
+    return [...byOrg.values()]
+        .map(({ organization, rows }) => {
+            const active = rows.filter((r) => r.status === "active");
+            const roles = new Map(rows.map((r) => [r.test_role.id, r.test_role]));
+            return {
+                organization,
+                roles: [...roles.values()].sort((a, b) => a.name.localeCompare(b.name)),
+                testers: rows
+                    .map((r) => ({ userId: r.user_id, fullName: r.profile.full_name, testRole: r.test_role, status: r.status as iterationTester["status"] }))
+                    .sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? "")),
+                submittedAt: active.length > 0 && active.every((r) => r.submitted_at) ? latest(active.map((r) => r.submitted_at)) : null,
+                withdrawnAt: latest(rows.map((r) => r.withdrawn_at)),
+            };
+        })
         .sort((a, b) => compareOrganizations(a.organization, b.organization));
+}
+
+// Coverage of a planned round's scope (staff only).
+export async function getIterationCoverage(iterationId: string): Promise<roundCoverage> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_iteration_coverage", { p_iteration_id: iterationId });
+    if (error) throw error;
+    // Built by round_coverage in this shape.
+    return data as unknown as roundCoverage;
 }
 
 // One row per running round, for the admin dashboard's Active rounds card.
@@ -456,11 +504,21 @@ export type activeRound = {
     totalOrgs: number;
 };
 
+// An org is submitted once every active tester of it has submitted.
+function orgSubmissionCounts(testers: { organization_id: string; status: string; submitted_at: string | null }[]): { submittedOrgs: number; totalOrgs: number } {
+    const done = new Map<string, boolean>();
+    for (const t of testers) {
+        if (t.status !== "active") continue;
+        done.set(t.organization_id, (done.get(t.organization_id) ?? true) && !!t.submitted_at);
+    }
+    return { submittedOrgs: [...done.values()].filter(Boolean).length, totalOrgs: done.size };
+}
+
 export async function getActiveRounds(): Promise<activeRound[]> {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("test_iterations")
-        .select(`${ITERATION_SELECT}, testing_suites ( name, slug, code ), iteration_participants ( submitted_at )`)
+        .select(`${ITERATION_SELECT}, testing_suites ( name, slug, code ), iteration_testers ( organization_id, status, submitted_at )`)
         .eq("status", "in_progress")
         .order("planned_end_date", { ascending: true, nullsFirst: false });
     if (error) throw error;
@@ -486,8 +544,7 @@ export async function getActiveRounds(): Promise<activeRound[]> {
             testedCount,
             includedCount,
             failedCount,
-            submittedOrgs: row.iteration_participants.filter((p) => p.submitted_at).length,
-            totalOrgs: row.iteration_participants.length,
+            ...orgSubmissionCounts(row.iteration_testers),
         };
     }));
 }
@@ -549,7 +606,7 @@ export async function getRecentResults(limit = 10): Promise<recentResult[]> {
         .select(`
             id, code, title, status, completed_at,
             executor:profiles!test_case_results_executed_by_fkey ( full_name ),
-            participant:iteration_participants!test_case_results_participant_fkey ( organization:organizations ( name ) ),
+            organization:organizations ( name ),
             iteration:test_iterations!inner ( name, suite:testing_suites!inner ( name, slug ) )
         `)
         .not("completed_at", "is", null)
@@ -563,7 +620,7 @@ export async function getRecentResults(limit = 10): Promise<recentResult[]> {
         status: row.status,
         completedAt: row.completed_at as string,
         executorName: row.executor?.full_name ?? null,
-        organizationName: row.participant?.organization?.name ?? null,
+        organizationName: row.organization?.name ?? null,
         iterationName: row.iteration.name,
         suiteName: row.iteration.suite.name,
         suiteSlug: row.iteration.suite.slug,

@@ -59,11 +59,12 @@ export default function IterationActions({
 	);
 }
 
-// not_started -> in_progress. begin_iteration rejects a round with no participants or no
-// included cases (0027), so the dialog just shows the scope and surfaces that message.
+// not_started -> in_progress. begin_iteration rejects a round with no included cases (0027), a
+// case with no role or a role with no ticked tester (0058); the dialog surfaces that message.
+// Starting fixes the roster and gives every ticked tester a copy of each case of their role.
 // Sections with nothing ticked are dropped from the round as it starts (0032).
 // `disabledReason` greys the button out and explains why in a tooltip.
-export function StartIterationButton({ iteration, participantCount, testCaseCount, disabledReason }: { iteration: testIteration; participantCount?: number; testCaseCount?: number; disabledReason?: string }) {
+export function StartIterationButton({ iteration, testerCount, testCaseCount, disabledReason }: { iteration: testIteration; testerCount?: number; testCaseCount?: number; disabledReason?: string }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -109,14 +110,14 @@ export function StartIterationButton({ iteration, participantCount, testCaseCoun
 				<DialogHeader className="px-2 pt-2">
 					<DialogTitle>Start {iteration.name}?</DialogTitle>
 					<DialogDescription className="text-xs">
-						Participants can start recording results. The test cases in this round are locked once it starts, and sections with no included test cases are removed.
+						Each ticked tester gets their own copy of the test cases for their role and can start recording results. The testers and test cases are locked once it starts, and sections with no included test cases are removed.
 					</DialogDescription>
 				</DialogHeader>
-				{participantCount !== undefined && testCaseCount !== undefined && (
+				{testerCount !== undefined && testCaseCount !== undefined && (
 					<div className="grid grid-cols-2 gap-2 px-2">
 						<div className="rounded-md border px-3 py-2">
-							<p className="font-mono text-lg font-medium">{participantCount}</p>
-							<p className="text-xs text-muted-foreground">{participantCount === 1 ? "Participant" : "Participants"}</p>
+							<p className="font-mono text-lg font-medium">{testerCount}</p>
+							<p className="text-xs text-muted-foreground">{testerCount === 1 ? "Tester" : "Testers"}</p>
 						</div>
 						<div className="rounded-md border px-3 py-2">
 							<p className="font-mono text-lg font-medium">{testCaseCount}</p>
@@ -286,7 +287,7 @@ function CancelIterationButton({ iteration, testSuiteSlug }: { iteration: testIt
 	);
 }
 
-// in_progress/stopped -> not_started. Keeps participants and cases, erases what was recorded.
+// in_progress/stopped -> not_started. Keeps the cases and tester ticks, erases what was recorded.
 // On a running round this is the Cancel action; on a stopped one it reopens it for a rerun.
 export function ResetIterationButton({ iteration, hasRecordedResults, label = "Reset Iteration" }: { iteration: testIteration; hasRecordedResults: boolean; label?: string }) {
 	const [open, setOpen] = useState(false);
@@ -317,7 +318,7 @@ export function ResetIterationButton({ iteration, hasRecordedResults, label = "R
 				<DialogHeader className="px-2 pt-2">
 					<DialogTitle>{label.replace(" Iteration", "")} {iteration.name}?</DialogTitle>
 					<DialogDescription className="text-xs">
-						The round goes back to Not Started with the same participants and test cases, so it can be started again.
+						The round goes back to Not Started with the same test cases and testers ticked, so it can be started again.
 					</DialogDescription>
 				</DialogHeader>
 				{hasRecordedResults && (

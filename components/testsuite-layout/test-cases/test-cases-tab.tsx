@@ -63,7 +63,7 @@ export default async function TestCasesTab({
 	const iterationSlug = sectionPath?.[0];
 	const matchedIteration = iterations.find(i => i.slug === iterationSlug);
 	const isIterationView = !!matchedIteration;
-	// The round page's Add Section/Add Participant buttons: only on a planned or running round
+	// The round page's Add Section button: only on a planned or running round
 	// (Add Section is planned-only; IterationTestCaseList hides it once the round starts).
 	const matchedIterationOpen = editable && (matchedIteration?.status === "not_started" || matchedIteration?.status === "in_progress");
 	const matchedSectionsNotIncluded = matchedIteration && matchedIterationOpen

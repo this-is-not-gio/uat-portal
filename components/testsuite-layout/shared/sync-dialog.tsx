@@ -142,7 +142,7 @@ function ChangeRow({ change, locked, checked, onToggle, disabled }: { change: it
 				)}
 				<span className="font-mono text-xs">{change.code}</span>
 				<span className="text-sm truncate flex-1">{change.title}</span>
-				{change.audienceChanged && <span className="text-xs text-muted-foreground">{change.organizationName}</span>}
+				{change.audienceChanged && <span className="text-xs text-muted-foreground">Role changed</span>}
 				{locked && (
 					<Badge variant="outline" className={cn("text-xs", change.incomplete && "border-amber-600/40 text-amber-900")}>
 						{change.incomplete ? "Incomplete · can't sync" : change.change === "changed" ? "Retest next round" : "Kept in round"}

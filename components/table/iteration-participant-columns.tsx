@@ -1,22 +1,17 @@
 "use client"
 
-import { useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, UserCog, Users } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { removeParticipant } from "@/lib/supabase/iteration-actions"
-import ConfirmDialog from "../confirm-dialog"
-import EditParticipantRolesDialog from "@/components/testsuite-layout/test-cases/edit-participant-roles-dialog"
+import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, TestTubeDiagonal, Users } from "lucide-react"
 
 // One participating org in a round, shaped by IterationParticipantsTable.
 export type iterationParticipantRow = {
 	id: string
 	name: string
 	typeLabel: string
-	// Test roles the org tests the suite as in this round (0054).
+	// Catalog roles its rostered testers hold (0058).
 	roles: { id: string; name: string }[]
+	// Its active testers on the round's roster.
 	testerCount: number
 	tested: number
 	total: number
@@ -25,8 +20,6 @@ export type iterationParticipantRow = {
 	failed: number
 	blocked: number
 	submittedAt: string | null
-	// Set only while the round is planned/running — shows the Withdraw action.
-	iterationId?: string
 }
 
 const columnHelper = createColumnHelper<DataTableFeatures, iterationParticipantRow>()
@@ -118,7 +111,7 @@ export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.display({
 		id: "Submitted",
 		cell: (info) => {
-			const { submittedAt, tested, id, name, roles, iterationId } = info.row.original
+			const { submittedAt, tested } = info.row.original
 			const state = PARTICIPATION_STATES[submittedAt ? "submitted" : tested > 0 ? "testing" : "notTesting"]
 			const Icon = state.icon
 
@@ -131,10 +124,6 @@ export const iterationParticipantColumns = columnHelper.columns([
 							<p className="text-xs font-semibold">{state.label}</p>
 						</div>
 					</div>
-					{
-						// Rows navigate on click; React bubbles through portals, so keep menu/dialog clicks here.
-						iterationId ? <div onClick={(event) => event.stopPropagation()}><ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} roleIds={roles.map((r) => r.id)} /></div> : null
-					}
 				</div>
 			)
 		},
@@ -149,47 +138,3 @@ export const iterationParticipantColumns = columnHelper.columns([
 	// 	},
 	// }),
 ])
-
-// The dialog sits outside the menu so it stays open after the menu closes.
-function ParticipantActions({ iterationId, organizationId, organizationName, roleIds }: { iterationId: string; organizationId: string; organizationName: string; roleIds: string[] }) {
-	const [withdrawOpen, setWithdrawOpen] = useState(false)
-	const [rolesOpen, setRolesOpen] = useState(false)
-
-	return (
-		<div>
-			<DropdownMenu>
-				<DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label={`Actions for ${organizationName}`}>
-					<MoreVertical className="h-4 w-4" />
-				</Button>} />
-				<DropdownMenuContent align="end" className="w-56">
-					<DropdownMenuGroup>
-						<DropdownMenuItem onClick={() => setRolesOpen(true)}>
-							<UserCog size={14} />
-							Edit roles
-						</DropdownMenuItem>
-						<DropdownMenuItem variant="destructive" onClick={() => setWithdrawOpen(true)}>
-							<Trash2 size={14} />
-							Withdraw organization
-						</DropdownMenuItem>
-					</DropdownMenuGroup>
-				</DropdownMenuContent>
-			</DropdownMenu>
-			<EditParticipantRolesDialog
-				iterationId={iterationId}
-				organizationId={organizationId}
-				organizationName={organizationName}
-				currentRoleIds={roleIds}
-				open={rolesOpen}
-				onOpenChange={setRolesOpen}
-			/>
-			<ConfirmDialog
-				open={withdrawOpen}
-				onOpenChange={setWithdrawOpen}
-				title={`Withdraw ${organizationName}?`}
-				description="Removes this organization and its test cases from the round. Only works while it hasn't recorded any results yet."
-				confirmLabel="Withdraw organization"
-				onConfirm={() => removeParticipant({ iterationId, organizationId })}
-			/>
-		</div>
-	)
-}

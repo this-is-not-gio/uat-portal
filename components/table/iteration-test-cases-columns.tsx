@@ -16,10 +16,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu"
 import { Button } from "../ui/button"
 
-// One participating org's copy of a case in the round.
-export type iterationOrgResult = { resultId: string; organizationId: string; organizationName: string; status: testCaseStatus; includedInRun: boolean }
-// A round has one result row per case per org; the table shows one row per case
-// (the first org's row as the base) with every org's result alongside.
+// One copy of a case in the round: a tester's copy, or (planned round) its scope row with no org.
+export type iterationOrgResult = { resultId: string; organizationId: string | null; organizationName: string; status: testCaseStatus; includedInRun: boolean }
+// A round has one result row per case per tester; the table shows one row per case
+// (the first copy as the base) with every copy's result alongside.
 export type iterationCaseRow = testResultRow & { orgResults: iterationOrgResult[]; roundFlags: roundCaseFlag[] }
 
 const columnHelper = createColumnHelper<DataTableFeatures, iterationCaseRow>()

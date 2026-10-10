@@ -4,16 +4,15 @@ import { Badge, ChartColumn, ClipboardIcon, FolderClock, IterationCw, MoreHorizo
 import { Button } from "@/components/ui/button";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getIterationTestSections, getIterationTestCaseIds, getIterationParticipants } from "@/lib/supabase/test-iterations";
+import { getIterationTestSections, getIterationTestCaseIds, getIterationParticipants, getIterationCoverage } from "@/lib/supabase/test-iterations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 import { getIterationScopeOptions } from "@/lib/supabase/iteration-actions";
-import { getTesterCountsByOrg } from "@/lib/supabase/organizations";
 import { format } from "date-fns";
 import { IterationTestCaseList } from "./iteration-test-case-list";
 import type { notIncludedSection } from "./section-dialog";
 import AddTestCasesControl, { type addableSection } from "./add-test-cases-control";
 import IterationHeaderMenu from "./iteration-header-menu";
-import AddParticipantButton from "./add-participant-button";
+import { coverageBlockers } from "./coverage-blockers";
 import { CompleteIterationButton, ResetIterationButton, StartIterationButton, StopIterationButton } from "@/components/testsuite-layout/shared/iteration-actions";
 import { unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
@@ -22,16 +21,20 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 	testSuiteSlug: string;
 	suiteName: string;
 	iteration: testIteration | null;
-	// Set only while the round is planned/running — enables its Add Section/Add Participant buttons.
+	// Set only while the round is planned/running — enables its Add Section button.
 	sectionsNotIncluded?: notIncludedSection[];
 }): Promise<import("react").JSX.Element> {
-	const [sections, participants, testerCounts] = iteration
-		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id), getTesterCountsByOrg()])
-		: [[], [], {}];
+	const [sections, participants] = iteration
+		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id)])
+		: [[], []];
+	// A planned round picks its testers from coverage; Start is gated on it like begin_iteration.
+	const coverage = iteration?.status === "not_started" ? await getIterationCoverage(iteration.id) : undefined;
+	// A user holds one test role, so per-role ticked counts never overlap.
+	const tickedTesterCount = coverage?.roles.reduce((sum, r) => sum + r.tickedCount, 0) ?? 0;
 	// Every result row (excluded ones included) so the table can show what's left out.
 	const allRows = sections.flatMap((section) => section.testCases);
 	const allTestCases = allRows.filter((tc) => tc.includedInRun);
-	// Rows are one per case per org, so count distinct cases. No sections means none.
+	// Rows are one per case per tester, so count distinct cases. No sections means none.
 	const plannedCaseCount = new Set(allTestCases.map((tc) => tc.testCaseId ?? tc.id)).size;
 
 	// Note: a running round can no longer take more test cases (0023 locks its case set), so
@@ -84,14 +87,13 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 							<div className="flex flex-row items-center gap-1">
 								<StartIterationButton
 									iteration={iteration}
-									participantCount={participants.length}
+									testerCount={tickedTesterCount}
 									testCaseCount={plannedCaseCount}
-									// Nothing to run yet: Start stays disabled until the round has participants and test cases.
+									// Start stays disabled until there's something to run and every role and case is covered.
 									disabledReason={
-										participants.length === 0 && plannedCaseCount === 0 ? "Add participants and test cases first."
-											: participants.length === 0 ? "Add at least one participant first."
-												: plannedCaseCount === 0 ? "Add at least one test case first."
-													: undefined
+										plannedCaseCount === 0 ? "Add at least one test case first."
+											: coverage && !coverage.canStart ? coverageBlockers(coverage).join(" ")
+												: undefined
 									}
 								/>
 							</div>
@@ -128,7 +130,8 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 					iteration={iteration}
 					roundActions={sectionsNotIncluded ? { suiteId: testSuiteId, testSuiteSlug, sectionsNotIncluded } : undefined}
 					participants={participants}
-					testerCounts={testerCounts}				/>
+					coverage={coverage}
+				/>
 			</div>
 		</ScrollArea>
 	);

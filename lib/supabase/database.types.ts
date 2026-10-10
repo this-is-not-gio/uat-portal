@@ -46,71 +46,94 @@ export type Database = {
           },
         ]
       }
-      iteration_participant_roles: {
+      iteration_excluded_testers: {
         Row: {
           iteration_id: string
-          organization_id: string
-          role_id: string
+          user_id: string
         }
         Insert: {
           iteration_id: string
-          organization_id: string
-          role_id: string
+          user_id: string
         }
         Update: {
           iteration_id?: string
-          organization_id?: string
-          role_id?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "iteration_participant_roles_iteration_id_organization_id_fkey"
-            columns: ["iteration_id", "organization_id"]
-            isOneToOne: false
-            referencedRelation: "iteration_participants"
-            referencedColumns: ["iteration_id", "organization_id"]
-          },
-          {
-            foreignKeyName: "iteration_participant_roles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "organization_roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      iteration_participants: {
-        Row: {
-          iteration_id: string
-          organization_id: string
-          submitted_at: string | null
-          withdrawn_at: string | null
-        }
-        Insert: {
-          iteration_id: string
-          organization_id: string
-          submitted_at?: string | null
-          withdrawn_at?: string | null
-        }
-        Update: {
-          iteration_id?: string
-          organization_id?: string
-          submitted_at?: string | null
-          withdrawn_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "iteration_participants_iteration_id_fkey"
+            foreignKeyName: "iteration_excluded_testers_iteration_id_fkey"
             columns: ["iteration_id"]
             isOneToOne: false
             referencedRelation: "test_iterations"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "iteration_participants_organization_id_fkey"
+            foreignKeyName: "iteration_excluded_testers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      iteration_testers: {
+        Row: {
+          created_at: string
+          iteration_id: string
+          organization_id: string
+          status: string
+          submitted_at: string | null
+          test_role_id: string
+          user_id: string
+          withdrawn_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          iteration_id: string
+          organization_id: string
+          status?: string
+          submitted_at?: string | null
+          test_role_id: string
+          user_id: string
+          withdrawn_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          iteration_id?: string
+          organization_id?: string
+          status?: string
+          submitted_at?: string | null
+          test_role_id?: string
+          user_id?: string
+          withdrawn_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iteration_testers_iteration_id_fkey"
+            columns: ["iteration_id"]
+            isOneToOne: false
+            referencedRelation: "test_iterations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iteration_testers_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iteration_testers_test_role_id_fkey"
+            columns: ["test_role_id"]
+            isOneToOne: false
+            referencedRelation: "test_roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "iteration_testers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -563,7 +586,7 @@ export type Database = {
           included_in_run: boolean
           iteration_id: string
           order_index: number
-          organization_id: string
+          organization_id: string | null
           preconditions: Json
           priority: Database["public"]["Enums"]["priority_level"] | null
           section_name: string | null
@@ -577,6 +600,7 @@ export type Database = {
           synced_by: string | null
           test_case_id: string | null
           test_role_id: string | null
+          tester_id: string | null
           title: string
         }
         Insert: {
@@ -587,7 +611,7 @@ export type Database = {
           included_in_run?: boolean
           iteration_id: string
           order_index?: number
-          organization_id: string
+          organization_id?: string | null
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
           section_name?: string | null
@@ -601,6 +625,7 @@ export type Database = {
           synced_by?: string | null
           test_case_id?: string | null
           test_role_id?: string | null
+          tester_id?: string | null
           title: string
         }
         Update: {
@@ -611,7 +636,7 @@ export type Database = {
           included_in_run?: boolean
           iteration_id?: string
           order_index?: number
-          organization_id?: string
+          organization_id?: string | null
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
           section_name?: string | null
@@ -625,6 +650,7 @@ export type Database = {
           synced_by?: string | null
           test_case_id?: string | null
           test_role_id?: string | null
+          tester_id?: string | null
           title?: string
         }
         Relationships: [
@@ -643,11 +669,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "test_case_results_participant_fkey"
-            columns: ["iteration_id", "organization_id"]
+            foreignKeyName: "test_case_results_organization_id_fkey"
+            columns: ["organization_id"]
             isOneToOne: false
-            referencedRelation: "iteration_participants"
-            referencedColumns: ["iteration_id", "organization_id"]
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "test_case_results_synced_by_fkey"
@@ -669,6 +695,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "test_roles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_case_results_tester_fkey"
+            columns: ["iteration_id", "tester_id"]
+            isOneToOne: false
+            referencedRelation: "iteration_testers"
+            referencedColumns: ["iteration_id", "user_id"]
           },
         ]
       }
@@ -1073,10 +1106,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      add_iteration_participant: {
-        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
-        Returns: number
-      }
       apply_derived_case_status: {
         Args: { p_case_result_id: string }
         Returns: undefined
@@ -1098,10 +1127,6 @@ export type Database = {
       }
       assert_suite_readiness: {
         Args: { p_suite_id: string }
-        Returns: undefined
-      }
-      assign_participant_roles: {
-        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
         Returns: undefined
       }
       begin_iteration: {
@@ -1140,6 +1165,10 @@ export type Database = {
       case_result_has_results: {
         Args: { p_case_result_id: string }
         Returns: boolean
+      }
+      case_result_siblings: {
+        Args: { p_case_result_id: string }
+        Returns: string[]
       }
       complete_iteration: {
         Args: { p_iteration_id: string }
@@ -1225,6 +1254,10 @@ export type Database = {
         Args: { p_by?: string; p_case_result_id: string; p_reason?: string }
         Returns: undefined
       }
+      force_refresh_case_result_one: {
+        Args: { p_by: string; p_case_result_id: string; p_reason: string }
+        Returns: undefined
+      }
       generate_test_case_code: { Args: { p_epic_id: string }; Returns: string }
       get_iteration_changes: {
         Args: { p_iteration_id: string }
@@ -1241,6 +1274,10 @@ export type Database = {
           title: string
         }[]
       }
+      get_iteration_coverage: {
+        Args: { p_iteration_id: string }
+        Returns: Json
+      }
       get_round_case_history: {
         Args: { p_iteration_id: string }
         Returns: {
@@ -1249,6 +1286,14 @@ export type Database = {
           last_round_name: string
           test_case_id: string
         }[]
+      }
+      get_round_coverage: {
+        Args: {
+          p_excluded_user_ids?: string[]
+          p_suite_id: string
+          p_test_case_ids: string[]
+        }
+        Returns: Json
       }
       get_sidebar_suites: {
         Args: never
@@ -1318,21 +1363,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      iteration_scope_case_ids: {
-        Args: { p_iteration_id: string }
-        Returns: string[]
-      }
+      iteration_scope_cases: { Args: { p_iteration_id: string }; Returns: Json }
       norm_role_name: { Args: { p_name: string }; Returns: string }
       org_has_case_role: {
         Args: { p_org_id: string; p_test_role_id: string }
-        Returns: boolean
-      }
-      participant_tests_case: {
-        Args: {
-          p_iteration_id: string
-          p_org_id: string
-          p_test_role_id: string
-        }
         Returns: boolean
       }
       recompute_case_result_status: {
@@ -1378,10 +1412,6 @@ export type Database = {
         Args: { p_case_result_id: string }
         Returns: undefined
       }
-      remove_iteration_participant: {
-        Args: { p_iteration_id: string; p_org_id: string }
-        Returns: undefined
-      }
       reorder_sections: {
         Args: { p_section_ids: string[]; p_suite_id: string }
         Returns: undefined
@@ -1412,6 +1442,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      round_coverage: {
+        Args: { p_cases: Json; p_excluded_user_ids: string[] }
+        Returns: Json
       }
       save_sign_off_draft: {
         Args: { p_note?: string; p_report?: Json; p_sign_off_id: string }
@@ -1498,9 +1532,13 @@ export type Database = {
         Args: { p_case_result_ids: string[]; p_included: boolean }
         Returns: undefined
       }
-      set_participant_roles: {
-        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
-        Returns: number
+      set_iteration_testers_excluded: {
+        Args: {
+          p_excluded: boolean
+          p_iteration_id: string
+          p_user_ids: string[]
+        }
+        Returns: undefined
       }
       set_suite_status: {
         Args: {
@@ -1588,18 +1626,7 @@ export type Database = {
       }
       submit_participation: {
         Args: { p_iteration_id: string }
-        Returns: {
-          iteration_id: string
-          organization_id: string
-          submitted_at: string | null
-          withdrawn_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "iteration_participants"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: string
       }
       suite_readiness_issues: {
         Args: { p_suite_id: string }
@@ -1620,11 +1647,7 @@ export type Database = {
         }[]
       }
       sync_iteration: {
-        Args: {
-          p_iteration_id: string
-          p_org_ids?: string[]
-          p_test_case_ids?: string[]
-        }
+        Args: { p_iteration_id: string; p_test_case_ids?: string[] }
         Returns: string[]
       }
       test_case_content_hash: {
@@ -1711,18 +1734,7 @@ export type Database = {
       }
       withdraw_participation: {
         Args: { p_iteration_id: string }
-        Returns: {
-          iteration_id: string
-          organization_id: string
-          submitted_at: string | null
-          withdrawn_at: string | null
-        }
-        SetofOptions: {
-          from: "*"
-          to: "iteration_participants"
-          isOneToOne: true
-          isSetofReturn: false
-        }
+        Returns: undefined
       }
     }
     Enums: {
