@@ -50,25 +50,27 @@ export default function StepResultButton({
 				{
 					options.map((option) => {
 						const isSelected = currentStatus === option.value;
-							return (
-							<Tooltip key={option.value}>
-								<TooltipTrigger
-									render={
-										<Button
-											type="button"
-											size="icon"
-											variant="outline"
-											className={cn(isSelected && statusClassName?.[option.value])}
-											onClick={() => onSubmit(option.value)}
-											disabled={isPending}
-										>
-											<option.Icon className="h-4 w-4" />
-										</Button>
-									}
-								/>
-								<TooltipContent>{option.label}</TooltipContent>
-							</Tooltip>
-							)
+						return (
+							// <Tooltip key={option.value}>
+							// 	<TooltipTrigger
+							// 		render={
+
+							// 		}
+							// 	/>
+							// 	<TooltipContent>{option.label}</TooltipContent>
+							// </Tooltip>
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								className={cn(isSelected && statusClassName?.[option.value])}
+								onClick={() => onSubmit(option.value)}
+								disabled={isPending}
+							>
+								<div className="text-xs font-medium">{option.label}</div>
+								<option.Icon className="h-4 w-4" />
+							</Button>
+						)
 					})
 				}
 			</div>
