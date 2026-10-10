@@ -14,6 +14,21 @@ import { coverageBlockers } from "./coverage-blockers";
 // A planned round's testers: every role its scope needs, the orgs holding it and their users,
 // ticked unless staff untick them. The roster is fixed from the ticks when the round starts.
 export default function CoveragePanel({ iterationId, coverage }: { iterationId: string; coverage: roundCoverage }) {
+	return (
+		<CoverageView
+			coverage={coverage}
+			onToggle={(userIds, ticked) => setTestersExcluded({ iterationId, userIds, excluded: !ticked })}
+		/>
+	);
+}
+
+// The coverage list itself, shared with the round wizard (which keeps ticks until it creates the
+// round). onToggle saves a change; the view shows it at once and falls back when it fails.
+export function CoverageView({ coverage, onToggle, blockerExtra }: {
+	coverage: roundCoverage;
+	onToggle: (userIds: string[], ticked: boolean) => Promise<{ ok: true } | { ok: false; error: string }>;
+	blockerExtra?: React.ReactNode;
+}) {
 	// userId -> ticked, applied over the server's answer until refresh() brings the new coverage.
 	const [ticks, setTick] = useOptimistic(new Map<string, boolean>(), (current, change: { userIds: string[]; ticked: boolean }) => {
 		const next = new Map(current);
@@ -31,7 +46,7 @@ export default function CoveragePanel({ iterationId, coverage }: { iterationId: 
 		setError(null);
 		startTransition(async () => {
 			setTick({ userIds, ticked });
-			const result = await setTestersExcluded({ iterationId, userIds, excluded: !ticked });
+			const result = await onToggle(userIds, ticked);
 			if (!result.ok) setError(result.error);
 		});
 	}
@@ -67,6 +82,7 @@ export default function CoveragePanel({ iterationId, coverage }: { iterationId: 
 										No role: {coverage.casesWithoutRole.map((c) => [c.code, c.title].filter(Boolean).join(" ")).join(", ")}
 									</p>
 								)}
+								{blockerExtra}
 							</div>
 						)}
 						{error && <p role="alert" className="text-xs text-destructive">{error}</p>}

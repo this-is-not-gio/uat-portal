@@ -6,6 +6,7 @@ import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database, Json } from "./database.types";
+import type { roundCoverage } from "./test-iterations";
 import { buildSignOffReport, type SignOffReport } from "./sign-off-report";
 import { validateThemes, type ThemeInput } from "@/lib/report/sign-off-remarks";
 import { draftThemes, type ThemeDraft } from "@/lib/report/remark-themes";
@@ -222,6 +223,55 @@ export async function startIteration({ suiteId, name, plannedEndDate }: { suiteI
         p_planned_end_date: plannedEndDate || undefined,
     });
     if (error) return fail(error);
+    refresh();
+    return { ok: true, data: { iterationNumber: data.iteration_number, slug: data.slug } };
+}
+
+// Coverage of a candidate scope for the round wizard (get_round_coverage, 0058). Nothing is
+// saved: the wizard keeps the scope and the unticked users until createRound.
+export async function previewRoundCoverage({ suiteId, testCaseIds, excludedUserIds }: { suiteId: string; testCaseIds: string[]; excludedUserIds: string[] }): Promise<actionResult<roundCoverage>> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
+    // createRound needs it too; better to say so before the user fills in four steps.
+    if (!can(user, "sync")) return denied("sync");
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("get_round_coverage", { p_suite_id: suiteId, p_test_case_ids: testCaseIds, p_excluded_user_ids: excludedUserIds });
+    if (error) return fail(error);
+    // Built by round_coverage in this shape.
+    return { ok: true, data: data as unknown as roundCoverage };
+}
+
+// The wizard's final step: plans the round, adds the chosen cases and records the unticked
+// users. The round isn't started (begin_iteration still gates on coverage), so it stays editable
+// on its page. If a later step fails the half-built round is cancelled rather than left behind.
+export async function createRound({ suiteId, name, plannedEndDate, testCaseIds, excludedUserIds }: { suiteId: string; name?: string; plannedEndDate?: string; testCaseIds: string[]; excludedUserIds: string[] }): Promise<actionResult<{ iterationNumber: number; slug: string }>> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
+    if (!can(user, "sync")) return denied("sync");
+    if (testCaseIds.length === 0) return { ok: false, error: "Pick at least one test case for the round." };
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("start_iteration", {
+        p_suite_id: suiteId,
+        p_created_by: user.id,
+        p_name: name || undefined,
+        p_planned_end_date: plannedEndDate || undefined,
+    });
+    if (error) return fail(error);
+
+    const abandon = async (failure: { message: string }) => {
+        const { error: cancelError } = await supabase.rpc("cancel_iteration", { p_iteration_id: data.id });
+        if (cancelError) {
+            console.error("Cleanup of the half-built round failed:", cancelError.message);
+            return fail({ message: `${failure.message} The new round couldn't be removed; cancel it from its page.` });
+        }
+        return fail(failure);
+    };
+    const { error: addError } = await supabase.rpc("apply_iteration_sync", { p_iteration_id: data.id, p_by: user.id, p_add: testCaseIds, p_refresh: [], p_remove: [] });
+    if (addError) return abandon(addError);
+    if (excludedUserIds.length > 0) {
+        const { error: tickError } = await supabase.rpc("set_iteration_testers_excluded", { p_iteration_id: data.id, p_user_ids: excludedUserIds, p_excluded: true });
+        if (tickError) return abandon(tickError);
+    }
     refresh();
     return { ok: true, data: { iterationNumber: data.iteration_number, slug: data.slug } };
 }
