@@ -1,7 +1,9 @@
 "use client";
 
 import { EmptyState } from "@/components/ui/empty-state";
-import { IdCard, Key, Plus, ShieldUser, Trash } from "lucide-react";
+import { useState } from "react";
+import { ClipboardIcon, Eye, EyeOff, IdCard, Key, Plus, ShieldUser, Trash } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RoleOptionGroups } from "@/components/testsuite-layout/shared/test-role-options";
@@ -12,6 +14,7 @@ import type { suiteTestAccount } from "@/lib/supabase/test-accounts";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type DataTableFeatures } from "@/components/table/data-table-features";
 import { DataTable } from "@/components/table/data-table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export type accountRow = { key: string; role: string | null; username: string; password: string };
 export const emptyRow = (): accountRow => ({ key: crypto.randomUUID(), role: null, username: "", password: "" });
@@ -20,18 +23,65 @@ const columnHelper = createColumnHelper<DataTableFeatures, suiteTestAccount>();
 
 const columns = columnHelper.columns([
 	columnHelper.accessor("role", {
-		header: "Role",
-		cell: (info) => <p className="text-sm">{info.getValue() || "Any role"}</p>,
+		header: "Test Role",
+		cell: (info) => <p className="text-xs font-medium">{info.getValue() || "Any role"}</p>,
 	}),
 	columnHelper.accessor("username", {
 		header: "Username/Email",
-		cell: (info) => <p className="font-mono text-xs">{info.getValue()}</p>,
+		cell: (info) => <div className="w-full flex flex-row gap-2 items-center justify-between">
+			<p className="font-mono text-xs">{info.getValue()}</p>
+			<CopyButton value={info.getValue()} label="username" />
+		</div>,
 	}),
 	columnHelper.accessor("password", {
 		header: "Password",
-		cell: (info) => <p className="font-mono text-xs">{info.getValue()}</p>,
+		cell: (info) => <PasswordCell password={info.getValue()} />,
 	}),
 ]);
+
+// Copies one credential field. The toast confirms without echoing the value,
+// so credentials don't flash on a shared screen. Hidden when there's nothing to copy.
+function CopyButton({ value, label }: { value: string; label: string }) {
+	if (!value) return null;
+	const title = label.charAt(0).toUpperCase() + label.slice(1);
+	async function copy() {
+		try {
+			await navigator.clipboard.writeText(value);
+			toast.success(`${title} copied`);
+		} catch {
+			// Clipboard API needs a secure context (https/localhost) and permission.
+			toast.error(`Couldn't copy ${label} — copy it manually`);
+		}
+	}
+	return (
+		<Tooltip>
+			<TooltipTrigger render={<Button type="button" variant="outline" size="icon" aria-label={`Copy ${label}`} onClick={copy}>
+				<ClipboardIcon className="size-4" />
+			</Button>} />
+			<TooltipContent side="top" className="w-fit">
+				<p className="text-xs">Copy {label}</p>
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+
+// Masked with a fixed-length mask (doesn't leak the length) until this row is revealed.
+function PasswordCell({ password }: { password: string }) {
+	const [revealed, setRevealed] = useState(false);
+	return (
+		<div className="w-full flex flex-row gap-2 items-center justify-between">
+			<p className="font-mono text-xs">{revealed ? password : password && "••••••••"}</p>
+			{password && (
+				<div className="flex flex-row gap-1">
+					<Button type="button" variant="ghost" size="icon" aria-label={revealed ? "Hide password" : "Show password"} onClick={() => setRevealed(!revealed)}>
+						{revealed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+					</Button>
+					<CopyButton value={password} label="password" />
+				</div>
+			)}
+		</div>
+	);
+}
 
 // Overview "Test Accounts". The card renders nothing when there are no
 // accounts; the editor shows in the Overview's edit mode (SuiteOverviewContent).

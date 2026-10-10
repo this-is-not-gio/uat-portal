@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Montserrat, Raleway } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner";
 
 
 const montserratHeading = Montserrat({subsets:['latin'],variable:'--font-heading'});
@@ -36,7 +37,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 			lang="en"
 			className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, montserratHeading.variable, raleway.variable)}
 		>
-			<body className="h-full flex flex-col overflow-hidden">{children}</body>
+			<body className="h-full flex flex-col overflow-hidden">
+				{children}
+				<Toaster position="bottom-right" />
+			</body>
 		</html>
 	);
 }
