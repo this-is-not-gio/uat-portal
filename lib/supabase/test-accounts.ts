@@ -4,7 +4,7 @@ import { createClient } from "./server";
 // one of the suite's rounds, so they simply see no card.
 export type suiteTestAccount = {
 	id: string;
-	role: string | null; // a test role name from /admin (organization_roles)
+	role: string | null; // a test role name from the /admin role catalog (test_roles)
 	username: string;
 	password: string;
 };

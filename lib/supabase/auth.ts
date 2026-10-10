@@ -14,7 +14,7 @@ export type currentUser = {
         name: string;
         type: Database["public"]["Enums"]["org_type"];
     } | null;
-    // Test role within the org (e.g. Action-Officer); null if Admin hasn't assigned one.
+    // Catalog test role held in the org (e.g. Action Officer - Licensing); null if Admin hasn't assigned one.
     testRole: { id: string; name: string } | null;
 };
 
@@ -27,7 +27,7 @@ export const getCurrentUser = cache(async (): Promise<currentUser | null> => {
     const { data: profile, error } = await supabase
         .from("profiles")
         // Many-to-one embed: organization comes back as one object (or null), not an array.
-        .select("full_name, role, organization:organizations(id, name, type), test_role:organization_roles(id, name)")
+        .select("full_name, role, organization:organizations(id, name, type), org_role:organization_roles(test_role:test_roles(id, name))")
         .eq("id", user.id)
         .single();
     if (error) {
@@ -37,7 +37,7 @@ export const getCurrentUser = cache(async (): Promise<currentUser | null> => {
 
     return {
         id: user.id, email: user.email ?? null, fullName: profile.full_name, role: profile.role,
-        organization: profile.organization, testRole: profile.test_role,
+        organization: profile.organization, testRole: profile.org_role?.test_role ?? null,
     };
 });
 

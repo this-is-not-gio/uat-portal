@@ -13,7 +13,7 @@ export const IMPORT_COLUMNS = [
 	{ header: "PRECONDITION", aliases: ["PRECONDITIONS"], level: "case" },
 	{ header: "STEP TO EXECUTE", aliases: ["STEPS TO EXECUTE"], level: "step" },
 	{ header: "EXPECTED RESULT", aliases: ["EXPECTED RESULTS"], level: "step" },
-	// A test role name from /admin (organization_roles), e.g. "Action Officer - Licensing".
+	// A test role name from the /admin role catalog (test_roles), e.g. "Action Officer - Licensing".
 	{ header: "ASSIGNED ROLE", aliases: ["ROLE", "ROLE ASSIGNEE"], level: "case", optional: true },
 ] as const;
 

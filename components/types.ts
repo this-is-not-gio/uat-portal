@@ -4,7 +4,7 @@ export type Priority = "low" | "medium" | "high"
 
 export type TestStatus = "Untested" | "Passed" | "Failed" | "Skipped" | "Blocked"
 
-// A test role name from /admin (organization_roles), e.g. "Action Officer - Licensing".
+// A test role name from the /admin role catalog (test_roles), e.g. "Action Officer - Licensing".
 export type RoleAssignee = string
 
 

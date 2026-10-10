@@ -425,13 +425,13 @@ export async function getIterationParticipants(iterationId: string): Promise<ite
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("iteration_participants")
-        .select("submitted_at, withdrawn_at, organization:organizations ( id, name, type ), iteration_participant_roles ( role:organization_roles ( id, name ) )")
+        .select("submitted_at, withdrawn_at, organization:organizations ( id, name, type ), iteration_participant_roles ( role:organization_roles ( id, test_role:test_roles ( name ) ) )")
         .eq("iteration_id", iterationId);
     if (error) throw error;
     return data
         .map((row) => ({
             organization: row.organization,
-            roles: row.iteration_participant_roles.map((r) => r.role).sort((a, b) => a.name.localeCompare(b.name)),
+            roles: row.iteration_participant_roles.map((r) => ({ id: r.role.id, name: r.role.test_role.name })).sort((a, b) => a.name.localeCompare(b.name)),
             submittedAt: row.submitted_at,
             withdrawnAt: row.withdrawn_at,
         }))

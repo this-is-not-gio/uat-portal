@@ -1,13 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "./database.types";
-import { sameRoleName } from "@/lib/auth/test-role";
 
 export type orgType = Database["public"]["Enums"]["org_type"];
 
 export type organization = { id: string; name: string; type: orgType };
 
-// A test role inside an org (org type -> org -> role), e.g. Action-Officer in IC Licensing.
-export type orgRole = { id: string; name: string; organizationId: string };
+// A role in the global test role catalog (0056), e.g. "Action Officer - Licensing".
+export type testRole = { id: string; name: string };
+
+// An org's instance of a catalog role; its name is the catalog name.
+export type orgRole = { id: string; name: string; organizationId: string; testRoleId: string };
+
+// A catalog role with the orgs that have it, for the admin Roles page.
+export type catalogRole = testRole & { instances: orgRole[] };
 
 // The enum predates the Internal/External naming: "client" orgs are the Internal ones.
 export { ORG_TYPE_LABELS } from "@/lib/org-type-labels";
@@ -30,23 +35,38 @@ export async function getOrganizations(): Promise<organization[]> {
 // Roles of every org the current user can see, A–Z (same RLS as organizations).
 export async function getOrganizationRoles(): Promise<orgRole[]> {
     const supabase = await createClient();
-    const { data, error } = await supabase.from("organization_roles").select("id, name, organization_id").order("name");
+    const { data, error } = await supabase.from("organization_roles").select("id, organization_id, test_role:test_roles ( id, name )");
     if (error) throw error;
-    return data.map((r) => ({ id: r.id, name: r.name, organizationId: r.organization_id }));
+    return data
+        .map((r) => ({ id: r.id, name: r.test_role.name, organizationId: r.organization_id, testRoleId: r.test_role.id }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Test role names to pick from (e.g. Overview Test Accounts), Internal then External,
-// one entry per name across orgs (same name match as sameRoleName). Vendor orgs excluded.
+// The whole catalog A–Z, each role with the org instances the current user can see.
+export async function getCatalogRoles(): Promise<catalogRole[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("test_roles").select("id, name, organization_roles ( id, organization_id )").order("name");
+    if (error) throw error;
+    return data.map((t) => ({
+        id: t.id,
+        name: t.name,
+        instances: t.organization_roles.map((r) => ({ id: r.id, name: t.name, organizationId: r.organization_id, testRoleId: t.id })),
+    }));
+}
+
+// Test role names to pick from (e.g. Overview Test Accounts), grouped by the kind of org that
+// has them: a catalog role given to both an Internal and an External org shows in both lists.
 export type testRoleOptions = { internal: string[]; external: string[] };
 
 export async function getTestRoleOptions(): Promise<testRoleOptions> {
     const supabase = await createClient();
-    const { data, error } = await supabase.from("organization_roles").select("name, organizations!inner ( type )").order("name");
+    const { data, error } = await supabase.from("test_roles").select("name, organization_roles ( organizations!inner ( type ) )").order("name");
     if (error) throw error;
     const options: testRoleOptions = { internal: [], external: [] };
     for (const role of data) {
-        const list = role.organizations.type === "client" ? options.internal : role.organizations.type === "external" ? options.external : null;
-        if (list && !list.some((name) => sameRoleName(name, role.name))) list.push(role.name);
+        const types = new Set(role.organization_roles.map((r) => r.organizations.type));
+        if (types.has("client")) options.internal.push(role.name);
+        if (types.has("external")) options.external.push(role.name);
     }
     return options;
 }
@@ -64,7 +84,7 @@ export async function getTesterCountsByOrg(): Promise<Record<string, number>> {
     return counts;
 }
 
-// Tester accounts per test role id (organization_roles.id), for the Roles tab. Same RLS as above.
+// Tester accounts per org role id (organization_roles.id), for the Roles tab. Same RLS as above.
 export async function getTesterCountsByRole(): Promise<Record<string, number>> {
     const supabase = await createClient();
     const { data, error } = await supabase.from("profiles").select("org_role_id").not("org_role_id", "is", null);

@@ -27,7 +27,8 @@ users through the `_as` helpers (RLS applies):
 | Helper | Does |
 | --- | --- |
 | `t_org(name, type)` | organization (`vendor` / `client` / `external`) |
-| `t_role(org, name)` | a test role in an org |
+| `t_test_role(name)`, `t_org_role(org, test_role)` | catalog role (found by normalized name or created) / its instance in an org |
+| `t_role(org, name)` | shorthand for `t_org_role(org, t_test_role(name))` |
 | `t_user(label, user_role, org, org_role)` | auth user + profile, optionally holding a test role |
 | `t_suite(name)`, `t_section(suite, name)`, `t_case(section, title, role)` | suite content (cases are complete: one step, one expected result) |
 | `t_count_as(user, sql)`, `t_rows_as(user, sql)` | read as a user |

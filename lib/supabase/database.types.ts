@@ -119,20 +119,20 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          name: string
           organization_id: string
+          test_role_id: string
         }
         Insert: {
           created_at?: string
           id?: string
-          name: string
           organization_id: string
+          test_role_id: string
         }
         Update: {
           created_at?: string
           id?: string
-          name?: string
           organization_id?: string
+          test_role_id?: string
         }
         Relationships: [
           {
@@ -140,6 +140,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_roles_test_role_id_fkey"
+            columns: ["test_role_id"]
+            isOneToOne: false
+            referencedRelation: "test_roles"
             referencedColumns: ["id"]
           },
         ]
@@ -868,6 +875,24 @@ export type Database = {
           },
         ]
       }
+      test_roles: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       test_step_results: {
         Row: {
           expected_results: Json
@@ -1141,6 +1166,20 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "suite_sign_offs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_test_role: {
+        Args: { p_name: string; p_org_ids?: string[] }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "test_roles"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1460,6 +1499,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_test_role_orgs: {
+        Args: { p_org_ids: string[]; p_test_role_id: string }
+        Returns: undefined
       }
       sign_off_iteration: { Args: { p_suite_id: string }; Returns: string }
       slugify: { Args: { p_text: string }; Returns: string }

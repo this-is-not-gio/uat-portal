@@ -1,12 +1,11 @@
 import { IdCard } from "lucide-react";
-import { getOrganizationRoles, getOrganizations, getTesterCountsByRole } from "@/lib/supabase/organizations";
+import { getCatalogRoles, getOrganizations, getTesterCountsByRole } from "@/lib/supabase/organizations";
 import { RolesList } from "./roles-list";
 import { CreateRoleDialog } from "./create-role-dialog";
 
-// Every org's test roles in one list (org type → org → role). Roles can also be edited per org
-// from the Organization tab's Edit dialog.
+// The test role catalog: each role is defined once and given to the orgs that have it.
 export default async function AdminRolesPage() {
-	const [organizations, roles, testerCounts] = await Promise.all([getOrganizations(), getOrganizationRoles(), getTesterCountsByRole()]);
+	const [organizations, roles, testerCounts] = await Promise.all([getOrganizations(), getCatalogRoles(), getTesterCountsByRole()]);
 
 	return (
 		<div className="px-2 flex flex-col gap-4">
@@ -16,9 +15,9 @@ export default async function AdminRolesPage() {
 						<IdCard className="size-5 " />
 						<p className="text-sm font-semibold">Roles</p>
 					</div>
-					<p className="text-xs text-muted-foreground">Manage the test roles each organization&apos;s testers can have.</p>
+					<p className="text-xs text-muted-foreground">Manage the test role catalog and which organizations&apos; testers can hold each role.</p>
 				</div>
-				<CreateRoleDialog organizations={organizations} />
+				<CreateRoleDialog organizations={organizations.filter((org) => org.type !== "vendor")} />
 			</div>
 			<RolesList organizations={organizations} roles={roles} testerCounts={testerCounts} />
 		</div>

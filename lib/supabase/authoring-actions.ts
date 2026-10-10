@@ -20,7 +20,7 @@ function fail(error: { message: string }): { ok: false; error: string } {
 }
 
 type priority = Database["public"]["Enums"]["priority_level"];
-// A test role name from /admin (organization_roles).
+// A test role name from the /admin role catalog (test_roles).
 type roleAssignee = string;
 
 // Suites -----------------------------------------------------------------------

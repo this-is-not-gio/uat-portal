@@ -6,7 +6,7 @@ import { createAdminClient } from "./admin";
 import { requireUser, type currentUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
-import type { organization, orgRole, orgType } from "./organizations";
+import type { organization, orgType, testRole } from "./organizations";
 
 // Users and organizations for the /admin area. Every action re-checks admin_area itself:
 // the /admin layout only hides the pages, it doesn't protect a direct action call.
@@ -79,7 +79,7 @@ export async function listUsers(): Promise<actionResult<adminUser[]>> {
         admin
             .from("profiles")
             .select(
-                "id, full_name, role, organization:organizations(id, name, type), org_role:organization_roles(id, name)",
+                "id, full_name, role, organization:organizations(id, name, type), org_role:organization_roles(id, test_role:test_roles(name))",
             ),
     ]);
     if (authError) return fail(authError);
@@ -97,7 +97,7 @@ export async function listUsers(): Promise<actionResult<adminUser[]>> {
                     fullName: p.full_name,
                     role: p.role,
                     organization: p.organization,
-                    orgRole: p.org_role,
+                    orgRole: p.org_role && { id: p.org_role.id, name: p.org_role.test_role.name },
                     invitedAt: account?.invited_at ?? null,
                     lastSignInAt: account?.last_sign_in_at ?? null,
                 };
@@ -255,53 +255,49 @@ export async function renameOrg({ id, name }: { id: string; name: string }): Pro
 
 // Test roles ---------------------------------------------------------------------
 
-// RLS (0051) limits writes to Admins; the unique index rejects a duplicate name in the same org.
-export async function createOrgRole({
-    organizationId,
-    name,
-}: {
-    organizationId: string;
-    name: string;
-}): Promise<actionResult<orgRole>> {
-    const user = await requireUser();
-    if (!can(user, "admin_area")) return denied("admin_area");
-    const trimmed = name.trim();
-    if (!trimmed) return { ok: false, error: "Role name is required." };
-
-    const supabase = await createClient();
-    const { data, error } = await supabase
-        .from("organization_roles")
-        .insert({ organization_id: organizationId, name: trimmed })
-        .select("id, name, organization_id")
-        .single();
-    if (error)
-        return error.code === "23505" ? { ok: false, error: `"${trimmed}" already exists in this organization.` } : fail(error);
-    refresh();
-    return { ok: true, data: { id: data.id, name: data.name, organizationId: data.organization_id } };
+// A catalog role is defined once (0056) and given to orgs by ticking them; RLS and the RPCs
+// limit every write to Admins, and the normalized-name index rejects a second spelling.
+function roleNameTaken(error: { code?: string }, name: string) {
+    return error.code === "23505" ? { ok: false as const, error: `"${name}" is already in the role catalog.` } : null;
 }
 
-// Testers holding the role keep it — they reference it by id, so only the label changes.
-export async function renameOrgRole({ id, name }: { id: string; name: string }): Promise<actionResult> {
+export async function createTestRole({ name, orgIds }: { name: string; orgIds: string[] }): Promise<actionResult<testRole>> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
     const trimmed = name.trim();
     if (!trimmed) return { ok: false, error: "Role name is required." };
 
     const supabase = await createClient();
-    const { error } = await supabase.from("organization_roles").update({ name: trimmed }).eq("id", id);
-    if (error)
-        return error.code === "23505" ? { ok: false, error: `"${trimmed}" already exists in this organization.` } : fail(error);
+    const { data, error } = await supabase.rpc("create_test_role", { p_name: trimmed, p_org_ids: orgIds });
+    if (error) return roleNameTaken(error, trimmed) ?? fail(error);
+    refresh();
+    return { ok: true, data: { id: data.id, name: data.name } };
+}
+
+// Renames the role everywhere and sets exactly which orgs have it. Unticking an org removes its
+// instance: testers holding it keep their org but lose the role (0051's FK sets it null).
+export async function updateTestRole({ id, name, orgIds }: { id: string; name: string; orgIds: string[] }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, error: "Role name is required." };
+
+    const supabase = await createClient();
+    const { error: renameError } = await supabase.from("test_roles").update({ name: trimmed }).eq("id", id);
+    if (renameError) return roleNameTaken(renameError, trimmed) ?? fail(renameError);
+    const { error } = await supabase.rpc("set_test_role_orgs", { p_test_role_id: id, p_org_ids: orgIds });
+    if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
 }
 
-// Users holding the role keep their org; their role is cleared (FK on delete set null).
-export async function deleteOrgRole({ id }: { id: string }): Promise<actionResult> {
+// Removes the role from the catalog and every org; its holders keep their org but lose the role.
+export async function deleteTestRole({ id }: { id: string }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
 
     const supabase = await createClient();
-    const { error } = await supabase.from("organization_roles").delete().eq("id", id);
+    const { error } = await supabase.from("test_roles").delete().eq("id", id);
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };

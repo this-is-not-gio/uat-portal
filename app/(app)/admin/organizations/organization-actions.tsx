@@ -10,10 +10,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { deleteOrg, renameOrg } from "@/lib/supabase/admin-actions";
 import ConfirmDialog from "@/components/confirm-dialog";
 import type { organization, orgRole } from "@/lib/supabase/organizations";
-import { OrgRolesEditor } from "./org-roles-editor";
 
-// Row action on the Organizations table: rename the org and manage its test roles (its type is fixed once created).
-// The row already carries the org's test roles, so they come in with it.
+// Row action on the Organizations table: rename or withdraw the org (its type is fixed once created).
 export function OrganizationActions({ org }: { org: organization & { roles: orgRole[]; testerCount: number } }) {
 	const [open, setOpen] = useState(false);
 	const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -27,7 +25,7 @@ export function OrganizationActions({ org }: { org: organization & { roles: orgR
 				</TooltipContent>
 			</Tooltip>
 			{/* Remounted on open so the field starts from the current name. */}
-			{open && <EditOrgDialog org={org} roles={org.roles} open={open} onOpenChange={setOpen} />}
+			{open && <EditOrgDialog org={org} open={open} onOpenChange={setOpen} />}
 			<Tooltip>
 				<TooltipTrigger render={<Button size="icon" variant="destructive" className="text-xs" onClick={() => setWithdrawOpen(true)}><Trash className="size-4" /></Button>} />
 				<TooltipContent>
@@ -47,7 +45,7 @@ export function OrganizationActions({ org }: { org: organization & { roles: orgR
 	);
 }
 
-function EditOrgDialog({ org, roles, open, onOpenChange }: { org: organization; roles: orgRole[]; open: boolean; onOpenChange: (open: boolean) => void }) {
+function EditOrgDialog({ org, open, onOpenChange }: { org: organization; open: boolean; onOpenChange: (open: boolean) => void }) {
 	const [name, setName] = useState(org.name);
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
@@ -59,7 +57,7 @@ function EditOrgDialog({ org, roles, open, onOpenChange }: { org: organization; 
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Edit organization</DialogTitle>
-					<DialogDescription>Rename this organization and choose which test roles it has. Its type can&apos;t be changed.</DialogDescription>
+					<DialogDescription>Rename this organization. Its type can&apos;t be changed; its test roles are managed on the Roles page.</DialogDescription>
 				</DialogHeader>
 				<form
 					id={formId}
@@ -80,13 +78,6 @@ function EditOrgDialog({ org, roles, open, onOpenChange }: { org: organization; 
 					<Input id={`${formId}-name`} value={name} onChange={(e) => setName(e.target.value)} className="text-xs md:text-xs" required />
 					{error && <p className="text-sm text-destructive">{error}</p>}
 				</form>
-				{/* Outside the name form: the roles editor has its own form, and each add/remove saves at once. */}
-				{/* {org.type !== "vendor" && (
-					<div className="flex flex-col gap-2">
-						<Label className="text-xs">Test roles</Label>
-						<OrgRolesEditor organizationId={org.id} roles={roles} />
-					</div>
-				)} */}
 				<DialogFooter>
 					<DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Close</DialogClose>
 					<Button type="submit" form={formId} disabled={pending || !dirty}>{pending ? "Saving…" : "Save name"}</Button>

@@ -136,10 +136,29 @@ returns uuid language sql as $$
   insert into public.organizations (name, type) values ('[t] ' || p_name, p_type) returning id;
 $$;
 
--- An org's test role.
+-- A catalog test role (reused when the normalized name already exists).
+create function pg_temp.t_test_role(p_name text)
+returns uuid language plpgsql as $$
+declare v_id uuid;
+begin
+  select id into v_id from public.test_roles where public.norm_role_name(name) = public.norm_role_name(p_name);
+  if v_id is null then
+    insert into public.test_roles (name) values (p_name) returning id into v_id;
+  end if;
+  return v_id;
+end;
+$$;
+
+-- An org's instance of a catalog role.
+create function pg_temp.t_org_role(p_org uuid, p_test_role uuid)
+returns uuid language sql as $$
+  insert into public.organization_roles (organization_id, test_role_id) values (p_org, p_test_role) returning id;
+$$;
+
+-- Shorthand: the org's instance of the catalog role with this name.
 create function pg_temp.t_role(p_org uuid, p_name text)
 returns uuid language sql as $$
-  insert into public.organization_roles (organization_id, name) values (p_org, p_name) returning id;
+  select pg_temp.t_org_role(p_org, pg_temp.t_test_role(p_name));
 $$;
 
 -- A user (auth.users row → profile via handle_new_user), optionally holding a test role.

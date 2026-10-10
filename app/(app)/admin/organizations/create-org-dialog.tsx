@@ -1,16 +1,15 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { BuildingComplexPlus, XIcon } from "lucide-react";
+import { BuildingComplexPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createOrg, createOrgRole } from "@/lib/supabase/admin-actions";
+import { createOrg } from "@/lib/supabase/admin-actions";
 import { ORG_TYPE_LABELS } from "@/lib/org-type-labels";
 import type { orgType } from "@/lib/supabase/organizations";
-import { sameRoleName } from "@/lib/auth/test-role";
 
 // Internal first: that's the org type being set up now (External is deferred).
 const TYPE_OPTIONS: orgType[] = ["client", "external", "vendor"];
@@ -32,19 +31,8 @@ function CreateOrgForm({ onDone }: { onDone: () => void }) {
 	const formId = useId();
 	const [name, setName] = useState("");
 	const [type, setType] = useState<orgType>("client");
-	const [roleNames, setRoleNames] = useState<string[]>([]);
-	const [roleInput, setRoleInput] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
-	// The vendor org is Admin-only and doesn't test, so it gets no test roles.
-	const hasRoles = type !== "vendor";
-
-	function addRole() {
-		const trimmed = roleInput.trim();
-		if (!trimmed) return;
-		if (!roleNames.some((r) => sameRoleName(r, trimmed))) setRoleNames([...roleNames, trimmed]);
-		setRoleInput("");
-	}
 
 	function submit() {
 		setError(null);
@@ -54,16 +42,6 @@ function CreateOrgForm({ onDone }: { onDone: () => void }) {
 				setError(created.error);
 				return;
 			}
-			if (hasRoles) {
-				for (const roleName of roleNames) {
-					const result = await createOrgRole({ organizationId: created.data.id, name: roleName });
-					if (!result.ok) {
-						// The org exists now; the rest can be added from its Edit dialog.
-						setError(`Organization created, but adding "${roleName}" failed: ${result.error}`);
-						return;
-					}
-				}
-			}
 			onDone();
 		});
 	}
@@ -72,7 +50,7 @@ function CreateOrgForm({ onDone }: { onDone: () => void }) {
 		<DialogContent className="sm:max-w-lg">
 			<DialogHeader>
 				<DialogTitle>Create new organization</DialogTitle>
-				<DialogDescription>Add an organization and the test roles its participants can have.</DialogDescription>
+				<DialogDescription>Add an organization. Give it test roles from the Roles page.</DialogDescription>
 			</DialogHeader>
 			<form id={formId} className="flex flex-col gap-4" onSubmit={(e) => { e.preventDefault(); submit(); }}>
 				<div className="flex flex-col gap-2">

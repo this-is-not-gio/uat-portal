@@ -1,20 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/table/data-table";
 import { roleColumns, type roleRow } from "@/components/table/role-columns";
 import { ORG_TYPE_LABELS } from "@/lib/org-type-labels";
-import type { organization, orgRole, orgType } from "@/lib/supabase/organizations";
+import type { catalogRole, organization, orgType } from "@/lib/supabase/organizations";
 
 const ALL = "__all__";
 
-// testerCounts: profiles per test role id (getTesterCountsByRole).
+// One row per catalog role. testerCounts: profiles per org role id (getTesterCountsByRole).
 export function RolesList({ organizations, roles, testerCounts }: {
 	organizations: organization[];
-	roles: orgRole[];
+	roles: catalogRole[];
 	testerCounts: Record<string, number>;
 }) {
 	const [orgType, setOrgType] = useState<string>(ALL);
@@ -25,14 +25,18 @@ export function RolesList({ organizations, roles, testerCounts }: {
 	const testingOrgs = organizations.filter((org) => org.type !== "vendor");
 	const typeOrgs = testingOrgs.filter((org) => orgType === ALL || org.type === orgType);
 	const orgById = new Map(organizations.map((org) => [org.id, org]));
+	const columns = useMemo(() => roleColumns(organizations.filter((org) => org.type !== "vendor")), [organizations]);
 	const query = search.trim().toLowerCase();
-	const rows: roleRow[] = roles.flatMap((role) => {
-		const org = orgById.get(role.organizationId);
-		if (!org) return [];
-		return [{ ...role, orgName: org.name, orgType: org.type, testerCount: testerCounts[role.id] ?? 0 }];
+	const rows: roleRow[] = roles.map((role) => {
+		const orgs = role.instances.flatMap((instance) => {
+			const org = orgById.get(instance.organizationId);
+			return org ? [{ id: org.id, name: org.name, type: org.type, testerCount: testerCounts[instance.id] ?? 0 }] : [];
+		});
+		orgs.sort((a, b) => a.name.localeCompare(b.name));
+		return { id: role.id, name: role.name, orgs, testerCount: orgs.reduce((sum, org) => sum + org.testerCount, 0) };
 	})
-		.filter((row) => orgType === ALL || row.orgType === orgType)
-		.filter((row) => orgId === ALL || row.organizationId === orgId)
+		.filter((row) => orgType === ALL || row.orgs.some((org) => org.type === orgType))
+		.filter((row) => orgId === ALL || row.orgs.some((org) => org.id === orgId))
 		.filter((row) => !query || row.name.toLowerCase().includes(query));
 	const orgName = orgById.get(orgId)?.name;
 
@@ -79,7 +83,7 @@ export function RolesList({ organizations, roles, testerCounts }: {
 			</div>
 			<div className="border rounded-md">
 				<DataTable
-					columns={roleColumns}
+					columns={columns}
 					data={rows}
 					bordered={false}
 					notEnd
