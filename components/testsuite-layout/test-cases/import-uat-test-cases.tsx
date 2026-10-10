@@ -10,6 +10,7 @@ import { FilePlus, FileSpreadsheet, Upload } from "lucide-react";
 import { parseTestCaseRows } from "@/lib/import/parse-test-cases";
 import { useImportStaging } from "./import-staging";
 import { useTestRoleOptions } from "@/components/testsuite-layout/shared/test-role-options";
+import { unmatchedRoleNames } from "@/lib/import/role-mapping";
 
 type parsedImport = ReturnType<typeof parseTestCaseRows>;
 
@@ -179,6 +180,7 @@ function ImportSummary({ parsed, section }: { parsed: parsedImport; section?: st
 	const errors = parsed.issues.filter((issue) => issue.severity === "error");
 	const errorCount = errors.length;
 	const warningCount = parsed.issues.length - errorCount;
+	const unmatchedRoleCount = unmatchedRoleNames(parsed.cases).length;
 
 	return (
 		<div className="flex flex-col gap-1 px-2">
@@ -191,6 +193,12 @@ function ImportSummary({ parsed, section }: { parsed: parsedImport; section?: st
 				<span className={cn(errorCount && "text-destructive font-medium")}>{plural(errorCount, "error")}</span>
 				<span>·</span>
 				<span className={cn(warningCount && "text-amber-600 font-medium")}>{plural(warningCount, "warning")}</span>
+				{unmatchedRoleCount > 0 && (
+					<>
+						<span>·</span>
+						<span className="text-destructive font-medium">{plural(unmatchedRoleCount, "role name")} to map in the review</span>
+					</>
+				)}
 			</p>
 			{errorCount > 0 && (
 				<div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto rounded-md bg-destructive/5 p-3">

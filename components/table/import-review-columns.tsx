@@ -148,7 +148,11 @@ export function getImportReviewColumns() {
 		}),
 		columnHelper.accessor("roleAssignee", {
 			header: "Assigned Role",
-			cell: (info) => info.getValue() ?
+			cell: (info) => info.row.original.unmatchedRole ?
+				<div className="flex flex-row items-center gap-1" title="Map this name to a catalog role above">
+					<p className="text-xs text-destructive">&ldquo;{info.row.original.unmatchedRole}&rdquo; · Not mapped</p>
+				</div>
+				: info.getValue() ?
 				 <div className="flex flex-row items-center gap-1">
 					<p className="text-xs">{info.getValue()}</p>
 				 </div>

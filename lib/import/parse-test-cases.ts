@@ -1,5 +1,5 @@
 import type { Database } from "@/lib/supabase/database.types";
-import { sameRoleName } from "@/lib/auth/test-role";
+import { normalizeRoleName, sameRoleName } from "@/lib/auth/test-role";
 import type { testRole } from "@/lib/supabase/organizations";
 
 type priority = Database["public"]["Enums"]["priority_level"];
@@ -32,6 +32,9 @@ export type importCase = {
 	// The matching catalog role (test_roles) ID and name, or null when the cell is blank or matches none.
 	testRoleId: string | null;
 	roleAssignee: string | null;
+	// The file's role name when it matches no catalog role. The review blocks saving until
+	// it's mapped to a catalog role (role-mapping.ts); import never creates catalog roles.
+	unmatchedRole: string | null;
 	preconditions: { condition: string }[];
 	steps: { step: string; expectedResults: { result: string }[] }[];
 };
@@ -132,8 +135,9 @@ function toItems(text: string): string[] {
 // - Next step: Test Case blank, Step filled. Precondition must be blank.
 // - Blank: skipped.
 //
-// `roles` are the catalog test roles from /admin; a case's Assigned Role must match
-// one of them (ignoring case, spaces and dashes) or it's imported without a role.
+// `roles` are the catalog test roles from /admin; a case's Assigned Role matches
+// one of them ignoring case, spaces and punctuation. A name that matches none is
+// kept as `unmatchedRole` for the review to map.
 //
 // `intoSection` imports every case into that one section (opened from a
 // section's page): the file needs no section rows, and any it has are skipped.
@@ -163,7 +167,9 @@ export function parseTestCaseRows(rows: unknown[][], roles: testRole[], intoSect
 		const precondition = cellText(cells, columns["PRECONDITION"]);
 		const step = stripNumber(cellText(cells, columns["STEP TO EXECUTE"]));
 		const expected = cellText(cells, columns["EXPECTED RESULT"]);
-		const assignedRole = cellText(cells, columns["ASSIGNED ROLE"]);
+		// A cell with no letters or digits (e.g. "-") counts as blank.
+		const roleCell = cellText(cells, columns["ASSIGNED ROLE"]);
+		const assignedRole = normalizeRoleName(roleCell) ? roleCell : "";
 
 		if (!title && !precondition && !step && !expected) return;
 
@@ -205,15 +211,14 @@ export function parseTestCaseRows(rows: unknown[][], roles: testRole[], intoSect
 				priority: "medium",
 				testRoleId: role?.id ?? null,
 				roleAssignee: role?.name ?? null,
+				unmatchedRole: assignedRole && !role ? assignedRole : null,
 				preconditions: preconditions.map((condition) => ({ condition })),
 				steps: [nextStep],
 			};
 			cases.push(current);
 			skipping = false;
-			if (!assignedRole) {
-				if (columns["ASSIGNED ROLE"] >= 0) warn(row, "ASSIGNED ROLE", 'No assigned role; the case will show "Not ready" until one is set.');
-			} else if (!role) {
-				warn(row, "ASSIGNED ROLE", `"${assignedRole}" isn't a test role in Admin → Roles; the case is imported without a role and shows "Not ready" until one is set.`);
+			if (!assignedRole && columns["ASSIGNED ROLE"] >= 0) {
+				warn(row, "ASSIGNED ROLE", 'No assigned role; the case will show "Not ready" until one is set.');
 			}
 			warnIfNoExpected();
 			return;

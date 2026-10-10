@@ -217,6 +217,7 @@ export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{
 export async function importTestCases({ suiteId, cases }: { suiteId: string; cases: importCase[] }): Promise<actionResult<{ created: number; sectionsCreated: number }>> {
     const user = await requireUser();
     if (!can(user, "author")) return denied("author");
+    if (cases.some((importCase) => importCase.unmatchedRole)) return { ok: false, error: "Map every role name to a catalog role before importing." };
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("import_test_cases", {
         p_suite_id: suiteId,

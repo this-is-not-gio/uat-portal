@@ -3,13 +3,18 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/table/data-table";
 import { getImportReviewColumns, type importReviewRow } from "@/components/table/import-review-columns";
-import { AlertTriangle, FilePlus, FileSpreadsheet, Undo2, X } from "lucide-react";
+import { AlertTriangle, CircleAlert, FilePlus, FileSpreadsheet, Undo2, X } from "lucide-react";
 import { useImportStaging, type stagedImport } from "./import-staging";
 import ImportUATTestCases from "./import-uat-test-cases";
 import { importTestCases } from "@/lib/supabase/authoring-actions";
 import type { suiteStatus } from "@/lib/supabase/Init";
+import type { importCase } from "@/lib/import/parse-test-cases";
+import { applyRoleMappings, unmatchedRoleNames, type roleMappings, type unmatchedRoleName } from "@/lib/import/role-mapping";
+import { RoleOptionGroups, roleNameOf, useTestRoleOptions } from "@/components/testsuite-layout/shared/test-role-options";
+import type { testRole } from "@/lib/supabase/organizations";
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
 
@@ -21,9 +26,9 @@ const normalizeName = (name: string) => name.trim().replace(/\s+/g, " ").toLower
 
 // One table row per case, with the warnings from its own rows: its first row up
 // to (not including) the next case's first row. Row 1 warnings are file-level.
-function toRows(staged: stagedImport, existingSections: Set<string>): importReviewRow[] {
-	return staged.cases.map((testCase, i) => {
-		const end = staged.cases[i + 1]?.row ?? Infinity;
+function toRows(staged: stagedImport, cases: importCase[], existingSections: Set<string>): importReviewRow[] {
+	return cases.map((testCase, i) => {
+		const end = cases[i + 1]?.row ?? Infinity;
 		return {
 			...testCase,
 			id: String(testCase.row),
@@ -40,15 +45,23 @@ export default function ImportReview({ existingSectionNames, suite }: { existing
 	const [isSaving, startSaving] = useTransition();
 	const [error, setError] = useState<string | null>(null);
 	const [saved, setSaved] = useState<string | null>(null);
+	// Role mappings belong to the file they were made for; choosing a new file starts over.
+	const [mapped, setMapped] = useState<{ file: stagedImport | null; roles: roleMappings }>({ file: null, roles: {} });
 	if (!staged) return null;
+
+	const mappings = mapped.file === staged ? mapped.roles : {};
+	const unmatchedRoles = unmatchedRoleNames(staged.cases);
+	const cases = applyRoleMappings(staged.cases, mappings);
+	const unmappedCount = unmatchedRoleNames(cases).length;
+	const mapRole = (key: string, role: testRole) => setMapped({ file: staged, roles: { ...mappings, [key]: role } });
 
 	// All or nothing: the RPC saves every case in one transaction. On success the
 	// action refreshes the page, and discarding the staged file shows the list again.
 	function saveImport() {
-		if (!staged) return;
+		if (!staged || unmappedCount) return;
 		setError(null);
 		startSaving(async () => {
-			const result = await importTestCases({ suiteId: suite.id, cases: staged.cases });
+			const result = await importTestCases({ suiteId: suite.id, cases });
 			if (!result.ok) {
 				setError(result.error);
 				return;
@@ -60,7 +73,7 @@ export default function ImportReview({ existingSectionNames, suite }: { existing
 	}
 
 	const existingSections = new Set(existingSectionNames.map(normalizeName));
-	const rows = toRows(staged, existingSections);
+	const rows = toRows(staged, cases, existingSections);
 	const newSectionCount = new Set(rows.filter((row) => row.isNewSection).map((row) => normalizeName(row.sectionName))).size;
 	const fileWarnings = staged.issues.filter((issue) => issue.row === 1);
 	const sectionCount = new Set(staged.cases.map((testCase) => testCase.sectionName)).size;
@@ -85,7 +98,7 @@ export default function ImportReview({ existingSectionNames, suite }: { existing
 							<X className="size-4" />
 							Discard
 						</Button>
-						<Button size="lg" onClick={saveImport} disabled={isSaving || Boolean(saved) || !staged.cases.length} className="text-xs">
+						<Button size="lg" onClick={saveImport} disabled={isSaving || Boolean(saved) || !staged.cases.length || unmappedCount > 0} className="text-xs">
 							<FilePlus className="size-4" />
 							{isSaving ? "Adding…" : "Add imported test cases"}
 						</Button>
@@ -114,6 +127,7 @@ export default function ImportReview({ existingSectionNames, suite }: { existing
 						}
 					/>
 				</div>
+				{unmatchedRoles.length > 0 && <RoleMappingPanel names={unmatchedRoles} mappings={mappings} unmapped={unmappedCount} onMap={mapRole} disabled={isSaving || Boolean(saved)} />}
 				{fileWarnings.map((issue) => (
 					<p key={issue.message} className="flex flex-row items-center gap-2 px-1 text-xs text-amber-600">
 						<AlertTriangle className="size-3.5 shrink-0" />
@@ -123,5 +137,56 @@ export default function ImportReview({ existingSectionNames, suite }: { existing
 				<DataTable columns={columns} data={rows} />
 			</div>
 		</ScrollArea>
+	);
+}
+
+// The role names the catalog doesn't know, each with a dropdown to map it to a
+// catalog role; the choice applies to every case with that name. Saving stays
+// disabled while `unmapped` > 0.
+function RoleMappingPanel({ names, mappings, unmapped, onMap, disabled }: { names: unmatchedRoleName[]; mappings: roleMappings; unmapped: number; onMap: (key: string, role: testRole) => void; disabled: boolean }) {
+	const roleOptions = useTestRoleOptions();
+
+	return (
+		<div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4">
+			<div className="flex flex-row items-start gap-2">
+				<CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+				<div>
+					<p className="text-sm font-semibold text-destructive">
+						{unmapped ? `${plural(unmapped, "role name")} not in the role catalog` : "Every role name is mapped"}
+					</p>
+					<p className="text-xs text-muted-foreground">
+						Map each name to a test role from Admin → Roles before adding the test cases. Import never creates new roles.
+					</p>
+				</div>
+			</div>
+			<ul className="flex flex-col gap-2">
+				{names.map((name) => {
+					const role = mappings[name.key];
+					return (
+						<li key={name.key} className="flex flex-row flex-wrap items-center justify-between gap-2 rounded-md bg-background px-3 py-2">
+							<div className="flex flex-col">
+								<p className="text-xs font-semibold">&ldquo;{name.name}&rdquo;</p>
+								<p className="text-xs text-muted-foreground">{plural(name.caseCount, "test case")}</p>
+							</div>
+							<Select
+								value={role?.id ?? ""}
+								onValueChange={(id) => {
+									const roleName = roleNameOf(roleOptions, id);
+									if (id && roleName) onMap(name.key, { id, name: roleName });
+								}}
+								disabled={disabled}
+							>
+								<SelectTrigger className="w-64" aria-label={`Catalog role for ${name.name}`}>
+									<SelectValue placeholder="Map to a catalog role">{role?.name ?? "Map to a catalog role"}</SelectValue>
+								</SelectTrigger>
+								<SelectContent alignItemWithTrigger={false}>
+									<RoleOptionGroups options={roleOptions} current={null} />
+								</SelectContent>
+							</Select>
+						</li>
+					);
+				})}
+			</ul>
+		</div>
 	);
 }
