@@ -112,7 +112,6 @@ const RESULT_SELECT = `
   included_in_run,
   sync_kind,
   completed_at,
-  live_case:test_cases ( audience ),
   executor:profiles!test_case_results_executed_by_fkey ( id, full_name, role ),
   test_case_result_archives ( id, reason, archived_at, snapshot, archiver:profiles ( full_name ) ),
   test_step_results (
@@ -368,8 +367,6 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
         status: row.status,
         roleAssignee: row.role_assignee ?? undefined,
         priority: row.priority ?? undefined,
-        // Audience isn't snapshotted, so read it off the live case (null if it was deleted).
-        audience: row.live_case?.audience ?? undefined,
         sectionName: row.section_name,
         sectionSlug: row.section_slug,
         completedAt: row.completed_at,

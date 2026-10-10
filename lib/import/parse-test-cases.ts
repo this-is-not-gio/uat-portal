@@ -2,7 +2,6 @@ import type { Database } from "@/lib/supabase/database.types";
 import { sameRoleName } from "@/lib/auth/test-role";
 
 type priority = Database["public"]["Enums"]["priority_level"];
-type audience = Database["public"]["Enums"]["audience"];
 
 // The import file's header row. Headers match by name or alias, ignoring case
 // and extra spaces, so column order doesn't matter; extra columns are ignored.
@@ -31,7 +30,6 @@ export type importCase = {
 	priority: priority;
 	// The matching /admin role name, or null when the cell is blank or matches none.
 	roleAssignee: string | null;
-	audience: audience;
 	preconditions: { condition: string }[];
 	steps: { step: string; expectedResults: { result: string }[] }[];
 };
@@ -205,7 +203,6 @@ export function parseTestCaseRows(rows: unknown[][], roleNames: string[], intoSe
 				description: "",
 				priority: "medium",
 				roleAssignee: role,
-				audience: "internal",
 				preconditions: preconditions.map((condition) => ({ condition })),
 				steps: [nextStep],
 			};

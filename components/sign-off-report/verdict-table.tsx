@@ -6,9 +6,6 @@ import { DataTable } from "@/components/table/data-table";
 import type { DataTableFeatures } from "@/components/table/data-table-features";
 import type { CriterionResult, ReportHeader } from "@/lib/supabase/sign-off-report";
 import { cn, formatTimestamp } from "@/lib/utils";
-import { AudienceBadge } from "../audience-badge";
-import { audience } from "@/lib/supabase/test-cases";
-import { organization } from "@/lib/supabase/organizations";
 import { CheckIcon, XIcon } from "lucide-react";
 
 // Client island for the report header's participants: column defs hold cell functions,

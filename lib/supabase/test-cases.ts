@@ -8,7 +8,6 @@ export const TEST_CASE_SELECT = `
   description,
   priority,
   role_assignee,
-  audience,
   status,
   lifecycle_status,
   order_index,
@@ -24,9 +23,6 @@ export const TEST_CASE_SELECT = `
   )
 ` as const;
 
-
-// Who a case is meant for: the client's staff, the client's clients, or both.
-export type audience = "internal" | "external" | "both";
 
 export type testCaseStatus = "Untested" | "In Progress" | "Passed" | "Failed" | "Blocked";
 
@@ -72,7 +68,6 @@ export type testCase = {
     sectionId?: string;
     description?: string;
     priority?: "low" | "medium" | "high";
-    audience?: audience;
     lifecycleStatus?: "new" | "updated";
     preconditions?: preCondition[];
     stepsToExecute?: testStep[];

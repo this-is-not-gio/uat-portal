@@ -8,10 +8,9 @@
 		ComboboxItem,
 		ComboboxList,
 	} from "@/components/ui/combobox";
-	import { CheckCircle2, Circle, Clock, Equal, EqualNot, ListChecks, Search, User, Users, X, XCircle } from "lucide-react";
+	import { CheckCircle2, Circle, Clock, Equal, EqualNot, ListChecks, Search, User, X, XCircle } from "lucide-react";
 	import { useState, type KeyboardEvent } from "react";
 	import { cn } from "@/lib/utils";
-	import { AUDIENCE_LABELS } from "@/components/audience-badge";
 
 	// Reasons base-ui reports on a genuine, unambiguous user-initiated
 	// dismissal (escape, clicking outside). Deliberately excludes "focus-out":
@@ -24,20 +23,17 @@
 	// abandon-and-close.
 	const USER_DISMISS_REASONS = new Set(["escape-key", "outside-press"]);
 
-	export type filterField = "status" | "roleAssignee" | "audience"
+	export type filterField = "status" | "roleAssignee"
 	export type filterOperator = "is" | "is not"
 	export type filterToken =
 		| { id: string; field: filterField; operator: filterOperator; value: string }
 		| { id: string; field: "search"; value: string };
 
 	const STATUS_VALUES = ["Untested", "In Progress", "Passed", "Failed"];
-	// Audience tokens store the label (what the chip shows); match against AUDIENCE_LABELS[tc.audience].
-	const AUDIENCE_VALUES = Object.values(AUDIENCE_LABELS);
 
 	const FIELD_LABELS: Record<filterField, string> = {
 		status: "Status",
 		roleAssignee: "Role Assignee",
-		audience: "Audience",
 	};
 	const fieldFromLabel = (label: string) =>
 		(Object.keys(FIELD_LABELS) as filterField[]).find((field) => FIELD_LABELS[field] === label) ?? null;
@@ -49,14 +45,11 @@
 		filters,
 		onFiltersChange,
 		roleAssigneeValues,
-		includeAudience = false,
 		disabled = false,
 	}: {
 		filters: filterToken[];
 		onFiltersChange: (filters: filterToken[]) => void;
 		roleAssigneeValues: string[];
-		// Only live test cases carry an audience; iteration snapshots don't.
-		includeAudience?: boolean;
 		disabled?: boolean;
 	}) {
 		const [step, setStep] = useState<"field" | "operator" | "value">("field");
@@ -74,10 +67,10 @@
 		const [hasInteracted, setHasInteracted] = useState<boolean>(false);
 
 		const usedFields = new Set(filters.map((f) => f.field));
-		const availableFields: filterField[] = includeAudience ? ["status", "roleAssignee", "audience"] : ["status", "roleAssignee"];
+		const availableFields: filterField[] = ["status", "roleAssignee"];
 		const FIELD_OPTIONS = availableFields.filter((field) => !usedFields.has(field)).map((field) => FIELD_LABELS[field]);
 		const OPERATOR_OPTIONS = ["is", "is not"];
-		const VALUE_OPTIONS = draftField === "status" ? STATUS_VALUES : draftField === "audience" ? AUDIENCE_VALUES : roleAssigneeValues;
+		const VALUE_OPTIONS = draftField === "status" ? STATUS_VALUES : roleAssigneeValues;
 
 		function hasNoMatch(options: string[]): boolean {
 			const term = inputValue.trim().toLowerCase();
@@ -149,7 +142,6 @@
 
 		function fieldOptionIcon(label: string) {
 			if (label === FIELD_LABELS.status) return <ListChecks size={14} />;
-			if (label === FIELD_LABELS.audience) return <Users size={14} />;
 			return <User size={14} />;
 		}
 
@@ -164,7 +156,6 @@
 				if (label === "Passed") return <CheckCircle2 size={14} />;
 				if (label === "Failed") return <XCircle size={14} />;
 			}
-			if (draftField === "audience") return <Users size={14} />;
 			return <User size={14} />;
 		}
 

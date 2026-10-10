@@ -1,10 +1,9 @@
 import { ClipboardList, TestTube2, UserGroup } from "lucide-react";
-import { AUDIENCE_ICONS, AUDIENCE_LABELS } from "@/components/audience-badge";
 import type { suiteScope } from "@/lib/supabase/test-suite";
 
 const pluralWord = (count: number, word: string) => `${word}${count === 1 ? "" : "s"}`;
 
-// "Scope of Testing": what the suite covers (sections, cases, roles, audience).
+// "Scope of Testing": what the suite covers (sections, cases, roles).
 // Shown in the suite header (right-aligned) and the Overview title (left-aligned).
 export function ScopeOfTesting({ scope, align = "end" }: { scope: suiteScope; align?: "start" | "end" }) {
 	return (
@@ -24,15 +23,6 @@ export function ScopeOfTesting({ scope, align = "end" }: { scope: suiteScope; al
 						</div>
 					</div>
 				))}
-				{scope.audience && (() => {
-					const AudienceIcon = AUDIENCE_ICONS[scope.audience];
-					return (
-						<div className="flex flex-row items-center gap-1 rounded-md py-1.5 px-2 bg-gray-600/5 w-fit text-gray-800">
-							<AudienceIcon size={15} />
-							<p className="text-xs font-semibold">{AUDIENCE_LABELS[scope.audience]}</p>
-						</div>
-					);
-				})()}
 			</div>
 		</div>
 	);

@@ -56,7 +56,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import StepResultButton from "./step-result-buttons";
 import TestCaseResult from "./test-case-result";
-import { AudienceBadge } from "@/components/audience-badge";
 
 const step_status_options: {
 	value: testStepStatus;
@@ -198,8 +197,6 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					<div className="flex gap-2">
 						{testCase.roleAssignee && <Badge variant="secondary">{testCase.roleAssignee}</Badge>}
 						<Badge variant="secondary">{testCase.stepsToExecute?.length || 0} Steps</Badge>
-						{/* {testCase.audience && <AudienceBadge audience={testCase.audience} />} */}
-						<Badge variant="secondary">{testCase.audience === "both" ? "Internal & External" : testCase.audience === "internal" ? "Internal" : "External"}</Badge>
 					</div>
 				</div>
 			</SheetHeader>

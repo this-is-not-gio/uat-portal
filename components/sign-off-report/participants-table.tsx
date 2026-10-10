@@ -6,9 +6,7 @@ import { DataTable } from "@/components/table/data-table";
 import type { DataTableFeatures } from "@/components/table/data-table-features";
 import type { ReportHeader } from "@/lib/supabase/sign-off-report";
 import { formatTimestamp } from "@/lib/utils";
-import { AudienceBadge } from "../audience-badge";
-import { audience } from "@/lib/supabase/test-cases";
-import { organization } from "@/lib/supabase/organizations";
+import { OrgTypeBadge } from "../org-type-badge";
 
 // Client island for the report header's participants: column defs hold cell functions,
 // which can't cross from the Server Component report view into DataTable.
@@ -16,12 +14,6 @@ import { organization } from "@/lib/supabase/organizations";
 type participantRow = ReportHeader["participants"][number] & { id: string };
 
 const columnHelper = createColumnHelper<DataTableFeatures, participantRow>();
-
-const ORG_AUDIENCE: Record<organization["type"], audience> = {
-      client: "internal",
-      vendor: "internal",
-      external: "external",
-};
 
 const columns = columnHelper.columns([
 	columnHelper.accessor("organizationName", {
@@ -31,7 +23,7 @@ const columns = columnHelper.columns([
 	columnHelper.accessor("organizationType", {
 		header: "Type",
 		cell: (info) => {
-			return  <AudienceBadge audience={ORG_AUDIENCE[info.getValue() as keyof typeof ORG_AUDIENCE]} /> 
+			return <OrgTypeBadge type={info.getValue()} />
 		}
 	}),
 	columnHelper.display({

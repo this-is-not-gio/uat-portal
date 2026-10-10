@@ -22,7 +22,6 @@ function fail(error: { message: string }): { ok: false; error: string } {
 type priority = Database["public"]["Enums"]["priority_level"];
 // A test role name from /admin (organization_roles).
 type roleAssignee = string;
-type audience = Database["public"]["Enums"]["audience"];
 
 // Suites -----------------------------------------------------------------------
 
@@ -178,8 +177,6 @@ export type testCaseDraft = {
     description: string;
     priority: priority;
     roleAssignee: roleAssignee | null;
-    // Omitted keeps the current audience (new cases default to internal).
-    audience?: audience;
     preconditions: { id?: string; condition: string }[];
     steps: { id?: string; step: string; expectedResults: { id?: string; result: string }[] }[];
 };
@@ -196,7 +193,6 @@ export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{
             description: draft.description,
             priority: draft.priority,
             role_assignee: draft.roleAssignee,
-            audience: draft.audience ?? null,
             created_by: user.id,
             preconditions: draft.preconditions.map((precondition) => ({ id: precondition.id ?? null, condition: precondition.condition })),
             steps: draft.steps.map((step) => ({
@@ -225,7 +221,6 @@ export async function importTestCases({ suiteId, cases }: { suiteId: string; cas
             description: importCase.description,
             priority: importCase.priority,
             role_assignee: importCase.roleAssignee,
-            audience: importCase.audience,
             created_by: user.id,
             preconditions: importCase.preconditions,
             steps: importCase.steps.map((step) => ({

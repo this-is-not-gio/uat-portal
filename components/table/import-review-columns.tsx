@@ -5,7 +5,6 @@ import { ClipboardCheck, Info, TriangleAlert, Waypoints } from "lucide-react"
 import { type DataTableFeatures } from "./data-table-features"
 import type { importCase, importIssue } from "@/lib/import/parse-test-cases"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card"
-import { AudienceBadge } from "../audience-badge"
 
 // One staged case in the import review. `id` is the case's first spreadsheet
 // row (DataTable needs a string id); `warnings` are the issues on its rows;
@@ -156,10 +155,6 @@ export function getImportReviewColumns() {
 				: <div className="flex flex-row items-center gap-1">
 					<p className="text-xs text-muted-foreground">No Role Assigned</p>
 				</div>,
-		}),
-		columnHelper.accessor("audience", {
-			header: "Audience",
-			cell: (info) => info.getValue() ? <AudienceBadge audience={info.getValue()} /> : <p className="text-xs">No Audience</p>
 		}),
 		columnHelper.display({
 			id: "issues",

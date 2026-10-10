@@ -3,7 +3,6 @@
 import { TestCase } from "@/components/types";
 import { createClient } from "@/lib/supabase/server";
 import { getIterationsBySuiteId, type testIteration } from "@/lib/supabase/test-iterations";
-import type { audience } from "@/lib/supabase/test-cases";
 import { toExitCriteria } from "@/lib/report/exit-criteria";
 import {cache} from "react";
 
@@ -46,8 +45,6 @@ export type suiteScope = {
     sectionCount: number;
     testCaseCount: number;
     roleCount: number;
-    // Who the suite's cases are for, combined: a mix of internal and external is "both". Null with no cases.
-    audience: audience | null;
 };
 
 // The draft header's "Scope of Testing": what the suite will hand over for testing.
@@ -57,21 +54,16 @@ export const getSuiteScope = cache(async (suiteId: string): Promise<suiteScope> 
         supabase.from("sections").select("id", { count: "exact", head: true }).eq("test_suite_id", suiteId),
         supabase
             .from("test_cases")
-            .select("role_assignee, audience, sections!inner ( test_suite_id )")
+            .select("role_assignee, sections!inner ( test_suite_id )")
             .eq("sections.test_suite_id", suiteId),
     ]);
     if (sectionsResult.error) throw sectionsResult.error;
     if (casesResult.error) throw casesResult.error;
 
-    const audiences = new Set(casesResult.data.map((c) => c.audience));
-    const audience = audiences.size === 0 ? null
-        : audiences.size === 1 ? [...audiences][0]
-            : "both";
     return {
         sectionCount: sectionsResult.count ?? 0,
         testCaseCount: casesResult.data.length,
         roleCount: new Set(casesResult.data.map((c) => c.role_assignee).filter(Boolean)).size,
-        audience,
     };
 });
 

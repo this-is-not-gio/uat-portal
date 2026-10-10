@@ -277,106 +277,6 @@ export type Database = {
           },
         ]
       }
-      suite_sign_offs: {
-        Row: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          exceptions: Json
-          id: string
-          iteration_id: string
-          note: string | null
-          revoked_at: string | null
-          rejected_at: string | null
-          rejected_by: string | null
-          rejection_reason: string | null
-          revoked_by: string | null
-          report: Json | null
-          signed_off_at: string
-          signed_off_by: string | null
-          status: Database["public"]["Enums"]["sign_off_status"]
-          testing_suite_id: string
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          exceptions?: Json
-          id?: string
-          iteration_id: string
-          note?: string | null
-          revoked_at?: string | null
-          rejected_at?: string | null
-          rejected_by?: string | null
-          rejection_reason?: string | null
-          revoked_by?: string | null
-          report?: Json | null
-          signed_off_at?: string
-          signed_off_by?: string | null
-          status?: Database["public"]["Enums"]["sign_off_status"]
-          testing_suite_id: string
-        }
-        Update: {
-          acknowledged_at?: string | null
-          acknowledged_by?: string | null
-          exceptions?: Json
-          id?: string
-          iteration_id?: string
-          note?: string | null
-          revoked_at?: string | null
-          rejected_at?: string | null
-          rejected_by?: string | null
-          rejection_reason?: string | null
-          revoked_by?: string | null
-          report?: Json | null
-          signed_off_at?: string
-          signed_off_by?: string | null
-          status?: Database["public"]["Enums"]["sign_off_status"]
-          testing_suite_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "suite_sign_offs_acknowledged_by_fkey"
-            columns: ["acknowledged_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suite_sign_offs_iteration_id_fkey"
-            columns: ["iteration_id"]
-            isOneToOne: false
-            referencedRelation: "test_iterations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suite_sign_offs_rejected_by_fkey"
-            columns: ["rejected_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suite_sign_offs_revoked_by_fkey"
-            columns: ["revoked_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suite_sign_offs_signed_off_by_fkey"
-            columns: ["signed_off_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suite_sign_offs_testing_suite_id_fkey"
-            columns: ["testing_suite_id"]
-            isOneToOne: false
-            referencedRelation: "testing_suites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       suite_endpoints: {
         Row: {
           created_at: string
@@ -443,6 +343,106 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "suite_overview_sections_testing_suite_id_fkey"
+            columns: ["testing_suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suite_sign_offs: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          exceptions: Json
+          id: string
+          iteration_id: string
+          note: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          report: Json | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signed_off_at: string
+          signed_off_by: string | null
+          status: Database["public"]["Enums"]["sign_off_status"]
+          testing_suite_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          exceptions?: Json
+          id?: string
+          iteration_id: string
+          note?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          report?: Json | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          signed_off_at?: string
+          signed_off_by?: string | null
+          status?: Database["public"]["Enums"]["sign_off_status"]
+          testing_suite_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          exceptions?: Json
+          id?: string
+          iteration_id?: string
+          note?: string | null
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          report?: Json | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          signed_off_at?: string
+          signed_off_by?: string | null
+          status?: Database["public"]["Enums"]["sign_off_status"]
+          testing_suite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suite_sign_offs_acknowledged_by_fkey"
+            columns: ["acknowledged_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_sign_offs_iteration_id_fkey"
+            columns: ["iteration_id"]
+            isOneToOne: false
+            referencedRelation: "test_iterations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_sign_offs_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_sign_offs_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_sign_offs_signed_off_by_fkey"
+            columns: ["signed_off_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_sign_offs_testing_suite_id_fkey"
             columns: ["testing_suite_id"]
             isOneToOne: false
             referencedRelation: "testing_suites"
@@ -552,9 +552,7 @@ export type Database = {
           organization_id: string
           preconditions: Json
           priority: Database["public"]["Enums"]["priority_level"] | null
-          role_assignee:
-            | string
-            | null
+          role_assignee: string | null
           section_name: string | null
           section_order: number
           section_slug: string | null
@@ -578,9 +576,7 @@ export type Database = {
           organization_id: string
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
-          role_assignee?:
-            | string
-            | null
+          role_assignee?: string | null
           section_name?: string | null
           section_order?: number
           section_slug?: string | null
@@ -604,9 +600,7 @@ export type Database = {
           organization_id?: string
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
-          role_assignee?:
-            | string
-            | null
+          role_assignee?: string | null
           section_name?: string | null
           section_order?: number
           section_slug?: string | null
@@ -659,7 +653,6 @@ export type Database = {
       }
       test_cases: {
         Row: {
-          audience: Database["public"]["Enums"]["audience"]
           code: string | null
           created_at: string
           created_by: string | null
@@ -668,16 +661,13 @@ export type Database = {
           lifecycle_status: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index: number
           priority: Database["public"]["Enums"]["priority_level"]
-          role_assignee:
-            | string
-            | null
+          role_assignee: string | null
           section_id: string
           status: Database["public"]["Enums"]["test_case_status"]
           title: string
           updated_at: string
         }
         Insert: {
-          audience?: Database["public"]["Enums"]["audience"]
           code?: string | null
           created_at?: string
           created_by?: string | null
@@ -686,16 +676,13 @@ export type Database = {
           lifecycle_status?: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
-          role_assignee?:
-            | string
-            | null
+          role_assignee?: string | null
           section_id: string
           status?: Database["public"]["Enums"]["test_case_status"]
           title: string
           updated_at?: string
         }
         Update: {
-          audience?: Database["public"]["Enums"]["audience"]
           code?: string | null
           created_at?: string
           created_by?: string | null
@@ -704,9 +691,7 @@ export type Database = {
           lifecycle_status?: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
-          role_assignee?:
-            | string
-            | null
+          role_assignee?: string | null
           section_id?: string
           status?: Database["public"]["Enums"]["test_case_status"]
           title?: string
@@ -1024,94 +1009,12 @@ export type Database = {
           id: string
           iteration_id: string
           note: string | null
-          revoked_at: string | null
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
-          revoked_by: string | null
           report: Json | null
-          signed_off_at: string
-          signed_off_by: string | null
-          status: Database["public"]["Enums"]["sign_off_status"]
-          testing_suite_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "suite_sign_offs"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      create_sign_off: {
-        Args: { p_by?: string; p_suite_id: string }
-        Returns: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          exceptions: Json
-          id: string
-          iteration_id: string
-          note: string | null
           revoked_at: string | null
-          rejected_at: string | null
-          rejected_by: string | null
-          rejection_reason: string | null
           revoked_by: string | null
-          report: Json | null
-          signed_off_at: string
-          signed_off_by: string | null
-          status: Database["public"]["Enums"]["sign_off_status"]
-          testing_suite_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "suite_sign_offs"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      discard_sign_off_draft: { Args: { p_sign_off_id: string }; Returns: undefined }
-      reject_sign_off: {
-        Args: { p_by?: string; p_reason?: string; p_suite_id: string }
-        Returns: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          exceptions: Json
-          id: string
-          iteration_id: string
-          note: string | null
-          revoked_at: string | null
-          rejected_at: string | null
-          rejected_by: string | null
-          rejection_reason: string | null
-          revoked_by: string | null
-          report: Json | null
-          signed_off_at: string
-          signed_off_by: string | null
-          status: Database["public"]["Enums"]["sign_off_status"]
-          testing_suite_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "suite_sign_offs"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      save_sign_off_draft: {
-        Args: { p_note?: string; p_report?: Json; p_sign_off_id: string }
-        Returns: {
-          acknowledged_at: string | null
-          acknowledged_by: string | null
-          exceptions: Json
-          id: string
-          iteration_id: string
-          note: string | null
-          revoked_at: string | null
-          rejected_at: string | null
-          rejected_by: string | null
-          rejection_reason: string | null
-          revoked_by: string | null
-          report: Json | null
           signed_off_at: string
           signed_off_by: string | null
           status: Database["public"]["Enums"]["sign_off_status"]
@@ -1149,6 +1052,10 @@ export type Database = {
       }
       assert_suite_readiness: {
         Args: { p_suite_id: string }
+        Returns: undefined
+      }
+      assign_participant_roles: {
+        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
         Returns: undefined
       }
       begin_iteration: {
@@ -1211,6 +1118,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_sign_off: {
+        Args: { p_by?: string; p_suite_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          exceptions: Json
+          id: string
+          iteration_id: string
+          note: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          report: Json | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signed_off_at: string
+          signed_off_by: string | null
+          status: Database["public"]["Enums"]["sign_off_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "suite_sign_offs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       current_org_id: { Args: never; Returns: string }
       current_role_: {
         Args: never
@@ -1221,6 +1155,10 @@ export type Database = {
       delete_test_case: { Args: { p_test_case_id: string }; Returns: undefined }
       delete_test_case_rows: {
         Args: { p_test_case_id: string }
+        Returns: undefined
+      }
+      discard_sign_off_draft: {
+        Args: { p_sign_off_id: string }
         Returns: undefined
       }
       force_refresh_case_result: {
@@ -1302,12 +1240,12 @@ export type Database = {
           id: string
           iteration_id: string
           note: string | null
-          revoked_at: string | null
           rejected_at: string | null
           rejected_by: string | null
           rejection_reason: string | null
-          revoked_by: string | null
           report: Json | null
+          revoked_at: string | null
+          revoked_by: string | null
           signed_off_at: string
           signed_off_by: string | null
           status: Database["public"]["Enums"]["sign_off_status"]
@@ -1320,11 +1258,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      org_sees_audience: {
-        Args: {
-          p_audience: Database["public"]["Enums"]["audience"]
-          p_org_type: Database["public"]["Enums"]["org_type"]
-        }
+      iteration_scope_case_ids: {
+        Args: { p_iteration_id: string }
+        Returns: string[]
+      }
+      norm_role_name: { Args: { p_name: string }; Returns: string }
+      org_has_case_role: {
+        Args: { p_org_id: string; p_role: string }
+        Returns: boolean
+      }
+      participant_tests_case: {
+        Args: { p_iteration_id: string; p_org_id: string; p_role: string }
         Returns: boolean
       }
       recompute_case_result_status: {
@@ -1339,13 +1283,36 @@ export type Database = {
         Args: { p_case_result_id: string }
         Returns: undefined
       }
+      reject_sign_off: {
+        Args: { p_by?: string; p_reason?: string; p_suite_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          exceptions: Json
+          id: string
+          iteration_id: string
+          note: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          report: Json | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signed_off_at: string
+          signed_off_by: string | null
+          status: Database["public"]["Enums"]["sign_off_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "suite_sign_offs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       remove_case_result: {
         Args: { p_case_result_id: string }
         Returns: undefined
-      }
-      set_participant_roles: {
-        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
-        Returns: number
       }
       remove_iteration_participant: {
         Args: { p_iteration_id: string; p_org_id: string }
@@ -1378,6 +1345,33 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "test_iterations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      save_sign_off_draft: {
+        Args: { p_note?: string; p_report?: Json; p_sign_off_id: string }
+        Returns: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          exceptions: Json
+          id: string
+          iteration_id: string
+          note: string | null
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          report: Json | null
+          revoked_at: string | null
+          revoked_by: string | null
+          signed_off_at: string
+          signed_off_by: string | null
+          status: Database["public"]["Enums"]["sign_off_status"]
+          testing_suite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "suite_sign_offs"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1440,6 +1434,10 @@ export type Database = {
         Args: { p_case_result_ids: string[]; p_included: boolean }
         Returns: undefined
       }
+      set_participant_roles: {
+        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
+        Returns: number
+      }
       set_suite_status: {
         Args: {
           p_status: Database["public"]["Enums"]["suite_status"]
@@ -1463,6 +1461,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sign_off_iteration: { Args: { p_suite_id: string }; Returns: string }
       slugify: { Args: { p_text: string }; Returns: string }
       start_iteration: {
         Args: {
@@ -1659,7 +1658,6 @@ export type Database = {
       }
     }
     Enums: {
-      audience: "internal" | "external" | "both"
       execution_status: "not_run" | "passed" | "skipped" | "failed"
       iteration_status: "not_started" | "in_progress" | "completed" | "stopped"
       org_type: "vendor" | "client" | "external"
@@ -1824,7 +1822,6 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      audience: ["internal", "external", "both"],
       execution_status: ["not_run", "passed", "skipped", "failed"],
       iteration_status: ["not_started", "in_progress", "completed", "stopped"],
       org_type: ["vendor", "client", "external"],

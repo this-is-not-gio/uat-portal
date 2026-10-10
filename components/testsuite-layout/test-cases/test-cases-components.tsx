@@ -23,7 +23,6 @@ import { testCase } from "@/lib/supabase/test-cases";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SearchFilterCombobox, type filterToken } from "./search-filter-combox";
-import { AUDIENCE_LABELS } from "@/components/audience-badge";
 import { TestingSuites, type suiteStatus } from "@/lib/supabase/Init";
 import ImportUATTestCases from "./import-uat-test-cases";
 
@@ -133,9 +132,7 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 	function matchFilter(tc: testCase, filter: filterToken[]): boolean {
 		return filter.every((f) => {
 			if (f.field === "search") return tc.title.toLowerCase().includes(f.value.toLowerCase());
-			const actual = f.field === "status" ? tc.status
-				: f.field === "audience" ? (tc.audience && AUDIENCE_LABELS[tc.audience])
-					: tc.roleAssignee;
+			const actual = f.field === "status" ? tc.status : tc.roleAssignee;
 			const isEqual = actual === f.value;
 			return f.operator === "is" ? isEqual : !isEqual;
 		})
@@ -212,7 +209,6 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 					filters={filters}
 					onFiltersChange={setFilters}
 					roleAssigneeValues={roleAssigneeValues}
-					includeAudience
 					disabled
 				/>
 				<div className="flex-1 flex items-center justify-center">
@@ -279,7 +275,6 @@ export default function TestCasesComponents({ testCases, section, hasSections, a
 						filters={filters}
 						onFiltersChange={setFilters}
 						roleAssigneeValues={roleAssigneeValues}
-						includeAudience
 					/>
 					{/* <Tabs defaultValue="table" className="min-h-0 flex flex-row" onValueChange={(value) => setViewMode(value as "table" | "board")}>
 						<TabsList className="">

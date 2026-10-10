@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { TEST_CASE_SELECT, audience, testCase, testCaseStatus, testStepStatus } from "./test-cases";
+import { TEST_CASE_SELECT, testCase, testCaseStatus, testStepStatus } from "./test-cases";
 import type { caseFlag, caseOrgResult, caseResult, caseState, caseStatus } from "./case-states";
 
 type TestCaseRow = {
@@ -10,7 +10,6 @@ type TestCaseRow = {
     role_assignee: string | null;
     description: string;
     priority: "low" | "medium" | "high";
-    audience: audience;
     lifecycle_status: "new" | "updated";
     sections: { id: string };
     created_at: string;
@@ -97,7 +96,6 @@ function mapTestCaseRow(testCase: TestCaseRow) {
         sectionId: testCase.sections.id,
         description: testCase.description,
         priority: testCase.priority,
-        audience: testCase.audience,
         lifecycleStatus: testCase.lifecycle_status,
         preconditions:
             testCase.preconditions?.map((preCondition) => ({
