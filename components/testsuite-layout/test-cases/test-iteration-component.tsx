@@ -74,7 +74,7 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 						</div>
 						<div className="">
 							<p className="flex flex-row items-center gap-2 font-medium text-xs">{iteration?.name}</p>
-							<p className="text-xs text-muted-foreground font-mono">{format(iteration?.startedAt || new Date(), "MMMM dd yyyy")} to {format(iteration?.plannedEndDate || new Date(), "MMMM dd yyyy")}</p>
+							<p className="text-xs text-muted-foreground font-mono">Planned End Date: {format(iteration?.plannedEndDate || new Date(), "MMMM dd yyyy")}</p>
 						</div>
 						{/* <Badge variant="secondary" className="text-xs">{section?.testCases.length} Test Cases</Badge> */}
 					</div>

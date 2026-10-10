@@ -20,7 +20,8 @@ function fail(error: { message: string }): { ok: false; error: string } {
 }
 
 type priority = Database["public"]["Enums"]["priority_level"];
-type roleAssignee = Database["public"]["Enums"]["role_assignee_type"];
+// A test role name from /admin (organization_roles).
+type roleAssignee = string;
 type audience = Database["public"]["Enums"]["audience"];
 
 // Suites -----------------------------------------------------------------------
@@ -63,7 +64,7 @@ export async function updateSuiteDescription({ suiteId, description }: { suiteId
 }
 
 // Overview "Test Accounts": replaces the suite's whole list (order = array order).
-export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: string; accounts: { role: roleAssignee | null; username: string; password: string }[] }): Promise<actionResult> {
+export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: string; accounts: { role: string | null; username: string; password: string }[] }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
@@ -76,7 +77,7 @@ export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: st
 // Overview edit state: saves only the parts that changed (omitted = untouched).
 // Not one transaction — if accounts fail after the description saved, the
 // refreshed description no longer differs, so a retry only re-sends accounts.
-export async function saveSuiteOverview({ suiteId, description, accounts, sections, endpoints }: { suiteId: string; description?: string; accounts?: { role: roleAssignee | null; username: string; password: string }[]; sections?: { title: string; icon: string | null; content: string }[]; endpoints?: { name: string; url: string }[] }): Promise<actionResult> {
+export async function saveSuiteOverview({ suiteId, description, accounts, sections, endpoints }: { suiteId: string; description?: string; accounts?: { role: string | null; username: string; password: string }[]; sections?: { title: string; icon: string | null; content: string }[]; endpoints?: { name: string; url: string }[] }): Promise<actionResult> {
     if (description !== undefined) {
         const result = await updateSuiteDescription({ suiteId, description });
         if (!result.ok) return result;

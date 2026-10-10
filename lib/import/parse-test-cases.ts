@@ -1,20 +1,21 @@
 import type { Database } from "@/lib/supabase/database.types";
-import { detectRoleAssignee } from "@/lib/import/detect-role";
+import { sameRoleName } from "@/lib/auth/test-role";
 
 type priority = Database["public"]["Enums"]["priority_level"];
-type roleAssignee = Database["public"]["Enums"]["role_assignee_type"];
 type audience = Database["public"]["Enums"]["audience"];
 
 // The import file's header row. Headers match by name or alias, ignoring case
 // and extra spaces, so column order doesn't matter; extra columns are ignored.
 // "TEST CASE" holds a section name (on a row with nothing else filled) or a
 // case title. "case" columns belong on a case's first row only; "step" columns
-// are filled on every row.
+// are filled on every row. Optional columns may be left out of the file.
 export const IMPORT_COLUMNS = [
 	{ header: "TEST CASE", aliases: ["TEST CASES"], level: "case" },
 	{ header: "PRECONDITION", aliases: ["PRECONDITIONS"], level: "case" },
 	{ header: "STEP TO EXECUTE", aliases: ["STEPS TO EXECUTE"], level: "step" },
 	{ header: "EXPECTED RESULT", aliases: ["EXPECTED RESULTS"], level: "step" },
+	// A test role name from /admin (organization_roles), e.g. "Action Officer - Licensing".
+	{ header: "ASSIGNED ROLE", aliases: ["ROLE", "ROLE ASSIGNEE"], level: "case", optional: true },
 ] as const;
 
 export type importColumn = (typeof IMPORT_COLUMNS)[number]["header"];
@@ -28,7 +29,8 @@ export type importCase = {
 	title: string;
 	description: string;
 	priority: priority;
-	roleAssignee: roleAssignee | null;
+	// The matching /admin role name, or null when the cell is blank or matches none.
+	roleAssignee: string | null;
 	audience: audience;
 	preconditions: { condition: string }[];
 	steps: { step: string; expectedResults: { result: string }[] }[];
@@ -43,13 +45,15 @@ export type importIssue = {
 	severity: "error" | "warning";
 };
 
+// Optional columns missing from the file are -1.
 type columnIndex = Record<importColumn, number>;
 
 const normalizeHeader = (value: unknown) =>
 	String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
-// Maps each import column to its position in the header row. Every column is
-// required; a missing one is a file-level error that rejects the whole file.
+// Maps each import column to its position in the header row. A missing required
+// column is a file-level error that rejects the whole file; a missing optional
+// one is a file-level warning.
 function readHeaders(headerRow: unknown[]): {
 	columns: columnIndex | null;
 	issues: importIssue[];
@@ -58,10 +62,19 @@ function readHeaders(headerRow: unknown[]): {
 	const columns = {} as columnIndex;
 	const issues: importIssue[] = [];
 
-	for (const { header, aliases } of IMPORT_COLUMNS) {
+	for (const column of IMPORT_COLUMNS) {
+		const { header, aliases } = column;
 		const names = [header, ...aliases].map(normalizeHeader);
 		const index = positions.findIndex((name) => names.includes(name));
-		if (index === -1) {
+		if (index === -1 && "optional" in column) {
+			columns[header] = -1;
+			issues.push({
+				row: 1,
+				column: null,
+				message: `No "${header}" column; every case is imported without a role and shows "Not ready" until one is set.`,
+				severity: "warning",
+			});
+		} else if (index === -1) {
 			issues.push({
 				row: 1,
 				column: null,
@@ -73,11 +86,12 @@ function readHeaders(headerRow: unknown[]): {
 		}
 	}
 
-	return { columns: issues.length ? null : columns, issues };
+	const hasErrors = issues.some((issue) => issue.severity === "error");
+	return { columns: hasErrors ? null : columns, issues };
 }
 
 const cellText = (row: unknown[], index: number) =>
-	String(row[index] ?? "").trim();
+	index < 0 ? "" : String(row[index] ?? "").trim();
 
 // A list number at the start of a line: "1.", "2)", "3.Text". A digit right
 // after the dot ("1.5 kg") is not a list number.
@@ -118,9 +132,12 @@ function toItems(text: string): string[] {
 // - Next step: Test Case blank, Step filled. Precondition must be blank.
 // - Blank: skipped.
 //
+// `roleNames` are the test roles from /admin; a case's Assigned Role must match
+// one of them (ignoring case, spaces and dashes) or it's imported without a role.
+//
 // `intoSection` imports every case into that one section (opened from a
 // section's page): the file needs no section rows, and any it has are skipped.
-export function parseTestCaseRows(rows: unknown[][], intoSection?: string): {
+export function parseTestCaseRows(rows: unknown[][], roleNames: string[], intoSection?: string): {
 	cases: importCase[];
 	issues: importIssue[];
 } {
@@ -146,6 +163,7 @@ export function parseTestCaseRows(rows: unknown[][], intoSection?: string): {
 		const precondition = cellText(cells, columns["PRECONDITION"]);
 		const step = stripNumber(cellText(cells, columns["STEP TO EXECUTE"]));
 		const expected = cellText(cells, columns["EXPECTED RESULT"]);
+		const assignedRole = cellText(cells, columns["ASSIGNED ROLE"]);
 
 		if (!title && !precondition && !step && !expected) return;
 
@@ -178,26 +196,25 @@ export function parseTestCaseRows(rows: unknown[][], intoSection?: string): {
 				return;
 			}
 			const preconditions = toItems(precondition);
-			// The file has no role column, so the role is guessed from role names
-			// in the title or preconditions.
-			const role = detectRoleAssignee(title, preconditions);
+			// Saved with the /admin spelling so it matches testers' roles exactly.
+			const role = assignedRole ? roleNames.find((name) => sameRoleName(name, assignedRole)) ?? null : null;
 			current = {
 				row,
 				sectionName,
 				title,
 				description: "",
 				priority: "medium",
-				roleAssignee: role.kind === "found" ? role.role : null,
+				roleAssignee: role,
 				audience: "internal",
 				preconditions: preconditions.map((condition) => ({ condition })),
 				steps: [nextStep],
 			};
 			cases.push(current);
 			skipping = false;
-			if (role.kind === "ambiguous") {
-				warn(row, null, `No role assignee; could be ${role.candidates.join(" or ")}. The case will show "Not ready" until one is set.`);
-			} else if (role.kind === "none") {
-				warn(row, null, 'No role assignee; the case will show "Not ready" until one is set.');
+			if (!assignedRole) {
+				if (columns["ASSIGNED ROLE"] >= 0) warn(row, "ASSIGNED ROLE", 'No assigned role; the case will show "Not ready" until one is set.');
+			} else if (!role) {
+				warn(row, "ASSIGNED ROLE", `"${assignedRole}" isn't a test role in Admin → Roles; the case is imported without a role and shows "Not ready" until one is set.`);
 			}
 			warnIfNoExpected();
 			return;
@@ -209,6 +226,9 @@ export function parseTestCaseRows(rows: unknown[][], intoSection?: string): {
 		}
 		if (precondition) {
 			error(row, "PRECONDITION", "Preconditions belong on the test case's first row.");
+		}
+		if (assignedRole) {
+			warn(row, "ASSIGNED ROLE", "The assigned role belongs on the test case's first row; this one is ignored.");
 		}
 		if (!current) {
 			if (!skipping) error(row, "STEP TO EXECUTE", "Step comes before any test case.");

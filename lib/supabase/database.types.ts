@@ -46,6 +46,39 @@ export type Database = {
           },
         ]
       }
+      iteration_participant_roles: {
+        Row: {
+          iteration_id: string
+          organization_id: string
+          role_id: string
+        }
+        Insert: {
+          iteration_id: string
+          organization_id: string
+          role_id: string
+        }
+        Update: {
+          iteration_id?: string
+          organization_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "iteration_participant_roles_iteration_id_organization_id_fkey"
+            columns: ["iteration_id", "organization_id"]
+            isOneToOne: false
+            referencedRelation: "iteration_participants"
+            referencedColumns: ["iteration_id", "organization_id"]
+          },
+          {
+            foreignKeyName: "iteration_participant_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "organization_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       iteration_participants: {
         Row: {
           iteration_id: string
@@ -422,7 +455,7 @@ export type Database = {
           created_at: string
           id: string
           password: string
-          role: Database["public"]["Enums"]["role_assignee_type"] | null
+          role: string | null
           sort_order: number
           testing_suite_id: string
           username: string
@@ -431,7 +464,7 @@ export type Database = {
           created_at?: string
           id?: string
           password: string
-          role?: Database["public"]["Enums"]["role_assignee_type"] | null
+          role?: string | null
           sort_order?: number
           testing_suite_id: string
           username: string
@@ -440,7 +473,7 @@ export type Database = {
           created_at?: string
           id?: string
           password?: string
-          role?: Database["public"]["Enums"]["role_assignee_type"] | null
+          role?: string | null
           sort_order?: number
           testing_suite_id?: string
           username?: string
@@ -520,7 +553,7 @@ export type Database = {
           preconditions: Json
           priority: Database["public"]["Enums"]["priority_level"] | null
           role_assignee:
-            | Database["public"]["Enums"]["role_assignee_type"]
+            | string
             | null
           section_name: string | null
           section_order: number
@@ -546,7 +579,7 @@ export type Database = {
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
           role_assignee?:
-            | Database["public"]["Enums"]["role_assignee_type"]
+            | string
             | null
           section_name?: string | null
           section_order?: number
@@ -572,7 +605,7 @@ export type Database = {
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
           role_assignee?:
-            | Database["public"]["Enums"]["role_assignee_type"]
+            | string
             | null
           section_name?: string | null
           section_order?: number
@@ -636,7 +669,7 @@ export type Database = {
           order_index: number
           priority: Database["public"]["Enums"]["priority_level"]
           role_assignee:
-            | Database["public"]["Enums"]["role_assignee_type"]
+            | string
             | null
           section_id: string
           status: Database["public"]["Enums"]["test_case_status"]
@@ -654,7 +687,7 @@ export type Database = {
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
           role_assignee?:
-            | Database["public"]["Enums"]["role_assignee_type"]
+            | string
             | null
           section_id: string
           status?: Database["public"]["Enums"]["test_case_status"]
@@ -672,7 +705,7 @@ export type Database = {
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
           role_assignee?:
-            | Database["public"]["Enums"]["role_assignee_type"]
+            | string
             | null
           section_id?: string
           status?: Database["public"]["Enums"]["test_case_status"]
@@ -1092,7 +1125,7 @@ export type Database = {
         }
       }
       add_iteration_participant: {
-        Args: { p_iteration_id: string; p_org_id: string }
+        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
         Returns: number
       }
       apply_derived_case_status: {
@@ -1310,6 +1343,10 @@ export type Database = {
         Args: { p_case_result_id: string }
         Returns: undefined
       }
+      set_participant_roles: {
+        Args: { p_iteration_id: string; p_org_id: string; p_role_ids: string[] }
+        Returns: number
+      }
       remove_iteration_participant: {
         Args: { p_iteration_id: string; p_org_id: string }
         Returns: undefined
@@ -1386,7 +1423,7 @@ export type Database = {
           created_at: string
           id: string
           password: string
-          role: Database["public"]["Enums"]["role_assignee_type"] | null
+          role: string | null
           sort_order: number
           testing_suite_id: string
           username: string

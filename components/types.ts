@@ -4,7 +4,8 @@ export type Priority = "low" | "medium" | "high"
 
 export type TestStatus = "Untested" | "Passed" | "Failed" | "Skipped" | "Blocked"
 
-export type RoleAssignee = "IC Admin" | "Kora-Workflow" | "Action-Officer" | "Supervisor" | "Division-Manager" | "Deputy-Commissioner" | "Insurance Commissioner" | "Company Admin"
+// A test role name from /admin (organization_roles), e.g. "Action Officer - Licensing".
+export type RoleAssignee = string
 
 
 export type Precondition = {

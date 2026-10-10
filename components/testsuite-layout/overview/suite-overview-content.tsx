@@ -11,6 +11,7 @@ import { SuiteTestAccountsCard, SuiteTestAccountsEditor, type accountRow } from 
 import { useOverviewEdit } from "./overview-edit-state";
 import { SuiteCustomSectionCards, SuiteCustomSectionsEditor, toIconName, type sectionDraft } from "./suite-custom-sections";
 import type { testingsuiteLifeCycle } from "@/components/testsuite-layout/suite-status-badge";
+import type { testRoleOptions } from "@/lib/supabase/organizations";
 
 type sectionProps = {
 	testSuite: { id: string; slug: string; name: string; description: string; status: testingsuiteLifeCycle };
@@ -18,6 +19,7 @@ type sectionProps = {
 	description: string;
 	accounts: suiteTestAccount[];
 	sections: suiteOverviewSection[];
+	roleOptions: testRoleOptions;
 };
 
 // The Overview's editable sections. View mode shows only the sections that
@@ -36,7 +38,7 @@ export function SuiteOverviewContent({ canEdit, ...props }: sectionProps & { can
 }
 
 // Mounted only while editing, so the drafts start from the saved content each time.
-function OverviewEditor({ testSuite, suiteId, description, accounts, sections }: sectionProps) {
+function OverviewEditor({ testSuite, suiteId, description, accounts, sections, roleOptions }: sectionProps) {
 	const { setIsEdit } = useOverviewEdit();
 	const [descriptionDraft, setDescriptionDraft] = useState(description);
 	const [rows, setRows] = useState<accountRow[]>(() =>
@@ -148,7 +150,7 @@ function OverviewEditor({ testSuite, suiteId, description, accounts, sections }:
 				// </p>
 			}
 			<SuiteDescriptionEditor draft={descriptionDraft} onDraftChange={setDescriptionDraft} disabled={locked} />
-			<SuiteTestAccountsEditor rows={rows} onRowsChange={setRows} disabled={locked} />
+			<SuiteTestAccountsEditor rows={rows} onRowsChange={setRows} roleOptions={roleOptions} disabled={locked} />
 			<SuiteCustomSectionsEditor sections={sectionDrafts} onSectionsChange={setSectionDrafts} disabled={locked} />
 
 		</div>

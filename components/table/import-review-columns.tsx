@@ -172,12 +172,11 @@ export function getImportReviewColumns() {
 }
 
 // Short label for each kind of warning, keyed by the column it's about.
-// `null` is the case itself (no role assignee).
 function missingLabel(column: importIssue["column"], count: number): string {
 	switch (column) {
 		case "EXPECTED RESULT":
 			return `${count} ${count === 1 ? "step" : "steps"} missing expected result`
-		case null:
+		case "ASSIGNED ROLE":
 			return "No role assignee"
 		default:
 			return count === 1 ? "1 issue" : `${count} issues`

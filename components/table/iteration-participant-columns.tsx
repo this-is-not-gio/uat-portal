@@ -3,17 +3,20 @@
 import { useState } from "react"
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, Users } from "lucide-react"
+import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, MoreHorizontal, MoreVertical, TestTubeDiagonal, Trash2, UserCog, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { removeParticipant } from "@/lib/supabase/iteration-actions"
 import ConfirmDialog from "../confirm-dialog"
+import EditParticipantRolesDialog from "@/components/testsuite-layout/test-cases/edit-participant-roles-dialog"
 
 // One participating org in a round, shaped by IterationParticipantsTable.
 export type iterationParticipantRow = {
 	id: string
 	name: string
 	typeLabel: string
+	// Test roles the org tests the suite as in this round (0054).
+	roles: { id: string; name: string }[]
 	testerCount: number
 	tested: number
 	total: number
@@ -51,6 +54,20 @@ export const iterationParticipantColumns = columnHelper.columns([
 				<p className="text-xs text-muted-foreground font-mono">{info.row.original.typeLabel}</p>
 			</div>
 		),
+	}),
+	columnHelper.accessor("roles", {
+		header: "Roles",
+		meta: { className: "hidden md:table-cell" },
+		cell: (info) => {
+			const roles = info.getValue()
+			return roles.length > 0 ? (
+				<div className="flex flex-row flex-wrap gap-1 max-w-64">
+					{roles.map((role) => (
+						<span key={role.id} className="rounded-md py-0.5 px-1.5 bg-gray-600/5 text-xs text-gray-800">{role.name}</span>
+					))}
+				</div>
+			) : <p className="text-xs text-muted-foreground">No roles</p>
+		},
 	}),
 	columnHelper.accessor("testerCount", {
 		header: "Testers",
@@ -101,7 +118,7 @@ export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.display({
 		id: "Submitted",
 		cell: (info) => {
-			const { submittedAt, tested, id, name, iterationId } = info.row.original
+			const { submittedAt, tested, id, name, roles, iterationId } = info.row.original
 			const state = PARTICIPATION_STATES[submittedAt ? "submitted" : tested > 0 ? "testing" : "notTesting"]
 			const Icon = state.icon
 
@@ -116,7 +133,7 @@ export const iterationParticipantColumns = columnHelper.columns([
 					</div>
 					{
 						// Rows navigate on click; React bubbles through portals, so keep menu/dialog clicks here.
-						iterationId ? <div onClick={(event) => event.stopPropagation()}><ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} /></div> : null
+						iterationId ? <div onClick={(event) => event.stopPropagation()}><ParticipantActions iterationId={iterationId} organizationId={id} organizationName={name} roleIds={roles.map((r) => r.id)} /></div> : null
 					}
 				</div>
 			)
@@ -134,8 +151,9 @@ export const iterationParticipantColumns = columnHelper.columns([
 ])
 
 // The dialog sits outside the menu so it stays open after the menu closes.
-function ParticipantActions({ iterationId, organizationId, organizationName }: { iterationId: string; organizationId: string; organizationName: string }) {
+function ParticipantActions({ iterationId, organizationId, organizationName, roleIds }: { iterationId: string; organizationId: string; organizationName: string; roleIds: string[] }) {
 	const [withdrawOpen, setWithdrawOpen] = useState(false)
+	const [rolesOpen, setRolesOpen] = useState(false)
 
 	return (
 		<div>
@@ -145,6 +163,10 @@ function ParticipantActions({ iterationId, organizationId, organizationName }: {
 				</Button>} />
 				<DropdownMenuContent align="end" className="w-56">
 					<DropdownMenuGroup>
+						<DropdownMenuItem onClick={() => setRolesOpen(true)}>
+							<UserCog size={14} />
+							Edit roles
+						</DropdownMenuItem>
 						<DropdownMenuItem variant="destructive" onClick={() => setWithdrawOpen(true)}>
 							<Trash2 size={14} />
 							Withdraw organization
@@ -152,6 +174,14 @@ function ParticipantActions({ iterationId, organizationId, organizationName }: {
 					</DropdownMenuGroup>
 				</DropdownMenuContent>
 			</DropdownMenu>
+			<EditParticipantRolesDialog
+				iterationId={iterationId}
+				organizationId={organizationId}
+				organizationName={organizationName}
+				currentRoleIds={roleIds}
+				open={rolesOpen}
+				onOpenChange={setRolesOpen}
+			/>
 			<ConfirmDialog
 				open={withdrawOpen}
 				onOpenChange={setWithdrawOpen}

@@ -13,7 +13,6 @@ import { TestStatusMapping } from "./columns"
 import type { testResultRow } from "@/lib/supabase/test-iterations"
 import type { testCase, testCaseStatus } from "@/lib/supabase/test-cases"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
-import { AudienceBadge } from "../audience-badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu"
 import { Button } from "../ui/button"
 
@@ -277,14 +276,6 @@ export function createIterationTestCaseColumns({
 						</div>
 					</div>
 				)
-			}
-		}),
-		columnHelper.accessor("audience", {
-			header: "Audience",
-			meta: { className: "hidden lg:table-cell" },
-			cell: (info) => {
-				const value = info.getValue()
-				return value ? <AudienceBadge audience={value} /> : null
 			}
 		}),
 		columnHelper.accessor("roleAssignee", {

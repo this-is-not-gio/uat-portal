@@ -43,7 +43,7 @@ export default function SyncBanner({ iteration, changes }: { iteration: { id: st
 		{ title: "Changed — already tested", hint: "Results are kept; the new version is tested next round", rows: changes.filter((c) => c.change === "changed" && c.hasResults && !c.incomplete), locked: true },
 		{ title: "Changed — incomplete", hint: "Fix the test case before it can be synced", rows: changes.filter((c) => c.change === "changed" && c.incomplete), locked: true },
 		{ title: "Removed", hint: "Deleted from the suite; taken out of the round and flagged for testers, results kept", rows: changes.filter((c) => c.change === "removed" && !c.audienceChanged), locked: false },
-		{ title: "Audience changed", hint: "No longer for that organization; taken out of its round and flagged, results kept", rows: changes.filter((c) => c.change === "removed" && c.audienceChanged), locked: false },
+		{ title: "Role changed", hint: "That organization no longer tests the case's role; taken out of its round and flagged, results kept", rows: changes.filter((c) => c.change === "removed" && c.audienceChanged), locked: false },
 	];
 
 	function toggle(key: string) {

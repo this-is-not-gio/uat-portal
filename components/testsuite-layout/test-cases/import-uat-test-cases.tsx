@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { FilePlus, FileSpreadsheet, Upload } from "lucide-react";
 import { parseTestCaseRows } from "@/lib/import/parse-test-cases";
 import { useImportStaging } from "./import-staging";
+import { useTestRoleOptions } from "@/components/testsuite-layout/shared/test-role-options";
 
 type parsedImport = ReturnType<typeof parseTestCaseRows>;
 
@@ -42,6 +43,7 @@ export default function ImportUATTestCases({ trigger, section }: { trigger?: Rea
 	const pathname = usePathname();
 	const { testSuiteSlug } = useParams<{ testSuiteSlug: string }>();
 	const { stage } = useImportStaging();
+	const roleOptions = useTestRoleOptions();
 	const [open, setOpen] = useState(false);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const [file, setFile] = useState<File | null>(null);
@@ -62,7 +64,7 @@ export default function ImportUATTestCases({ trigger, section }: { trigger?: Rea
 		setFile(picked);
 		startReading(async () => {
 			try {
-				setParsed(parseTestCaseRows(await readFirstSheet(picked), section));
+				setParsed(parseTestCaseRows(await readFirstSheet(picked), [...roleOptions.internal, ...roleOptions.external], section));
 			} catch {
 				setFile(null);
 				setError("Couldn't read that file. Check that it's a valid .csv or .xlsx file.");

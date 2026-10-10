@@ -20,6 +20,7 @@ import { Constants } from "@/lib/supabase/database.types";
 import { saveTestCase, type testCaseDraft } from "@/lib/supabase/authoring-actions";
 import type { audience, testCase } from "@/lib/supabase/test-cases";
 import { AUDIENCE_DESCRIPTIONS, AUDIENCE_LABELS } from "@/components/audience-badge";
+import { RoleOptionGroups, useTestRoleOptions } from "@/components/testsuite-layout/shared/test-role-options";
 
 type priority = testCaseDraft["priority"];
 type roleAssignee = NonNullable<testCaseDraft["roleAssignee"]>;
@@ -73,6 +74,7 @@ export default function TestCaseEditor({
 }) {
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState(() => fromTestCase(testCase));
+	const roleOptions = useTestRoleOptions();
 	const [sectionId, setSectionId] = useState(testCase?.sectionId ?? defaultSectionId ?? sections[0]?.id ?? "");
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -140,37 +142,30 @@ export default function TestCaseEditor({
 						<Label htmlFor="tc-description">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
 						<Textarea id="tc-description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} disabled={isPending} />
 					</div>
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-						<div className="flex flex-col gap-2">
-							<Label>Section</Label>
-							<Select value={sectionId} onValueChange={(value) => value && setSectionId(value)} disabled={isPending}>
-								<SelectTrigger className="w-full">
-									<SelectValue placeholder="Select a section">{sections.find((s) => s.id === sectionId)?.name}</SelectValue>
-								</SelectTrigger>
-								<SelectContent alignItemWithTrigger={false}>
-									{sections.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="flex flex-col gap-2">
-							<Label>Priority</Label>
-							<Select value={form.priority} onValueChange={(value) => value && setForm((f) => ({ ...f, priority: value as priority }))} disabled={isPending}>
-								<SelectTrigger className="w-full capitalize"><SelectValue>{form.priority}</SelectValue></SelectTrigger>
-								<SelectContent alignItemWithTrigger={false}>
-									{Constants.public.Enums.priority_level.map((p) => <SelectItem key={p} value={p} className="capitalize">{p}</SelectItem>)}
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="flex flex-col gap-2">
+					<div className="flex flex-col gap-2">
+						<Label>Section</Label>
+						<Select value={sectionId} onValueChange={(value) => value && setSectionId(value)} disabled={isPending}>
+							<SelectTrigger className="w-full">
+								<SelectValue placeholder="Select a section">{sections.find((s) => s.id === sectionId)?.name}</SelectValue>
+							</SelectTrigger>
+							<SelectContent alignItemWithTrigger={false}>
+								{sections.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+							</SelectContent>
+						</Select>
+					</div>
+					<div className="flex flex-col gap-2">
 							<Label>Role assignee</Label>
 							<Select value={form.roleAssignee ?? ""} onValueChange={(value) => setForm((f) => ({ ...f, roleAssignee: (value || null) as roleAssignee | null }))} disabled={isPending}>
 								<SelectTrigger className="w-full"><SelectValue placeholder="None">{form.roleAssignee ?? "None"}</SelectValue></SelectTrigger>
 								<SelectContent alignItemWithTrigger={false}>
 									<SelectItem value="">None</SelectItem>
-									{Constants.public.Enums.role_assignee_type.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+									<RoleOptionGroups options={roleOptions} current={form.roleAssignee} />
 								</SelectContent>
 							</Select>
 						</div>
+					{/* <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+						
 						<div className="flex flex-col gap-2">
 							<Label>Audience</Label>
 							<Select value={form.audience} onValueChange={(value) => value && setForm((f) => ({ ...f, audience: value as audience }))} disabled={isPending}>
@@ -187,7 +182,7 @@ export default function TestCaseEditor({
 								</SelectContent>
 							</Select>
 						</div>
-					</div>
+					</div> */}
 				</div>
 
 				{/* Preconditions */}

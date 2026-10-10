@@ -45,10 +45,11 @@ export default function IterationParticipantsTable({
 			else if (row.status === "Blocked") entry.blocked += 1;
 			progress.set(row.organizationId, entry);
 		}
-		return participants.map(({ organization, submittedAt }) => ({
+		return participants.map(({ organization, roles, submittedAt }) => ({
 			id: organization.id,
 			name: organization.name,
 			typeLabel: ORG_TYPE_LABELS[organization.type],
+			roles,
 			testerCount: testerCounts[organization.id] ?? 0,
 			...(progress.get(organization.id) ?? empty),
 			submittedAt,

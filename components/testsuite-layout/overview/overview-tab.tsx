@@ -9,6 +9,7 @@ import { EditOverviewButton, OverviewEditProvider } from "./overview-edit-state"
 import { type testingsuiteLifeCycle } from "@/components/testsuite-layout/suite-status-badge";
 import { ScopeOfTesting } from "@/components/testsuite-layout/overview/scope-of-testing";
 import type { suiteScope } from "@/lib/supabase/test-suite";
+import type { testRoleOptions } from "@/lib/supabase/organizations";
 import NextLink from "next/link";
 import type { ExitCriteria } from "@/lib/supabase/sign-off-report";
 import { SuiteEndpointsList } from "./suite-endpoints";
@@ -21,7 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 // Server-rendered (the Description card is a client island). Name, description, test case count, timeline, roles,
 // iterations and sign-offs are real; the guideline/account/endpoint sections
 // are still static copy until the suite has fields for them.
-export default function OverviewTab({ suite, scope, overview, testAccounts, overviewSections, endpoints, canEdit, exitCriteria, canEditCriteria }: { suite: { id: string; slug: string; name: string; description: string; status: testingsuiteLifeCycle }; scope: suiteScope; overview: suiteOverview; testAccounts: suiteTestAccount[]; overviewSections: suiteOverviewSection[]; endpoints: suiteEndpoint[]; canEdit: boolean; exitCriteria: ExitCriteria; canEditCriteria: boolean }) {
+export default function OverviewTab({ suite, scope, overview, testAccounts, overviewSections, endpoints, roleOptions, canEdit, exitCriteria, canEditCriteria }: { suite: { id: string; slug: string; name: string; description: string; status: testingsuiteLifeCycle }; scope: suiteScope; overview: suiteOverview; testAccounts: suiteTestAccount[]; overviewSections: suiteOverviewSection[]; endpoints: suiteEndpoint[]; roleOptions: testRoleOptions; canEdit: boolean; exitCriteria: ExitCriteria; canEditCriteria: boolean }) {
 	const firstIteration = overview.iterations[overview.iterations.length - 1];
 	const latestIteration = overview.iterations[0];
 	const currentSignOff = overview.signOffs.find((s) => !s.revokedAt);
@@ -76,7 +77,7 @@ export default function OverviewTab({ suite, scope, overview, testAccounts, over
 				<div className="flex flex-col lg:flex-row w-full gap-6">
 
 					<div className="w-full min-w-0 lg:flex-1 flex flex-col gap-4 pb-4">
-						<SuiteOverviewContent testSuite={suite} suiteId={suite.id} description={suite.description} accounts={testAccounts} sections={overviewSections} canEdit={canEdit} />
+						<SuiteOverviewContent testSuite={suite} suiteId={suite.id} description={suite.description} accounts={testAccounts} sections={overviewSections} roleOptions={roleOptions} canEdit={canEdit} />
 					</div>
 					<div className="w-full lg:w-72 lg:shrink-0">
 						<div className="flex flex-col gap-4 pb-6 border-b">

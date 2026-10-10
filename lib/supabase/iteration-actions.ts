@@ -6,7 +6,7 @@ import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database, Json } from "./database.types";
-import { getOrganizations, getTesterCountsByOrg, type organization } from "./organizations";
+import { getOrganizationRoles, getOrganizations, getTesterCountsByOrg, type organization, type orgRole } from "./organizations";
 import { getIterationParticipants } from "./test-iterations";
 import { buildSignOffReport, type SignOffReport } from "./sign-off-report";
 import { validateThemes, type ThemeInput } from "@/lib/report/sign-off-remarks";
@@ -228,12 +228,25 @@ export async function startIteration({ suiteId, name, plannedEndDate }: { suiteI
     return { ok: true, data: { iterationNumber: data.iteration_number, slug: data.slug } };
 }
 
-// Brings another org into the running round with the same scope as everyone else.
-export async function addParticipant({ iterationId, organizationId }: { iterationId: string; organizationId: string }): Promise<actionResult<{ addedCount: number }>> {
+// Brings another org into the round with the test roles that test the suite for it;
+// it gets the round's cases whose Role Assignee is one of those roles (0054).
+export async function addParticipant({ iterationId, organizationId, roleIds }: { iterationId: string; organizationId: string; roleIds: string[] }): Promise<actionResult<{ addedCount: number }>> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
-    const { data, error } = await supabase.rpc("add_iteration_participant", { p_iteration_id: iterationId, p_org_id: organizationId });
+    const { data, error } = await supabase.rpc("add_iteration_participant", { p_iteration_id: iterationId, p_org_id: organizationId, p_role_ids: roleIds });
+    if (error) return fail(error);
+    refresh();
+    return { ok: true, data: { addedCount: data } };
+}
+
+// Changes which test roles an org tests in an open round. Newly covered cases are added;
+// cases no longer covered leave a planned round now, a running one at the next Sync.
+export async function setParticipantRoles({ iterationId, organizationId, roleIds }: { iterationId: string; organizationId: string; roleIds: string[] }): Promise<actionResult<{ addedCount: number }>> {
+    const user = await requireUser();
+    if (!can(user, "run_iteration")) return denied("run_iteration");
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("set_participant_roles", { p_iteration_id: iterationId, p_org_id: organizationId, p_role_ids: roleIds });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: { addedCount: data } };
@@ -251,15 +264,16 @@ export async function removeParticipant({ iterationId, organizationId }: { itera
 }
 
 // What the org pickers list: every client/external org (the vendor doesn't take part in
-// rounds), plus (for a running round) which already take part.
-export async function getParticipantOptions({ iterationId }: { iterationId?: string } = {}): Promise<actionResult<{ organizations: organization[]; participantIds: string[]; testerCounts: Record<string, number> }>> {
+// rounds) with its test roles, plus (for a running round) which already take part.
+export async function getParticipantOptions({ iterationId }: { iterationId?: string } = {}): Promise<actionResult<{ organizations: organization[]; roles: orgRole[]; participantIds: string[]; testerCounts: Record<string, number> }>> {
     try {
-        const [organizations, participants, testerCounts] = await Promise.all([
+        const [organizations, roles, participants, testerCounts] = await Promise.all([
             getOrganizations(),
+            getOrganizationRoles(),
             iterationId ? getIterationParticipants(iterationId) : Promise.resolve([]),
             getTesterCountsByOrg(),
         ]);
-        return { ok: true, data: { organizations: organizations.filter((org) => org.type !== "vendor"), participantIds: participants.map((p) => p.organization.id), testerCounts } };
+        return { ok: true, data: { organizations: organizations.filter((org) => org.type !== "vendor"), roles, participantIds: participants.map((p) => p.organization.id), testerCounts } };
     } catch (error) {
         return fail(error as { message: string });
     }

@@ -3,9 +3,9 @@
 import { EmptyState } from "@/components/ui/empty-state";
 import { IdCard, Key, Plus, ShieldUser, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Database } from "@/lib/supabase/database.types";
-import { Constants } from "@/lib/supabase/database.types";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RoleOptionGroups } from "@/components/testsuite-layout/shared/test-role-options";
+import type { testRoleOptions } from "@/lib/supabase/organizations";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { suiteTestAccount } from "@/lib/supabase/test-accounts";
@@ -13,8 +13,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { type DataTableFeatures } from "@/components/table/data-table-features";
 import { DataTable } from "@/components/table/data-table";
 
-type roleAssignee = Database["public"]["Enums"]["role_assignee_type"];
-export type accountRow = { key: string; role: roleAssignee | null; username: string; password: string };
+export type accountRow = { key: string; role: string | null; username: string; password: string };
 export const emptyRow = (): accountRow => ({ key: crypto.randomUUID(), role: null, username: "", password: "" });
 
 const columnHelper = createColumnHelper<DataTableFeatures, suiteTestAccount>();
@@ -49,7 +48,7 @@ export function SuiteTestAccountsCard({ accounts }: { accounts: suiteTestAccount
 	);
 }
 
-export function SuiteTestAccountsEditor({ rows, onRowsChange, disabled }: { rows: accountRow[]; onRowsChange: (rows: accountRow[]) => void; disabled?: boolean }) {
+export function SuiteTestAccountsEditor({ rows, onRowsChange, roleOptions, disabled }: { rows: accountRow[]; onRowsChange: (rows: accountRow[]) => void; roleOptions: testRoleOptions; disabled?: boolean }) {
 	function updateRow(key: string, patch: Partial<accountRow>) {
 		onRowsChange(rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
 	}
@@ -76,10 +75,10 @@ export function SuiteTestAccountsEditor({ rows, onRowsChange, disabled }: { rows
 							<ShieldUser className="text-muted-foreground size-4" />
 							<FieldLabel className="text-xs font-medium text-muted-foreground">Role</FieldLabel>
 						</div>
-						<Select value={row.role} onValueChange={(value) => updateRow(row.key, { role: value as roleAssignee | null })} disabled={disabled}>
+						<Select value={row.role} onValueChange={(value) => updateRow(row.key, { role: value as string | null })} disabled={disabled}>
 							<SelectTrigger className="w-full" aria-label="Role"><SelectValue placeholder="Select role" /></SelectTrigger>
 							<SelectContent alignItemWithTrigger={false}>
-								{Constants.public.Enums.role_assignee_type.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+								<RoleOptionGroups options={roleOptions} current={row.role} />
 							</SelectContent>
 						</Select>
 					</Field>

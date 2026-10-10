@@ -1,13 +1,10 @@
 import { createClient } from "./server";
-import type { Database } from "./database.types";
-
-type roleAssignee = Database["public"]["Enums"]["role_assignee_type"];
 
 // Overview "Test Accounts". RLS returns nothing to testers whose org isn't in
 // one of the suite's rounds, so they simply see no card.
 export type suiteTestAccount = {
 	id: string;
-	role: roleAssignee | null;
+	role: string | null; // a test role name from /admin (organization_roles)
 	username: string;
 	password: string;
 };

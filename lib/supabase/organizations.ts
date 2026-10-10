@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "./database.types";
+import { sameRoleName } from "@/lib/auth/test-role";
 
 export type orgType = Database["public"]["Enums"]["org_type"];
 
@@ -32,6 +33,22 @@ export async function getOrganizationRoles(): Promise<orgRole[]> {
     const { data, error } = await supabase.from("organization_roles").select("id, name, organization_id").order("name");
     if (error) throw error;
     return data.map((r) => ({ id: r.id, name: r.name, organizationId: r.organization_id }));
+}
+
+// Test role names to pick from (e.g. Overview Test Accounts), Internal then External,
+// one entry per name across orgs (same name match as sameRoleName). Vendor orgs excluded.
+export type testRoleOptions = { internal: string[]; external: string[] };
+
+export async function getTestRoleOptions(): Promise<testRoleOptions> {
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("organization_roles").select("name, organizations!inner ( type )").order("name");
+    if (error) throw error;
+    const options: testRoleOptions = { internal: [], external: [] };
+    for (const role of data) {
+        const list = role.organizations.type === "client" ? options.internal : role.organizations.type === "external" ? options.external : null;
+        if (list && !list.some((name) => sameRoleName(name, role.name))) list.push(role.name);
+    }
+    return options;
 }
 
 // Tester accounts (Internal/External) per org id, for the participant pickers.

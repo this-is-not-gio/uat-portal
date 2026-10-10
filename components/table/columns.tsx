@@ -10,7 +10,6 @@ import { testCase } from "@/lib/supabase/test-cases"
 import { cn } from "@/lib/utils"
 import type { suiteStatus } from "@/lib/supabase/Init"
 import { useDragHandle } from "./data-table"
-import { AudienceBadge } from "../audience-badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { caseResultLabel, shortRoundName, type caseFlag, type caseState } from "@/lib/supabase/case-states"
 
@@ -319,14 +318,6 @@ export function getColumns(suiteStatus: suiteStatus, options?: { renderActions?:
 					<p className="text-xs text-muted-foreground">{info.getValue()}</p>
 				)
 			)
-		}),
-		columnHelper.accessor("audience", {
-			header: "Audience",
-			meta: { className: "hidden lg:table-cell" },
-			cell: (info) => {
-				const value = info.getValue();
-				return value ? <AudienceBadge audience={value} /> : null;
-			}
 		}),
 		columnHelper.display({
 			id: "status",

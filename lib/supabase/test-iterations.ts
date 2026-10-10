@@ -23,11 +23,17 @@ export type testIteration = {
 // removed / audience_changed: taken out mid-round by Sync, see isRemovedFromRound (0036).
 export type syncKind = "added" | "updated" | "force_reset" | "removed" | "audience_changed";
 
-// An org taking part in a round. Each participant gets its own result rows, filtered by the
-// cases' audience. Every query below takes an optional `orgId`: omit it to get all
-// participants' rows (one per case per org), pass it for a single org's view.
+// An org taking part in a round. Each participant gets its own result rows: the cases whose
+// Role Assignee is one of the test roles it picked for the round (`roles`, 0054). Every query
+// below takes an optional `orgId`: omit it to get all participants' rows (one per case per
+// org), pass it for a single org's view.
 // withdrawnAt: last withdrawal, cleared when the org submits again (0031).
-export type iterationParticipant = { organization: organization; submittedAt: string | null; withdrawnAt: string | null };
+export type iterationParticipant = {
+    organization: organization;
+    roles: { id: string; name: string }[];
+    submittedAt: string | null;
+    withdrawnAt: string | null;
+};
 
 // Results wiped by a vendor force refresh, kept as a frozen copy.
 export type resultArchive = {
@@ -43,8 +49,8 @@ export type resultArchive = {
 
 // A difference between the running iteration and the live suite.
 // added: live case not in the round; changed: edited since it was copied;
-// removed: copied case no longer exists live, or its audience no longer
-// includes that org. One row per case per org. hasResults rows are never
+// removed: copied case no longer exists live, or the org no longer tests its role.
+// One row per case per org. hasResults rows are never
 // refreshed/removed by sync (only a vendor force refresh resets them).
 // incomplete (changed rows only): the live case has test_case_issues, so
 // neither sync nor force refresh will copy it until it's fixed.
@@ -56,7 +62,7 @@ export type iterationChange = {
     title: string;
     hasResults: boolean;
     incomplete: boolean;
-    // removed rows only: the case still exists but its audience no longer includes this org.
+    // removed rows only: the case still exists but this org no longer tests its role (0054).
     audienceChanged: boolean;
     organizationId: string;
     organizationName: string;
@@ -422,11 +428,16 @@ export async function getIterationParticipants(iterationId: string): Promise<ite
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("iteration_participants")
-        .select("submitted_at, withdrawn_at, organization:organizations ( id, name, type )")
+        .select("submitted_at, withdrawn_at, organization:organizations ( id, name, type ), iteration_participant_roles ( role:organization_roles ( id, name ) )")
         .eq("iteration_id", iterationId);
     if (error) throw error;
     return data
-        .map((row) => ({ organization: row.organization, submittedAt: row.submitted_at, withdrawnAt: row.withdrawn_at }))
+        .map((row) => ({
+            organization: row.organization,
+            roles: row.iteration_participant_roles.map((r) => r.role).sort((a, b) => a.name.localeCompare(b.name)),
+            submittedAt: row.submitted_at,
+            withdrawnAt: row.withdrawn_at,
+        }))
         .sort((a, b) => compareOrganizations(a.organization, b.organization));
 }
 
