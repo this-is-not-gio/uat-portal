@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/supabase/database.types";
 import { sameRoleName } from "@/lib/auth/test-role";
+import type { testRole } from "@/lib/supabase/organizations";
 
 type priority = Database["public"]["Enums"]["priority_level"];
 
@@ -28,7 +29,8 @@ export type importCase = {
 	title: string;
 	description: string;
 	priority: priority;
-	// The matching /admin role name, or null when the cell is blank or matches none.
+	// The matching catalog role (test_roles) ID and name, or null when the cell is blank or matches none.
+	testRoleId: string | null;
 	roleAssignee: string | null;
 	preconditions: { condition: string }[];
 	steps: { step: string; expectedResults: { result: string }[] }[];
@@ -130,12 +132,12 @@ function toItems(text: string): string[] {
 // - Next step: Test Case blank, Step filled. Precondition must be blank.
 // - Blank: skipped.
 //
-// `roleNames` are the test roles from /admin; a case's Assigned Role must match
+// `roles` are the catalog test roles from /admin; a case's Assigned Role must match
 // one of them (ignoring case, spaces and dashes) or it's imported without a role.
 //
 // `intoSection` imports every case into that one section (opened from a
 // section's page): the file needs no section rows, and any it has are skipped.
-export function parseTestCaseRows(rows: unknown[][], roleNames: string[], intoSection?: string): {
+export function parseTestCaseRows(rows: unknown[][], roles: testRole[], intoSection?: string): {
 	cases: importCase[];
 	issues: importIssue[];
 } {
@@ -194,15 +196,15 @@ export function parseTestCaseRows(rows: unknown[][], roleNames: string[], intoSe
 				return;
 			}
 			const preconditions = toItems(precondition);
-			// Saved with the /admin spelling so it matches testers' roles exactly.
-			const role = assignedRole ? roleNames.find((name) => sameRoleName(name, assignedRole)) ?? null : null;
+			const role = assignedRole ? roles.find((r) => sameRoleName(r.name, assignedRole)) ?? null : null;
 			current = {
 				row,
 				sectionName,
 				title,
 				description: "",
 				priority: "medium",
-				roleAssignee: role,
+				testRoleId: role?.id ?? null,
+				roleAssignee: role?.name ?? null,
 				preconditions: preconditions.map((condition) => ({ condition })),
 				steps: [nextStep],
 			};

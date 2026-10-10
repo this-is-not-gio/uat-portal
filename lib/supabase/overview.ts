@@ -63,7 +63,7 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
         getIterationsBySuiteId(suiteId),
         supabase
             .from("test_cases")
-            .select("role_assignee, sections!inner ( test_suite_id )")
+            .select("test_role:test_roles ( name ), sections!inner ( test_suite_id )")
             .eq("sections.test_suite_id", suiteId),
         getSuiteSignOffs(suiteId),
     ]);
@@ -84,7 +84,7 @@ export async function getSuiteOverview(suiteId: string): Promise<suiteOverview> 
 
     return {
         testCaseCount: casesResult.data.length,
-        roles: Array.from(new Set(casesResult.data.map((c) => c.role_assignee).filter((r): r is NonNullable<typeof r> => !!r))).sort(),
+        roles: Array.from(new Set(casesResult.data.map((c) => c.test_role?.name).filter((r): r is NonNullable<typeof r> => !!r))).sort(),
         iterations: iterations.map((iteration) => ({ ...iteration, counts: countStatuses(statusesByIteration.get(iteration.id) ?? []) })),
         signOffs,
     };

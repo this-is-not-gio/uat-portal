@@ -462,8 +462,8 @@ export type Database = {
           created_at: string
           id: string
           password: string
-          role: string | null
           sort_order: number
+          test_role_id: string | null
           testing_suite_id: string
           username: string
         }
@@ -471,8 +471,8 @@ export type Database = {
           created_at?: string
           id?: string
           password: string
-          role?: string | null
           sort_order?: number
+          test_role_id?: string | null
           testing_suite_id: string
           username: string
         }
@@ -480,12 +480,19 @@ export type Database = {
           created_at?: string
           id?: string
           password?: string
-          role?: string | null
           sort_order?: number
+          test_role_id?: string | null
           testing_suite_id?: string
           username?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "suite_test_accounts_test_role_id_fkey"
+            columns: ["test_role_id"]
+            isOneToOne: false
+            referencedRelation: "test_roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "suite_test_accounts_testing_suite_id_fkey"
             columns: ["testing_suite_id"]
@@ -559,7 +566,6 @@ export type Database = {
           organization_id: string
           preconditions: Json
           priority: Database["public"]["Enums"]["priority_level"] | null
-          role_assignee: string | null
           section_name: string | null
           section_order: number
           section_slug: string | null
@@ -570,6 +576,7 @@ export type Database = {
           synced_at: string | null
           synced_by: string | null
           test_case_id: string | null
+          test_role_id: string | null
           title: string
         }
         Insert: {
@@ -583,7 +590,6 @@ export type Database = {
           organization_id: string
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
-          role_assignee?: string | null
           section_name?: string | null
           section_order?: number
           section_slug?: string | null
@@ -594,6 +600,7 @@ export type Database = {
           synced_at?: string | null
           synced_by?: string | null
           test_case_id?: string | null
+          test_role_id?: string | null
           title: string
         }
         Update: {
@@ -607,7 +614,6 @@ export type Database = {
           organization_id?: string
           preconditions?: Json
           priority?: Database["public"]["Enums"]["priority_level"] | null
-          role_assignee?: string | null
           section_name?: string | null
           section_order?: number
           section_slug?: string | null
@@ -618,6 +624,7 @@ export type Database = {
           synced_at?: string | null
           synced_by?: string | null
           test_case_id?: string | null
+          test_role_id?: string | null
           title?: string
         }
         Relationships: [
@@ -656,6 +663,13 @@ export type Database = {
             referencedRelation: "test_cases"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "test_case_results_test_role_id_fkey"
+            columns: ["test_role_id"]
+            isOneToOne: false
+            referencedRelation: "test_roles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       test_cases: {
@@ -668,9 +682,9 @@ export type Database = {
           lifecycle_status: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index: number
           priority: Database["public"]["Enums"]["priority_level"]
-          role_assignee: string | null
           section_id: string
           status: Database["public"]["Enums"]["test_case_status"]
+          test_role_id: string | null
           title: string
           updated_at: string
         }
@@ -683,9 +697,9 @@ export type Database = {
           lifecycle_status?: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
-          role_assignee?: string | null
           section_id: string
           status?: Database["public"]["Enums"]["test_case_status"]
+          test_role_id?: string | null
           title: string
           updated_at?: string
         }
@@ -698,9 +712,9 @@ export type Database = {
           lifecycle_status?: Database["public"]["Enums"]["test_case_lifecycle"]
           order_index?: number
           priority?: Database["public"]["Enums"]["priority_level"]
-          role_assignee?: string | null
           section_id?: string
           status?: Database["public"]["Enums"]["test_case_status"]
+          test_role_id?: string | null
           title?: string
           updated_at?: string
         }
@@ -717,6 +731,13 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_cases_test_role_id_fkey"
+            columns: ["test_role_id"]
+            isOneToOne: false
+            referencedRelation: "test_roles"
             referencedColumns: ["id"]
           },
         ]
@@ -1303,11 +1324,15 @@ export type Database = {
       }
       norm_role_name: { Args: { p_name: string }; Returns: string }
       org_has_case_role: {
-        Args: { p_org_id: string; p_role: string }
+        Args: { p_org_id: string; p_test_role_id: string }
         Returns: boolean
       }
       participant_tests_case: {
-        Args: { p_iteration_id: string; p_org_id: string; p_role: string }
+        Args: {
+          p_iteration_id: string
+          p_org_id: string
+          p_test_role_id: string
+        }
         Returns: boolean
       }
       recompute_case_result_status: {
@@ -1456,8 +1481,8 @@ export type Database = {
           created_at: string
           id: string
           password: string
-          role: string | null
           sort_order: number
+          test_role_id: string | null
           testing_suite_id: string
           username: string
         }[]
@@ -1705,15 +1730,6 @@ export type Database = {
       iteration_status: "not_started" | "in_progress" | "completed" | "stopped"
       org_type: "vendor" | "client" | "external"
       priority_level: "low" | "medium" | "high"
-      role_assignee_type:
-        | "IC Admin"
-        | "Kora-Workflow"
-        | "Action-Officer"
-        | "Supervisor"
-        | "Division-Manager"
-        | "Deputy-Commissioner"
-        | "Insurance Commissioner"
-        | "Company Admin"
       sign_off_status:
         | "drafting"
         | "issued"
@@ -1869,16 +1885,6 @@ export const Constants = {
       iteration_status: ["not_started", "in_progress", "completed", "stopped"],
       org_type: ["vendor", "client", "external"],
       priority_level: ["low", "medium", "high"],
-      role_assignee_type: [
-        "IC Admin",
-        "Kora-Workflow",
-        "Action-Officer",
-        "Supervisor",
-        "Division-Manager",
-        "Deputy-Commissioner",
-        "Insurance Commissioner",
-        "Company Admin",
-      ],
       sign_off_status: [
         "drafting",
         "issued",

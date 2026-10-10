@@ -59,7 +59,7 @@ export async function getSyncDiff({ caseResultId }: { caseResultId: string }): P
     const supabase = await createClient();
     const { data: snapshot, error: snapshotError } = await supabase
         .from("test_case_results")
-        .select("test_case_id, title, section_name, priority, role_assignee, preconditions, test_step_results ( step, order_index, expected_results )")
+        .select("test_case_id, title, section_name, priority, test_role:test_roles ( name ), preconditions, test_step_results ( step, order_index, expected_results )")
         .eq("id", caseResultId)
         .order("order_index", { referencedTable: "test_step_results", ascending: true })
         .single();
@@ -68,7 +68,7 @@ export async function getSyncDiff({ caseResultId }: { caseResultId: string }): P
 
     const { data: live, error: liveError } = await supabase
         .from("test_cases")
-        .select("title, priority, role_assignee, sections ( name ), preconditions ( condition, order_index ), test_steps ( step, order_index, expected_results ( result, order_index ) )")
+        .select("title, priority, test_role:test_roles ( name ), sections ( name ), preconditions ( condition, order_index ), test_steps ( step, order_index, expected_results ( result, order_index ) )")
         .eq("id", snapshot.test_case_id)
         .order("order_index", { referencedTable: "preconditions", ascending: true })
         .order("order_index", { referencedTable: "test_steps", ascending: true })
@@ -85,7 +85,7 @@ export async function getSyncDiff({ caseResultId }: { caseResultId: string }): P
                 title: snapshot.title,
                 section: snapshot.section_name,
                 priority: snapshot.priority,
-                roleAssignee: snapshot.role_assignee,
+                roleAssignee: snapshot.test_role?.name ?? null,
                 preconditions: snapshotPreconditions.map((p) => p.condition),
                 steps: snapshot.test_step_results.map((s) => ({
                     step: s.step,
@@ -96,7 +96,7 @@ export async function getSyncDiff({ caseResultId }: { caseResultId: string }): P
                 title: live.title,
                 section: live.sections?.name ?? null,
                 priority: live.priority,
-                roleAssignee: live.role_assignee,
+                roleAssignee: live.test_role?.name ?? null,
                 preconditions: live.preconditions.map((p) => p.condition),
                 steps: live.test_steps.map((s) => ({ step: s.step, expected: s.expected_results.map((e) => e.result) })),
             },

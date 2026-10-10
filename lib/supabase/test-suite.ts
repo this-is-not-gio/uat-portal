@@ -54,7 +54,7 @@ export const getSuiteScope = cache(async (suiteId: string): Promise<suiteScope> 
         supabase.from("sections").select("id", { count: "exact", head: true }).eq("test_suite_id", suiteId),
         supabase
             .from("test_cases")
-            .select("role_assignee, sections!inner ( test_suite_id )")
+            .select("test_role_id, sections!inner ( test_suite_id )")
             .eq("sections.test_suite_id", suiteId),
     ]);
     if (sectionsResult.error) throw sectionsResult.error;
@@ -63,7 +63,7 @@ export const getSuiteScope = cache(async (suiteId: string): Promise<suiteScope> 
     return {
         sectionCount: sectionsResult.count ?? 0,
         testCaseCount: casesResult.data.length,
-        roleCount: new Set(casesResult.data.map((c) => c.role_assignee).filter(Boolean)).size,
+        roleCount: new Set(casesResult.data.map((c) => c.test_role_id).filter(Boolean)).size,
     };
 });
 

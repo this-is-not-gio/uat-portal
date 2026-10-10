@@ -42,7 +42,7 @@ function OverviewEditor({ testSuite, suiteId, description, accounts, sections, r
 	const { setIsEdit } = useOverviewEdit();
 	const [descriptionDraft, setDescriptionDraft] = useState(description);
 	const [rows, setRows] = useState<accountRow[]>(() =>
-		accounts.map((a) => ({ key: a.id, role: a.role, username: a.username, password: a.password })),
+		accounts.map((a) => ({ key: a.id, testRoleId: a.testRoleId, role: a.role, username: a.username, password: a.password })),
 	);
 	const [sectionDrafts, setSectionDrafts] = useState<sectionDraft[]>(() =>
 		sections.map((s) => ({ key: s.id, title: s.title, icon: s.icon ?? "", content: s.content })),
@@ -57,7 +57,7 @@ function OverviewEditor({ testSuite, suiteId, description, accounts, sections, r
 	// are dropped); invalid parts are left out and reported in `invalid`.
 	function changes() {
 		const invalid: string[] = [];
-		const filled = rows.filter((r) => r.role || r.username.trim() || r.password);
+		const filled = rows.filter((r) => r.testRoleId || r.username.trim() || r.password);
 		const accountsValid = !filled.some((r) => !r.username.trim() || !r.password);
 		if (!accountsValid) invalid.push("Every account needs a username/email and a password.");
 		const nextSections = sectionDrafts
@@ -65,8 +65,8 @@ function OverviewEditor({ testSuite, suiteId, description, accounts, sections, r
 			.map((s) => ({ title: s.title.trim(), icon: toIconName(s.icon), content: s.content.trim() }));
 		const sectionsValid = !nextSections.some((s) => !s.title);
 		if (!sectionsValid) invalid.push("Every custom section needs a header.");
-		const nextAccounts = filled.map(({ role, username, password }) => ({ role, username: username.trim(), password }));
-		const savedAccounts = accounts.map(({ role, username, password }) => ({ role, username, password }));
+		const nextAccounts = filled.map(({ testRoleId, username, password }) => ({ testRoleId, username: username.trim(), password }));
+		const savedAccounts = accounts.map(({ testRoleId, username, password }) => ({ testRoleId, username, password }));
 		const savedSections = sections.map(({ title, icon, content }) => ({ title, icon, content }));
 		const payload = {
 			suiteId,

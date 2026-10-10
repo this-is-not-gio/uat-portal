@@ -4,7 +4,8 @@ import { createClient } from "./server";
 // one of the suite's rounds, so they simply see no card.
 export type suiteTestAccount = {
 	id: string;
-	role: string | null; // a test role name from the /admin role catalog (test_roles)
+	testRoleId: string | null; // a catalog role (test_roles); null = any role
+	role: string | null; // that role's name, for display
 	username: string;
 	password: string;
 };
@@ -13,11 +14,11 @@ export async function getSuiteTestAccounts(suiteId: string): Promise<suiteTestAc
 	const supabase = await createClient();
 	const { data, error } = await supabase
 		.from("suite_test_accounts")
-		.select("id, role, username, password")
+		.select("id, test_role_id, test_role:test_roles ( name ), username, password")
 		.eq("testing_suite_id", suiteId)
 		.order("sort_order");
 	if (error) throw error;
-	return data;
+	return data.map((a) => ({ id: a.id, testRoleId: a.test_role_id, role: a.test_role?.name ?? null, username: a.username, password: a.password }));
 }
 
 // Overview custom sections (header, Lucide icon name, Markdown content). Same

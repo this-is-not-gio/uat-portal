@@ -196,18 +196,29 @@ returns uuid language sql as $$
   returning id;
 $$;
 
--- A complete test case (one step with one expected result) for the given role name.
+-- A complete test case (one step with one expected result) for the catalog role with this
+-- name (created if missing); a null role makes a roleless draft case.
 create function pg_temp.t_case(p_section uuid, p_title text, p_role text)
 returns uuid language plpgsql as $$
 declare
   v_case uuid;
   v_step uuid;
 begin
-  insert into public.test_cases (section_id, title, role_assignee, order_index)
-  values (p_section, p_title, p_role, (select count(*) from public.test_cases where section_id = p_section))
+  insert into public.test_cases (section_id, title, test_role_id, order_index)
+  values (p_section, p_title, case when p_role is not null then pg_temp.t_test_role(p_role) end,
+          (select count(*) from public.test_cases where section_id = p_section))
   returning id into v_case;
   insert into public.test_steps (test_case_id, step) values (v_case, 'Do ' || p_title) returning id into v_step;
   insert into public.expected_results (test_step_id, result) values (v_step, p_title || ' works');
   return v_case;
 end;
+$$;
+
+-- A round on the suite (not started; its scope is every case that exists now).
+create function pg_temp.t_round(p_suite uuid, p_name text default 'Round')
+returns uuid language sql as $$
+  insert into public.test_iterations (testing_suite_id, iteration_number, name, slug)
+  values (p_suite, (select count(*) + 1 from public.test_iterations where testing_suite_id = p_suite),
+          '[t] ' || p_name, 't-' || md5(p_name || clock_timestamp()::text))
+  returning id;
 $$;

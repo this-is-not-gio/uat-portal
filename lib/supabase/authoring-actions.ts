@@ -20,8 +20,6 @@ function fail(error: { message: string }): { ok: false; error: string } {
 }
 
 type priority = Database["public"]["Enums"]["priority_level"];
-// A test role name from the /admin role catalog (test_roles).
-type roleAssignee = string;
 
 // Suites -----------------------------------------------------------------------
 
@@ -62,12 +60,18 @@ export async function updateSuiteDescription({ suiteId, description }: { suiteId
     return { ok: true, data: undefined };
 }
 
+// A suite test account; testRoleId is a catalog role (test_roles) ID, or null for "any role".
+export type testAccountDraft = { testRoleId: string | null; username: string; password: string };
+
+const toAccountPayload = (accounts: testAccountDraft[]) =>
+    accounts.map((a) => ({ test_role_id: a.testRoleId, username: a.username, password: a.password }));
+
 // Overview "Test Accounts": replaces the suite's whole list (order = array order).
-export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: string; accounts: { role: string | null; username: string; password: string }[] }): Promise<actionResult> {
+export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: string; accounts: testAccountDraft[] }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "author")) return denied("author");
     const supabase = await createClient();
-    const { error } = await supabase.rpc("save_suite_test_accounts", { p_suite_id: suiteId, p_accounts: accounts });
+    const { error } = await supabase.rpc("save_suite_test_accounts", { p_suite_id: suiteId, p_accounts: toAccountPayload(accounts) });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };
@@ -76,7 +80,7 @@ export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: st
 // Overview edit state: saves only the parts that changed (omitted = untouched).
 // Not one transaction — if accounts fail after the description saved, the
 // refreshed description no longer differs, so a retry only re-sends accounts.
-export async function saveSuiteOverview({ suiteId, description, accounts, sections, endpoints }: { suiteId: string; description?: string; accounts?: { role: string | null; username: string; password: string }[]; sections?: { title: string; icon: string | null; content: string }[]; endpoints?: { name: string; url: string }[] }): Promise<actionResult> {
+export async function saveSuiteOverview({ suiteId, description, accounts, sections, endpoints }: { suiteId: string; description?: string; accounts?: testAccountDraft[]; sections?: { title: string; icon: string | null; content: string }[]; endpoints?: { name: string; url: string }[] }): Promise<actionResult> {
     if (description !== undefined) {
         const result = await updateSuiteDescription({ suiteId, description });
         if (!result.ok) return result;
@@ -176,7 +180,8 @@ export type testCaseDraft = {
     title: string;
     description: string;
     priority: priority;
-    roleAssignee: roleAssignee | null;
+    // A catalog role (test_roles) ID; null while drafting.
+    testRoleId: string | null;
     preconditions: { id?: string; condition: string }[];
     steps: { id?: string; step: string; expectedResults: { id?: string; result: string }[] }[];
 };
@@ -192,7 +197,7 @@ export async function saveTestCase(draft: testCaseDraft): Promise<actionResult<{
             title: draft.title,
             description: draft.description,
             priority: draft.priority,
-            role_assignee: draft.roleAssignee,
+            test_role_id: draft.testRoleId,
             created_by: user.id,
             preconditions: draft.preconditions.map((precondition) => ({ id: precondition.id ?? null, condition: precondition.condition })),
             steps: draft.steps.map((step) => ({
@@ -220,7 +225,7 @@ export async function importTestCases({ suiteId, cases }: { suiteId: string; cas
             title: importCase.title,
             description: importCase.description,
             priority: importCase.priority,
-            role_assignee: importCase.roleAssignee,
+            test_role_id: importCase.testRoleId,
             created_by: user.id,
             preconditions: importCase.preconditions,
             steps: importCase.steps.map((step) => ({

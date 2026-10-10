@@ -18,10 +18,9 @@ import {
 } from "@/components/ui/sheet";
 import { saveTestCase, type testCaseDraft } from "@/lib/supabase/authoring-actions";
 import type { testCase } from "@/lib/supabase/test-cases";
-import { RoleOptionGroups, useTestRoleOptions } from "@/components/testsuite-layout/shared/test-role-options";
+import { RoleOptionGroups, roleNameOf, useTestRoleOptions } from "@/components/testsuite-layout/shared/test-role-options";
 
 type priority = testCaseDraft["priority"];
-type roleAssignee = NonNullable<testCaseDraft["roleAssignee"]>;
 
 // `key` is only for React; `id` is the DB id of an existing item (kept on save
 // so iteration snapshots stay linked to it).
@@ -43,7 +42,7 @@ function fromTestCase(testCase?: testCase) {
 		title: testCase?.title ?? "",
 		description: testCase?.description ?? "",
 		priority: (testCase?.priority ?? "medium") as priority,
-		roleAssignee: (testCase?.roleAssignee ?? null) as roleAssignee | null,
+		testRoleId: testCase?.testRoleId ?? null,
 		preconditions: (testCase?.preconditions ?? []).map((p): draftPrecondition => ({ key: newKey(), id: p.id, condition: p.condition })),
 		steps: testCase?.stepsToExecute?.length
 			? testCase.stepsToExecute.map((s): draftStep => ({
@@ -96,7 +95,7 @@ export default function TestCaseEditor({
 				title: form.title.trim(),
 				description: form.description,
 				priority: form.priority,
-				roleAssignee: form.roleAssignee,
+				testRoleId: form.testRoleId,
 				preconditions: form.preconditions
 					.filter((p) => p.condition.trim())
 					.map(({ id, condition }) => ({ id, condition: condition.trim() })),
@@ -116,6 +115,7 @@ export default function TestCaseEditor({
 		});
 	}
 
+	const roleName = roleNameOf(roleOptions, form.testRoleId, form.testRoleId === testCase?.testRoleId ? testCase?.roleAssignee : null);
 	const canSave = !!form.title.trim() && !!sectionId && form.steps.every((s) => s.step.trim());
 
 	return (
@@ -151,11 +151,11 @@ export default function TestCaseEditor({
 					</div>
 					<div className="flex flex-col gap-2">
 							<Label>Role assignee</Label>
-							<Select value={form.roleAssignee ?? ""} onValueChange={(value) => setForm((f) => ({ ...f, roleAssignee: (value || null) as roleAssignee | null }))} disabled={isPending}>
-								<SelectTrigger className="w-full"><SelectValue placeholder="None">{form.roleAssignee ?? "None"}</SelectValue></SelectTrigger>
+							<Select value={form.testRoleId ?? ""} onValueChange={(value) => setForm((f) => ({ ...f, testRoleId: value || null }))} disabled={isPending}>
+								<SelectTrigger className="w-full"><SelectValue placeholder="None">{roleName ?? "None"}</SelectValue></SelectTrigger>
 								<SelectContent alignItemWithTrigger={false}>
 									<SelectItem value="">None</SelectItem>
-									<RoleOptionGroups options={roleOptions} current={form.roleAssignee} />
+									<RoleOptionGroups options={roleOptions} current={testCase?.testRoleId && testCase.roleAssignee ? { id: testCase.testRoleId, name: testCase.roleAssignee } : null} />
 								</SelectContent>
 							</Select>
 						</div>

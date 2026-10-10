@@ -589,7 +589,7 @@ async function loadLiveCases(suiteId: string): Promise<ReportLiveCase[]> {
     const [casesResult, statesResult] = await Promise.all([
         supabase
             .from("test_cases")
-            .select("id, code, title, priority, role_assignee, order_index, sections!inner ( name, order_index, test_suite_id )")
+            .select("id, code, title, priority, test_role:test_roles ( name ), order_index, sections!inner ( name, order_index, test_suite_id )")
             .eq("sections.test_suite_id", suiteId),
         supabase.rpc("get_suite_case_states", { p_suite_id: suiteId }),
     ]);
@@ -607,7 +607,7 @@ async function loadLiveCases(suiteId: string): Promise<ReportLiveCase[]> {
             sectionOrder: c.sections.order_index,
             orderIndex: c.order_index,
             priority: c.priority,
-            roleAssignee: c.role_assignee,
+            roleAssignee: c.test_role?.name ?? null,
             flags: flagsById.get(c.id) ?? [],
         }))
         .sort((a, b) => a.sectionOrder - b.sectionOrder || a.orderIndex - b.orderIndex);

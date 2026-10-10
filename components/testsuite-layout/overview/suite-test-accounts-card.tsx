@@ -6,7 +6,7 @@ import { ClipboardIcon, Eye, EyeOff, IdCard, Key, Plus, ShieldUser, Trash } from
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RoleOptionGroups } from "@/components/testsuite-layout/shared/test-role-options";
+import { RoleOptionGroups, roleNameOf } from "@/components/testsuite-layout/shared/test-role-options";
 import type { testRoleOptions } from "@/lib/supabase/organizations";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,9 @@ import { type DataTableFeatures } from "@/components/table/data-table-features";
 import { DataTable } from "@/components/table/data-table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-export type accountRow = { key: string; role: string | null; username: string; password: string };
-export const emptyRow = (): accountRow => ({ key: crypto.randomUUID(), role: null, username: "", password: "" });
+// testRoleId: a catalog role (test_roles) ID, or null for "any role"; role: its saved name.
+export type accountRow = { key: string; testRoleId: string | null; role: string | null; username: string; password: string };
+export const emptyRow = (): accountRow => ({ key: crypto.randomUUID(), testRoleId: null, role: null, username: "", password: "" });
 
 const columnHelper = createColumnHelper<DataTableFeatures, suiteTestAccount>();
 
@@ -125,10 +126,10 @@ export function SuiteTestAccountsEditor({ rows, onRowsChange, roleOptions, disab
 							<ShieldUser className="text-muted-foreground size-4" />
 							<FieldLabel className="text-xs font-medium text-muted-foreground">Role</FieldLabel>
 						</div>
-						<Select value={row.role} onValueChange={(value) => updateRow(row.key, { role: value as string | null })} disabled={disabled}>
-							<SelectTrigger className="w-full" aria-label="Role"><SelectValue placeholder="Select role" /></SelectTrigger>
+						<Select value={row.testRoleId} onValueChange={(value) => updateRow(row.key, { testRoleId: value as string | null })} disabled={disabled}>
+							<SelectTrigger className="w-full" aria-label="Role"><SelectValue placeholder="Select role">{roleNameOf(roleOptions, row.testRoleId, row.role)}</SelectValue></SelectTrigger>
 							<SelectContent alignItemWithTrigger={false}>
-								<RoleOptionGroups options={roleOptions} current={row.role} />
+								<RoleOptionGroups options={roleOptions} current={row.testRoleId && row.role ? { id: row.testRoleId, name: row.role } : null} />
 							</SelectContent>
 						</Select>
 					</Field>

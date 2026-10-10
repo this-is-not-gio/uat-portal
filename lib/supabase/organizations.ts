@@ -54,19 +54,19 @@ export async function getCatalogRoles(): Promise<catalogRole[]> {
     }));
 }
 
-// Test role names to pick from (e.g. Overview Test Accounts), grouped by the kind of org that
-// has them: a catalog role given to both an Internal and an External org shows in both lists.
-export type testRoleOptions = { internal: string[]; external: string[] };
+// Catalog roles to pick from (test case role, Overview Test Accounts), grouped by the kind of
+// org that has them: a catalog role given to both an Internal and an External org shows in both lists.
+export type testRoleOptions = { internal: testRole[]; external: testRole[] };
 
 export async function getTestRoleOptions(): Promise<testRoleOptions> {
     const supabase = await createClient();
-    const { data, error } = await supabase.from("test_roles").select("name, organization_roles ( organizations!inner ( type ) )").order("name");
+    const { data, error } = await supabase.from("test_roles").select("id, name, organization_roles ( organizations!inner ( type ) )").order("name");
     if (error) throw error;
     const options: testRoleOptions = { internal: [], external: [] };
     for (const role of data) {
         const types = new Set(role.organization_roles.map((r) => r.organizations.type));
-        if (types.has("client")) options.internal.push(role.name);
-        if (types.has("external")) options.external.push(role.name);
+        if (types.has("client")) options.internal.push({ id: role.id, name: role.name });
+        if (types.has("external")) options.external.push({ id: role.id, name: role.name });
     }
     return options;
 }

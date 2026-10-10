@@ -7,7 +7,8 @@ export const TEST_CASE_SELECT = `
   title,
   description,
   priority,
-  role_assignee,
+  test_role_id,
+  test_role:test_roles ( name ),
   status,
   lifecycle_status,
   order_index,
@@ -63,6 +64,8 @@ export type testCase = {
     code?: string | null;
     title: string;
     status: testCaseStatus;
+    // Catalog test role (test_roles): the ID to match on, the name to show.
+    testRoleId?: string;
     roleAssignee?: string;
     // Authoring fields; only set on live test cases (not iteration snapshots).
     sectionId?: string;

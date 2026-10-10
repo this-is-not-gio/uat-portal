@@ -7,7 +7,8 @@ type TestCaseRow = {
     code: string | null;
     title: string;
     status: testCaseStatus;
-    role_assignee: string | null;
+    test_role_id: string | null;
+    test_role: { name: string } | null;
     description: string;
     priority: "low" | "medium" | "high";
     lifecycle_status: "new" | "updated";
@@ -92,7 +93,8 @@ function mapTestCaseRow(testCase: TestCaseRow) {
         code: testCase.code,
         title: testCase.title,
         status: testCase.status,
-        roleAssignee: testCase.role_assignee ?? undefined,
+        testRoleId: testCase.test_role_id ?? undefined,
+        roleAssignee: testCase.test_role?.name,
         sectionId: testCase.sections.id,
         description: testCase.description,
         priority: testCase.priority,

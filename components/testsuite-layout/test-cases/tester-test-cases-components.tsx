@@ -17,12 +17,12 @@ import { TestStatusMapping } from "@/components/table/columns";
 import { ChangeFlagsCell, RemarkCountCell, ResultSummaryCell } from "@/components/table/test-result-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
+import type { testRole } from "@/lib/supabase/organizations";
 import { isRemovedFromRound } from "@/lib/supabase/case-states";
 import { cn } from "@/lib/utils";
 import { SubmitDialog, WithdrawButton, type untestedCase } from "@/components/testsuite-layout/shared/submission-bar";
 import { Progress } from "@/components/ui/progress";
 import { useCurrentUser } from "@/components/current-user-provider";
-import { sameRoleName } from "@/lib/auth/test-role";
 
 type statusFilter = "all" | "untested" | "failed" | "changed";
 const ALL_ROLES = "__all__";
@@ -148,17 +148,21 @@ export default function TesterTestCasesComponents({
 	const router = useRouter();
 	const [rows, setRows] = useState<testResultRow[]>(results);
 	const [statusFilter, setStatusFilter] = useState<statusFilter>("all");
-	// On their own org's rows, testers start on their test role's cases; "All roles" shows the rest.
+	// On their own org's rows, testers start on their test role's cases (matched by catalog
+	// role ID); "All roles" shows the rest. `role` is a catalog role ID or ALL_ROLES.
 	const testRole = useCurrentUser()?.testRole;
 	const [role, setRole] = useState<string>(
-		() => (isOwnLens && results.find((row) => sameRoleName(row.roleAssignee, testRole?.name))?.roleAssignee) || ALL_ROLES
+		() => (isOwnLens && testRole && results.some((row) => row.testRoleId === testRole.id) ? testRole.id : ALL_ROLES)
 	);
 	const [search, setSearch] = useState("");
 
 	const roles = useMemo(
-		() => [...new Set(rows.map((row) => row.roleAssignee).filter((r): r is string => !!r))].sort(),
+		() => [...new Map(rows.filter((row) => row.testRoleId).map((row) => [row.testRoleId!, row.roleAssignee ?? ""])).entries()]
+			.map(([id, name]) => ({ id, name }))
+			.sort((a, b) => a.name.localeCompare(b.name)),
 		[rows]
 	);
+	const roleLabel = (r: testRole) => (r.id === testRole?.id ? `${r.name} (my role)` : r.name);
 	const inRun = rows.filter((row) => !isRemovedFromRound(row));
 	const tested = inRun.filter((row) => !isUntested(row)).length;
 	const passed = inRun.filter((row) => row.status === "Passed").length;
@@ -168,7 +172,7 @@ export default function TesterTestCasesComponents({
 	const activeFilter = STATUS_FILTERS.find((f) => f.value === statusFilter) ?? STATUS_FILTERS[0];
 	const visibleRows = rows
 		.filter(activeFilter.match)
-		.filter((row) => role === ALL_ROLES || row.roleAssignee === role)
+		.filter((row) => role === ALL_ROLES || row.testRoleId === role)
 		.filter((row) => !query || row.title.toLowerCase().includes(query) || (row.code ?? "").toLowerCase().includes(query));
 
 	// Why the sheet opens read-only, if it does. Once the round is over it also wraps up when
@@ -265,11 +269,11 @@ export default function TesterTestCasesComponents({
 					</div>
 					<Select value={role} onValueChange={(value) => setRole(value ?? ALL_ROLES)}>
 						<SelectTrigger size="sm" className="w-full text-xs md:w-48 md:text-sm">
-							<SelectValue>{role === ALL_ROLES ? "All roles" : sameRoleName(role, testRole?.name) ? `${role} (my role)` : role}</SelectValue>
+							<SelectValue>{role === ALL_ROLES ? "All roles" : roleLabel(roles.find((r) => r.id === role) ?? { id: role, name: "" })}</SelectValue>
 						</SelectTrigger>
 						<SelectContent alignItemWithTrigger={false}>
 							<SelectItem value={ALL_ROLES} className="text-xs md:text-sm">All roles</SelectItem>
-							{roles.map((r) => <SelectItem key={r} value={r} className="text-xs md:text-sm">{sameRoleName(r, testRole?.name) ? `${r} (my role)` : r}</SelectItem>)}
+							{roles.map((r) => <SelectItem key={r.id} value={r.id} className="text-xs md:text-sm">{roleLabel(r)}</SelectItem>)}
 						</SelectContent>
 					</Select>
 					<div className="relative w-full md:ml-auto md:w-64">
