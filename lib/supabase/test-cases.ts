@@ -41,8 +41,6 @@ export type testRemark = {
     author?: profile;
     created_at?: string;
     attachments?: signedAttachment[];
-    // Posted files on this remark, for the 📎 marker; the signed links load separately.
-    attachmentCount?: number;
 };
 
 export type testStep = {

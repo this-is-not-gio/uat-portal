@@ -87,12 +87,10 @@ export function ChangeFlagsCell({ row }: { row: testResultRow }) {
 export function RemarkCountCell({ row }: { row: testResultRow }) {
 	const remarkCount = (row.stepsToExecute ?? [])
 		.reduce((count, step) => count + (step.remarks?.length ?? 0), 0);
-	const hasFiles = (row.stepsToExecute ?? []).some((step) => step.remarks?.some((remark) => (remark.attachmentCount ?? 0) > 0));
 	return (
 		<div className=" flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-100/50 w-fit">
 			<MessageSquare size={15} className="text-gray-800" />
 			<p className="font-mono text-xs text-gray-800">{remarkCount}</p>
-			{hasFiles && <span title="Has attachments" aria-label="Has attachments" className="text-xs">📎</span>}
 		</div>
 	);
 }

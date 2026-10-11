@@ -441,7 +441,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																									<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
 																								</div>
 																							)}
-																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} unavailable={filesUnavailable && (remark.attachmentCount ?? 0) > 0} />
+																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} unavailable={filesUnavailable} />
 																						</div>
 																					</div>
 																				</div>
