@@ -43,6 +43,14 @@ Rules:
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
 
+## Context budget
+
+- Read files with `Read` + `offset`/`limit`, or `graphify query`, not `cat` of whole files.
+- Never use `rtk proxy` unless the condensed output was empty, garbled, or contradicted the exit code.
+- Get DB schema from `lib/supabase/database.types.ts` and `supabase/migrations/`; don't introspect via `execute_sql`. Use SQL only for data checks or applying migrations.
+- For `/implement`: read the spec, the ticket and the planning notes file first; don't re-explore files the notes already cover.
+- If context passes ~150K, stop, summarise progress into the ticket, and tell me to `/compact` or `/clear`.
+
 ## Agent skills
 
 ### Issue tracker
