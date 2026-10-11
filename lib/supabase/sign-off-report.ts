@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { presignGet } from "@/lib/storage/b2";
 import { isRemovedFromRound, type caseFlag } from "./case-states";
 import { countStatuses, type statusCounts } from "./overview";
 import { compareOrganizations, type organization } from "./organizations";
@@ -11,7 +12,7 @@ import {
     type testResultRow,
 } from "./test-iterations";
 import type { testCaseStatus } from "./test-cases";
-import type { ReportRemark, ReportThemes } from "@/lib/report/sign-off-remarks";
+import type { ReportAttachment, ReportRemark, ReportThemes } from "@/lib/report/sign-off-remarks";
 
 // Deterministic sign-off report: every number here is computed from recorded results, so the
 // same data always gives the same report. Verdict rules: ~/.claude/plans/give-me-a-scope-calm-frog.md.
@@ -497,7 +498,7 @@ export function buildFailedCases(rolledUp: RolledUp): ReportFailedCase[] {
         }));
 }
 
-export function buildLimitations(rounds: ReportRound[], rolledUp: RolledUp): ReportLimitation[] {
+export function buildLimitations(rounds: ReportRound[], rolledUp: RolledUp, hasAttachments = false): ReportLimitation[] {
     const withdrawn = rounds.flatMap((round) =>
         round.participants.filter((p) => p.withdrawnAt).map((p) => `${p.organization.name} (${round.iteration.name})`)
     );
@@ -523,7 +524,8 @@ export function buildLimitations(rounds: ReportRound[], rolledUp: RolledUp): Rep
     ];
     return [
         ...limitations.filter((l) => l.items.length > 0),
-        { key: "no_evidence", text: "No evidence attachments or defect tracking are recorded in the portal", items: [] },
+        // Only when the report really carries no evidence files.
+        ...(hasAttachments ? [] : [{ key: "no_evidence" as const, text: "No evidence attachments or defect tracking are recorded in the portal", items: [] }]),
     ];
 }
 
@@ -573,6 +575,58 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
         }
     }
     return remarks;
+}
+
+// Posted, ready files of the given remarks, read with the viewer's own client so the read rules apply.
+// Only the remarks that have files get an `attachments` key, so reports without evidence freeze unchanged.
+export async function withRemarkAttachments(remarks: ReportRemark[]): Promise<ReportRemark[]> {
+    if (remarks.length === 0) return remarks;
+    const supabase = await createClient();
+    // Batched: the ids go in the request URL.
+    const ids = remarks.map((r) => r.id);
+    const batches = Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) => ids.slice(i * 100, (i + 1) * 100));
+    const results = await Promise.all(
+        batches.map((batch) =>
+            supabase
+                .from("attachments")
+                .select("id, remark_id, file_name, size_bytes, content_type")
+                .in("remark_id", batch)
+                .eq("status", "ready")
+                .order("created_at")
+        )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+    const byRemark = new Map<string, ReportAttachment[]>();
+    for (const row of results.flatMap((r) => r.data ?? [])) {
+        const list = byRemark.get(row.remark_id!) ?? [];
+        list.push({ id: row.id, fileName: row.file_name, sizeBytes: row.size_bytes, contentType: row.content_type });
+        byRemark.set(row.remark_id!, list);
+    }
+    return remarks.map((r) => (byRemark.has(r.id) ? { ...r, attachments: byRemark.get(r.id) } : r));
+}
+
+// Fresh viewing links for a frozen report's attachments, signed with the viewer's own client: only
+// rows it can read come back, and files deleted since (a round reset) simply have no link.
+// Admin and Internal are the only report viewers and both read every organization's remarks. If
+// report access ever widens to External users or a public export, signing must move to a
+// security-definer path.
+export async function signReportAttachmentLinks(attachmentIds: string[]): Promise<Map<string, string>> {
+    const links = new Map<string, string>();
+    if (attachmentIds.length === 0) return links;
+    const supabase = await createClient();
+    const batches = Array.from({ length: Math.ceil(attachmentIds.length / 100) }, (_, i) => attachmentIds.slice(i * 100, (i + 1) * 100));
+    const results = await Promise.all(
+        batches.map((batch) => supabase.from("attachments").select("id, object_key, file_name, content_type").in("id", batch).eq("status", "ready"))
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+    await Promise.all(
+        results.flatMap((r) => r.data ?? []).map(async (row) => {
+            links.set(row.id, await presignGet({ key: row.object_key, contentType: row.content_type, fileName: row.file_name }));
+        })
+    );
+    return links;
 }
 
 function loadRounds(iterations: testIteration[]): Promise<ReportRound[]> {
@@ -680,6 +734,9 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
         ).keys(),
     ];
 
+    // Evidence files per remark, frozen with the catalog.
+    const remarks = await withRemarkAttachments(buildRemarkCatalog(rolledUp, liveCases));
+
     return {
         header: {
             suiteId,
@@ -705,8 +762,8 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
         breakdowns: buildBreakdowns(rolledUp.finals, liveCases, orgOrder),
         failedCases: buildFailedCases(rolledUp),
         roundHistory: buildRoundHistory(rounds),
-        limitations: buildLimitations(rounds, rolledUp),
-        remarks: buildRemarkCatalog(rolledUp, liveCases),
+        limitations: buildLimitations(rounds, rolledUp, remarks.some((r) => r.attachments)),
+        remarks,
         caseResults: toCaseResults(rolledUp.finals),
         // Attached by issueSignOff after validation.
         themes: null,

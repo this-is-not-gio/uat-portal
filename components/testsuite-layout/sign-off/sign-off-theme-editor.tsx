@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { AttachmentChips } from "@/components/sign-off-report/attachment-chips";
 import { groupRemarks, themeProblem, THEME_LIMITS, type ReportRemark, type ThemeInput } from "@/lib/report/sign-off-remarks";
 
 // Optional vendor observations in the sign-off dialog. A theme is a title, an optional summary and
@@ -134,6 +135,7 @@ function ThemeCard({
 										<XIcon className="size-3" />
 									</button>
 								</Badge>
+								<AttachmentChips attachments={remark?.attachments} className="mt-1" />
 							</li>
 						);
 					})}
@@ -212,6 +214,7 @@ function RemarkPicker({
 													<span className="text-muted-foreground">
 														{r.organizationName} · {r.roundName} · Step {r.stepNumber} ({r.stepStatus})
 													</span>
+													<AttachmentChips attachments={r.attachments} className="mt-0.5" />
 												</span>
 											</label>
 										);

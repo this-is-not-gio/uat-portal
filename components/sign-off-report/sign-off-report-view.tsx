@@ -7,6 +7,10 @@ import { cn, formatTimestamp } from "@/lib/utils";
 import type { statusCounts } from "@/lib/supabase/overview";
 import type { Breakdown, CaseAuditEntry, ExecutedStatus, FrozenSignOffReport, CriterionResult, SignOffReport } from "@/lib/supabase/sign-off-report";
 import { groupRemarks, type ReportRemark } from "@/lib/report/sign-off-remarks";
+import { RemarkAttachments } from "@/components/testcasesheet/remark-attachments";
+import type { signedAttachment } from "@/lib/supabase/attachment-actions";
+import { signReportAttachmentLinks } from "@/lib/supabase/sign-off-report";
+import { AttachmentChips } from "./attachment-chips";
 import { ParticipantsTable } from "./participants-table";
 import { VerdictTable } from "./verdict-table";
 import { RoundTable } from "./round-table";
@@ -701,8 +705,32 @@ function ObservationsSection({ report }: { report: SignOffReport }) {
 	);
 }
 
-function RemarksSection({ report }: { report: SignOffReport }) {
+// On screen: thumbnails and chips with links signed now (frozen links would have expired); the files'
+// names stay when a link can't be made. Print: a plain name and size list, no images or links.
+function RemarkEvidence({ attachments, links }: { attachments: NonNullable<ReportRemark["attachments"]>; links: Map<string, string> }) {
+	const linked: signedAttachment[] = attachments
+		.filter((a) => links.has(a.id))
+		.map((a) => ({ id: a.id, fileName: a.fileName, contentType: a.contentType, sizeBytes: a.sizeBytes, kind: a.contentType.startsWith("image/") ? "image" : "pdf", status: "ready", url: links.get(a.id)! }));
+	const unlinked = attachments.filter((a) => !links.has(a.id));
+	return (
+		<>
+			<div className="print:hidden">
+				<RemarkAttachments attachments={linked} />
+				<AttachmentChips attachments={unlinked} className="mt-2" />
+			</div>
+			<AttachmentChips attachments={attachments} className="mt-1 hidden print:flex" />
+		</>
+	);
+}
+
+async function RemarksSection({ report }: { report: SignOffReport }) {
 	const groups = groupRemarks(report.remarks ?? []);
+	const attachmentIds = (report.remarks ?? []).flatMap((r) => (r.attachments ?? []).map((a) => a.id));
+	// Storage trouble (not configured, daily cap) must not take the report down: names still show.
+	const links = await signReportAttachmentLinks(attachmentIds).catch((e) => {
+		console.error("Signing report attachments failed:", e);
+		return new Map<string, string>();
+	});
 	return (
 		<Section
 			title="Remarks"
@@ -744,6 +772,7 @@ function RemarksSection({ report }: { report: SignOffReport }) {
 														{" · "}{remark.organizationName}
 														{remark.createdAt && <> · {formatTimestamp(remark.createdAt)}</>}
 													</p>
+																					{remark.attachments?.length ? <RemarkEvidence attachments={remark.attachments} links={links} /> : null}
 												</div>
 											</div>
 										))

@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { FileText, ImageOff } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { formatFileSize } from "@/lib/utils";
 import { listRemarkAttachments, type signedAttachment } from "@/lib/supabase/attachment-actions";
 
-export function formatSize(bytes: number): string {
-	return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+export const formatSize = formatFileSize;
 
 // Signed links live 10 minutes (lib/storage/b2.ts). Reusing the same URLs within that window keeps
 // the browser cache valid, so reopening a case or switching tabs doesn't re-download thumbnails.
