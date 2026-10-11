@@ -14,6 +14,70 @@ export type Database = {
   }
   public: {
     Tables: {
+      attachments: {
+        Row: {
+          content_type: string
+          created_at: string
+          file_name: string
+          id: string
+          kind: Database["public"]["Enums"]["attachment_kind"]
+          object_key: string
+          remark_id: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["attachment_status"]
+          test_step_result_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          file_name: string
+          id?: string
+          kind: Database["public"]["Enums"]["attachment_kind"]
+          object_key: string
+          remark_id?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["attachment_status"]
+          test_step_result_id: string
+          uploaded_by: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          file_name?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["attachment_kind"]
+          object_key?: string
+          remark_id?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["attachment_status"]
+          test_step_result_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_remark_id_fkey"
+            columns: ["remark_id"]
+            isOneToOne: false
+            referencedRelation: "test_remarks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_test_step_result_id_fkey"
+            columns: ["test_step_result_id"]
+            isOneToOne: false
+            referencedRelation: "test_step_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expected_results: {
         Row: {
           created_at: string
@@ -1195,6 +1259,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_draft_attachment: {
+        Args: {
+          p_content_type: string
+          p_file_name: string
+          p_size_bytes: number
+          p_step_result_id: string
+        }
+        Returns: {
+          content_type: string
+          created_at: string
+          file_name: string
+          id: string
+          kind: Database["public"]["Enums"]["attachment_kind"]
+          object_key: string
+          remark_id: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["attachment_status"]
+          test_step_result_id: string
+          uploaded_by: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_sign_off: {
         Args: { p_by?: string; p_suite_id: string }
         Returns: {
@@ -1241,6 +1332,10 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      delete_draft_attachment: {
+        Args: { p_attachment_id: string }
+        Returns: string
+      }
       delete_section: { Args: { p_section_id: string }; Returns: undefined }
       delete_suite: { Args: { p_suite_id: string }; Returns: undefined }
       delete_test_case: { Args: { p_test_case_id: string }; Returns: undefined }
@@ -1261,6 +1356,21 @@ export type Database = {
         Returns: undefined
       }
       generate_test_case_code: { Args: { p_epic_id: string }; Returns: string }
+      get_iteration_case_verdicts: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          blocked: number
+          case_key: string
+          copies: number
+          failed: number
+          in_progress: number
+          organization_id: string
+          passed: number
+          test_case_id: string
+          untested: number
+          verdict: Database["public"]["Enums"]["test_case_status"]
+        }[]
+      }
       get_iteration_changes: {
         Args: { p_iteration_id: string }
         Returns: {
@@ -1276,21 +1386,6 @@ export type Database = {
           test_role_name: string
           title: string
           user_id: string
-        }[]
-      }
-      get_iteration_case_verdicts: {
-        Args: { p_iteration_id: string }
-        Returns: {
-          blocked: number
-          case_key: string
-          copies: number
-          failed: number
-          in_progress: number
-          organization_id: string
-          passed: number
-          test_case_id: string
-          untested: number
-          verdict: Database["public"]["Enums"]["test_case_status"]
         }[]
       }
       get_iteration_coverage: {
@@ -1383,6 +1478,28 @@ export type Database = {
         }
       }
       iteration_scope_cases: { Args: { p_iteration_id: string }; Returns: Json }
+      mark_attachment_ready: {
+        Args: { p_attachment_id: string }
+        Returns: {
+          content_type: string
+          created_at: string
+          file_name: string
+          id: string
+          kind: Database["public"]["Enums"]["attachment_kind"]
+          object_key: string
+          remark_id: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["attachment_status"]
+          test_step_result_id: string
+          uploaded_by: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       norm_role_name: { Args: { p_name: string }; Returns: string }
       org_has_case_role: {
         Args: { p_org_id: string; p_test_role_id: string }
@@ -1462,9 +1579,25 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rollup_case_status: {
+        Args: { p_statuses: Database["public"]["Enums"]["test_case_status"][] }
+        Returns: Database["public"]["Enums"]["test_case_status"]
+      }
       round_coverage: {
         Args: { p_cases: Json; p_excluded_user_ids: string[] }
         Returns: Json
+      }
+      round_roster_drift: {
+        Args: { p_iteration_id: string }
+        Returns: {
+          change: string
+          full_name: string
+          organization_id: string
+          organization_name: string
+          test_role_id: string
+          test_role_name: string
+          user_id: string
+        }[]
       }
       save_sign_off_draft: {
         Args: { p_note?: string; p_report?: Json; p_sign_off_id: string }
@@ -1757,6 +1890,8 @@ export type Database = {
       }
     }
     Enums: {
+      attachment_kind: "image" | "pdf" | "video"
+      attachment_status: "pending" | "ready"
       execution_status: "not_run" | "passed" | "skipped" | "failed"
       iteration_status: "not_started" | "in_progress" | "completed" | "stopped"
       org_type: "vendor" | "client" | "external"
@@ -1912,6 +2047,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      attachment_kind: ["image", "pdf", "video"],
+      attachment_status: ["pending", "ready"],
       execution_status: ["not_run", "passed", "skipped", "failed"],
       iteration_status: ["not_started", "in_progress", "completed", "stopped"],
       org_type: ["vendor", "client", "external"],
