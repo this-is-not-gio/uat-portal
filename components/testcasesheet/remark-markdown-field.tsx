@@ -39,9 +39,11 @@ async function compressImage(file: File): Promise<File> {
 	return new File([blob], `${base}.webp`, { type: "image/webp" });
 }
 
-function putWithProgress(url: string, file: File, onProgress: (pct: number) => void): Promise<void> {
+function putWithProgress(url: string, file: File, signal: AbortSignal, onProgress: (pct: number) => void): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const xhr = new XMLHttpRequest();
+		signal.addEventListener("abort", () => xhr.abort());
+		xhr.onabort = () => reject(new Error("Upload cancelled."));
 		xhr.open("PUT", url);
 		xhr.setRequestHeader("Content-Type", file.type);
 		xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
@@ -52,6 +54,8 @@ function putWithProgress(url: string, file: File, onProgress: (pct: number) => v
 }
 
 // A file picked for this remark: uploading straight to the bucket, ready to post, or failed.
+type uploadJob = { controller: AbortController; attachmentId?: string };
+
 type draftFile = { localId: string; name: string; contentType: string; previewUrl?: string; progress?: number; state: "uploading" | "ready" | "error"; attachmentId?: string; error?: string };
 
 const TOOLBAR_ACTIONS: {
@@ -108,6 +112,8 @@ export function RemarkMarkdownField({
 	const [files, setFiles] = useState<draftFile[]>([]);
 	const [fileError, setFileError] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	// In-flight upload per chip, so removing a chip can cancel it and find its draft id before state has it.
+	const uploads = useRef(new Map<string, uploadJob>());
 	const isEmpty = !draftText.trim();
 	const uploading = files.some((f) => f.state === "uploading");
 	const readyIds = files.flatMap((f) => (f.state === "ready" && f.attachmentId ? [f.attachmentId] : []));
@@ -145,6 +151,7 @@ export function RemarkMarkdownField({
 			onSubmitted(result.data);
 			files.forEach((f) => f.previewUrl && URL.revokeObjectURL(f.previewUrl));
 			setFiles([]);
+			uploads.current.clear();
 			setFileError(null);
 			setDraftText("");
 		})
@@ -156,6 +163,9 @@ export function RemarkMarkdownField({
 	}
 
 	async function uploadFile(original: File, localId: string) {
+		const job: uploadJob = { controller: new AbortController() };
+		uploads.current.set(localId, job);
+		const { signal } = job.controller;
 		let file = original;
 		if (original.type.startsWith("image/")) {
 			try {
@@ -163,14 +173,19 @@ export function RemarkMarkdownField({
 			} catch (e) {
 				return patchFile(localId, { state: "error", error: (e as Error).message });
 			}
+			if (signal.aborted) return;
 			patchFile(localId, { name: file.name, contentType: file.type });
 		}
 		const created = await createAttachmentUpload({ stepResultId: step.id, fileName: file.name, contentType: file.type, sizeBytes: file.size });
 		if (!created.ok) return patchFile(localId, { state: "error", error: created.error });
 		const attachmentId = created.data.attachment.id;
+		job.attachmentId = attachmentId;
+		// Removed while the draft row was being created: removeFile had no id to delete yet, so delete it here.
+		if (signal.aborted) return void deleteDraftAttachment({ attachmentId });
 		try {
-			await putWithProgress(created.data.uploadUrl, file, (progress) => patchFile(localId, { progress }));
+			await putWithProgress(created.data.uploadUrl, file, signal, (progress) => patchFile(localId, { progress }));
 		} catch (e) {
+			if (signal.aborted) return; // removeFile already deleted the draft
 			await deleteDraftAttachment({ attachmentId });
 			return patchFile(localId, { state: "error", error: (e as Error).message });
 		}
@@ -184,7 +199,8 @@ export function RemarkMarkdownField({
 	}
 
 	function addFiles(picked: File[]) {
-		if (picked.length === 0) return;
+		// A file added while posting would be cleared on success with its upload still running.
+		if (picked.length === 0 || isPending) return;
 		setFileError(null);
 		let room = MAX_FILES - files.length;
 		const accepted: draftFile[] = [];
@@ -230,9 +246,13 @@ export function RemarkMarkdownField({
 	}
 
 	async function removeFile(f: draftFile) {
+		const job = uploads.current.get(f.localId);
+		uploads.current.delete(f.localId);
+		job?.controller.abort();
 		setFiles((current) => current.filter((x) => x.localId !== f.localId));
 		if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
-		if (f.attachmentId) await deleteDraftAttachment({ attachmentId: f.attachmentId });
+		const attachmentId = job?.attachmentId ?? f.attachmentId;
+		if (attachmentId) await deleteDraftAttachment({ attachmentId });
 	}
 
 	return (
