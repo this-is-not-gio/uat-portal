@@ -31,9 +31,9 @@ export function invalidateRemarkAttachments() {
 
 export const ATTACHMENTS_UNAVAILABLE = "Attachments are temporarily unavailable. Try again later.";
 
-function Unavailable() {
+export function AttachmentsUnavailable({ className = "" }: { className?: string }) {
 	return (
-		<p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+		<p className={`flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}>
 			<ImageOff className="size-3.5" />
 			{ATTACHMENTS_UNAVAILABLE}
 		</p>
@@ -41,19 +41,20 @@ function Unavailable() {
 }
 
 // Images as lazy thumbnails opening a lightbox; PDFs as chips opening in a new tab.
-export function RemarkAttachments({ attachments, unavailable = false }: { attachments: signedAttachment[]; unavailable?: boolean }) {
+// A thumbnail B2 refuses (daily cap, expired link) is hidden behind the notice instead of showing broken.
+export function RemarkAttachments({ attachments }: { attachments: signedAttachment[] }) {
 	const [lightbox, setLightbox] = useState<signedAttachment | null>(null);
-	const [broken, setBroken] = useState(false);
-	if (unavailable) return <Unavailable />;
+	const [brokenIds, setBrokenIds] = useState<Set<string>>(() => new Set());
 	if (attachments.length === 0) return null;
+	const shown = attachments.filter((a) => !brokenIds.has(a.id));
 	return (
 		<>
-			<div className="mt-3 flex flex-wrap gap-2">
-				{attachments.map((a) =>
+			<div className="mt-3 flex flex-wrap gap-2 empty:hidden">
+				{shown.map((a) =>
 					a.kind === "image" ? (
 						<button key={a.id} type="button" onClick={() => setLightbox(a)} title={a.fileName} className="rounded-md focus-visible:ring-2 focus-visible:ring-ring">
 							{/* eslint-disable-next-line @next/next/no-img-element */}
-							<img src={a.url} alt={a.fileName} loading="lazy" decoding="async" onError={() => setBroken(true)} className="size-24 rounded-md border object-cover" />
+							<img src={a.url} alt={a.fileName} loading="lazy" decoding="async" onError={() => setBrokenIds((current) => new Set(current).add(a.id))} className="size-24 rounded-md border object-cover" />
 						</button>
 					) : (
 						<a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="flex max-w-56 items-center gap-2 rounded-md border bg-background px-2 py-1.5 text-xs hover:bg-accent">
@@ -64,7 +65,7 @@ export function RemarkAttachments({ attachments, unavailable = false }: { attach
 					),
 				)}
 			</div>
-			{broken && <Unavailable />}
+			{brokenIds.size > 0 && <AttachmentsUnavailable className="mt-3" />}
 			<Dialog open={lightbox !== null} onOpenChange={(open) => { if (!open) setLightbox(null); }}>
 				<DialogContent className="sm:max-w-4xl">
 					<DialogTitle className="truncate">{lightbox?.fileName}</DialogTitle>

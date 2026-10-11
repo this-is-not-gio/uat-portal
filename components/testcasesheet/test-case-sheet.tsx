@@ -49,7 +49,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
-import { RemarkAttachments, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
+import { AttachmentsUnavailable, RemarkAttachments, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
 import type { signedAttachment } from "@/lib/supabase/attachment-actions";
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
@@ -405,6 +405,8 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																	<MessagesSquare size="12" />
 																	<p className="text-xs font-medium">Remarks:</p>
 																</div>
+																{/* The listing failed, so which remarks have files is unknown: one notice per thread, not per remark. */}
+																{filesUnavailable && remarks?.length > 0 && <AttachmentsUnavailable />}
 																<div className="group/with-remark">
 																	{
 																		remarks?.length > 0 ? (
@@ -441,7 +443,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																									<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
 																								</div>
 																							)}
-																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} unavailable={filesUnavailable} />
+																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} />
 																						</div>
 																					</div>
 																				</div>
@@ -467,8 +469,10 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																				step={step}
 																				placeholder="Leave a remark for this step"
 																				onSubmitted={(insertedRemark) => {
-																					if (insertedRemark.attachments?.length) invalidateRemarkAttachments();
-																			if (insertedRemark.attachments?.length) setRemarkFiles((current) => ({ ...current, [insertedRemark.id]: insertedRemark.attachments! }));
+																					if (insertedRemark.attachments?.length) {
+																						invalidateRemarkAttachments();
+																						setRemarkFiles((current) => ({ ...current, [insertedRemark.id]: insertedRemark.attachments! }));
+																					}
 																					const nextRemarks = { ...stepRemarks, [step.id]: [...(stepRemarks[step.id] || []), insertedRemark] };
 																					setStepRemarks(nextRemarks);
 																					emitChange(stepStatuses, nextRemarks, caseState);
