@@ -92,7 +92,7 @@ export async function deleteDraftAttachment({ attachmentId }: { attachmentId: st
     return { ok: true, data: undefined };
 }
 
-export type signedAttachment = attachmentView & { url: string };
+export type signedAttachment = attachmentView & { url: string; remarkId?: string | null };
 
 // Selected with the viewer's own client so the read rules decide what comes back, then signed in one batch.
 export async function listSignedAttachments({ stepResultId }: { stepResultId: string }): Promise<actionResult<signedAttachment[]>> {
@@ -114,4 +114,49 @@ export async function listSignedAttachments({ stepResultId }: { stepResultId: st
     } catch (e) {
         return fail(e as Error);
     }
+}
+
+type linkedRow = attachmentRow & { object_key: string; remark_id: string | null };
+
+async function signRows(rows: linkedRow[]): Promise<signedAttachment[]> {
+    return Promise.all(rows.map(async (r) => ({
+        ...toView(r),
+        remarkId: r.remark_id,
+        url: await storage.presignGet({ key: r.object_key, contentType: r.content_type, fileName: r.file_name }),
+    })));
+}
+
+// Posted attachments of the given step results, grouped by remark. Rows come from the viewer's own
+// client, so another organization's evidence never comes back. Signing is local (no bucket call).
+export async function listRemarkAttachments({ stepResultIds }: { stepResultIds: string[] }): Promise<actionResult<Record<string, signedAttachment[]>>> {
+    await requireUser();
+    if (stepResultIds.length === 0) return { ok: true, data: {} };
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("attachments")
+        .select("id, object_key, file_name, content_type, size_bytes, kind, status, remark_id")
+        .in("test_step_result_id", stepResultIds)
+        .eq("status", "ready")
+        .not("remark_id", "is", null)
+        .order("created_at");
+    if (error) return fail(error);
+    try {
+        const grouped: Record<string, signedAttachment[]> = {};
+        for (const a of await signRows(data)) (grouped[a.remarkId!] ??= []).push(a);
+        return { ok: true, data: grouped };
+    } catch (e) {
+        return fail(e as Error);
+    }
+}
+
+export async function signAttachmentsForRemark(remarkId: string): Promise<signedAttachment[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("attachments")
+        .select("id, object_key, file_name, content_type, size_bytes, kind, status, remark_id")
+        .eq("remark_id", remarkId)
+        .eq("status", "ready")
+        .order("created_at");
+    if (error) throw error;
+    return signRows(data);
 }

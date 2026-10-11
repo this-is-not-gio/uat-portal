@@ -1478,6 +1478,10 @@ export type Database = {
         }
       }
       iteration_scope_cases: { Args: { p_iteration_id: string }; Returns: Json }
+      post_remark_with_attachments: {
+        Args: { p_step_result_id: string; p_remark: string; p_attachment_ids?: string[] }
+        Returns: { id: string; remark: string; created_at: string }[]
+      }
       mark_attachment_ready: {
         Args: { p_attachment_id: string }
         Returns: {

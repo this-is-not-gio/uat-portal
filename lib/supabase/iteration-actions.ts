@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
+import { signAttachmentsForRemark, type signedAttachment } from "./attachment-actions";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database, Json } from "./database.types";
@@ -453,16 +454,26 @@ export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: st
     return readCaseResultState(caseResultId);
 }
 
-export async function addResultRemark({ stepResultId, remark }: { stepResultId: string; remark: string }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile }>> {
+export async function addResultRemark({ stepResultId, remark, attachmentIds = [] }: { stepResultId: string; remark: string; attachmentIds?: string[] }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile; attachments: signedAttachment[] }>> {
     const user = await requireUser();
     const supabase = await createClient();
-    const { data, error } = await supabase
-        .from("test_remarks")
-        .insert({ test_step_result_id: stepResultId, remark, created_by: user.id })
-        .select("id, remark, created_at, profile:profiles ( id, full_name, role )")
-        .single();
+    // One transaction: the remark and the links to the caller's ready drafts, or neither (0063).
+    const { data, error } = await supabase.rpc("post_remark_with_attachments", {
+        p_step_result_id: stepResultId, p_remark: remark, p_attachment_ids: attachmentIds,
+    });
     if (error) return fail(error);
-    return { ok: true, data: { id: data.id, remark: data.remark, created_at: data.created_at, author: data.profile ?? undefined } };
+    const posted = data[0];
+    const { data: author } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).maybeSingle();
+    let attachments: signedAttachment[] = [];
+    if (attachmentIds.length > 0) {
+        try {
+            attachments = await signAttachmentsForRemark(posted.id);
+        } catch (e) {
+            // The remark is saved; the files show after a refresh.
+            console.error("Signing attachments failed:", (e as Error).message);
+        }
+    }
+    return { ok: true, data: { id: posted.id, remark: posted.remark, created_at: posted.created_at, author: author ?? undefined, attachments } };
 }
 
 export type scopeOption = { id: string; code: string | null; title: string; issues: string[] };

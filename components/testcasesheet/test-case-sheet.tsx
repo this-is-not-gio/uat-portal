@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import {
 	Sheet,
@@ -49,6 +49,8 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
+import { RemarkAttachments } from "@/components/testcasesheet/remark-attachments";
+import { listRemarkAttachments, type signedAttachment } from "@/lib/supabase/attachment-actions";
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
 import type { caseCopy, resultArchive } from "@/lib/supabase/test-iterations";
@@ -196,6 +198,17 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: step.remarks || [] }), {}) || {};
 		}
 	);
+	// Posted evidence per remark, signed with the viewer's own session; loaded once when the sheet opens.
+	const [remarkFiles, setRemarkFiles] = useState<Record<string, signedAttachment[]>>({});
+	const stepIdsKey = showResults ? (testCase.stepsToExecute ?? []).map((step) => step.id).join(",") : "";
+	useEffect(() => {
+		if (!stepIdsKey) return;
+		let cancelled = false;
+		listRemarkAttachments({ stepResultIds: stepIdsKey.split(",") }).then((res) => {
+			if (!cancelled && res.ok) setRemarkFiles((current) => ({ ...res.data, ...current }));
+		});
+		return () => { cancelled = true; };
+	}, [stepIdsKey]);
 	const [caseState, setCaseState] = useState<caseResultState>({
 		status: testCase.status,
 		statusOverridden: testCase.statusOverridden ?? false,
@@ -423,6 +436,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																							<div className="typeset text-sm break-words">
 																								<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
 																							</div>
+																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} />
 																						</div>
 																					</div>
 																				</div>
@@ -448,6 +462,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																				step={step}
 																				placeholder="Leave a remark for this step"
 																				onSubmitted={(insertedRemark) => {
+																					if (insertedRemark.attachments?.length) setRemarkFiles((current) => ({ ...current, [insertedRemark.id]: insertedRemark.attachments! }));
 																					const nextRemarks = { ...stepRemarks, [step.id]: [...(stepRemarks[step.id] || []), insertedRemark] };
 																					setStepRemarks(nextRemarks);
 																					emitChange(stepStatuses, nextRemarks, caseState);

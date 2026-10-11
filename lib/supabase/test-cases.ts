@@ -1,3 +1,4 @@
+import type { signedAttachment } from "./attachment-actions";
 import { createClient } from "@/lib/supabase/server";
 import type { caseState } from "./case-states";
 
@@ -39,6 +40,7 @@ export type testRemark = {
     remark: string;
     author?: profile;
     created_at?: string;
+    attachments?: signedAttachment[];
 };
 
 export type testStep = {
