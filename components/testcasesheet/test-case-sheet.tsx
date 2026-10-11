@@ -433,9 +433,11 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																							<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
 																						</div>
 																						<div className="p-3 sm:p-4 overflow-x-auto">
-																							<div className="typeset text-sm break-words">
-																								<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
-																							</div>
+																							{remark.remark.trim() && (
+																								<div className="typeset text-sm break-words">
+																									<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
+																								</div>
+																							)}
 																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} />
 																						</div>
 																					</div>

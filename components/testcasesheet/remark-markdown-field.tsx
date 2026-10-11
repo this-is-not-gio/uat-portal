@@ -22,9 +22,37 @@ import { testRemark, testStep } from "@/lib/supabase/test-cases";
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"];
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_FILES = 5;
+const MAX_DIMENSION = 1920;
+
+// Images are always re-encoded as WebP no larger than 1920px (GIFs lose animation); PDFs pass through.
+async function compressImage(file: File): Promise<File> {
+	const bitmap = await createImageBitmap(file);
+	const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+	const canvas = document.createElement("canvas");
+	canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+	canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+	canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+	bitmap.close();
+	const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.85));
+	if (!blob || blob.type !== "image/webp") throw new Error("This browser could not compress the image.");
+	const base = file.name.replace(/\.[^.]+$/, "") || "image";
+	return new File([blob], `${base}.webp`, { type: "image/webp" });
+}
+
+function putWithProgress(url: string, file: File, onProgress: (pct: number) => void): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open("PUT", url);
+		xhr.setRequestHeader("Content-Type", file.type);
+		xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+		xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status}).`)));
+		xhr.onerror = () => reject(new Error("Upload failed (network error)."));
+		xhr.send(file);
+	});
+}
 
 // A file picked for this remark: uploading straight to the bucket, ready to post, or failed.
-type draftFile = { localId: string; name: string; contentType: string; previewUrl?: string; state: "uploading" | "ready" | "error"; attachmentId?: string; error?: string };
+type draftFile = { localId: string; name: string; contentType: string; previewUrl?: string; progress?: number; state: "uploading" | "ready" | "error"; attachmentId?: string; error?: string };
 
 const TOOLBAR_ACTIONS: {
 	name: string;
@@ -127,13 +155,21 @@ export function RemarkMarkdownField({
 		setFiles((current) => current.map((f) => (f.localId === localId ? { ...f, ...patch } : f)));
 	}
 
-	async function uploadFile(file: File, localId: string) {
+	async function uploadFile(original: File, localId: string) {
+		let file = original;
+		if (original.type.startsWith("image/")) {
+			try {
+				file = await compressImage(original);
+			} catch (e) {
+				return patchFile(localId, { state: "error", error: (e as Error).message });
+			}
+			patchFile(localId, { name: file.name, contentType: file.type });
+		}
 		const created = await createAttachmentUpload({ stepResultId: step.id, fileName: file.name, contentType: file.type, sizeBytes: file.size });
 		if (!created.ok) return patchFile(localId, { state: "error", error: created.error });
 		const attachmentId = created.data.attachment.id;
 		try {
-			const res = await fetch(created.data.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-			if (!res.ok) throw new Error(`Upload failed (${res.status}).`);
+			await putWithProgress(created.data.uploadUrl, file, (progress) => patchFile(localId, { progress }));
 		} catch (e) {
 			await deleteDraftAttachment({ attachmentId });
 			return patchFile(localId, { state: "error", error: (e as Error).message });
@@ -147,12 +183,12 @@ export function RemarkMarkdownField({
 		fileInputRef.current?.click();
 	}
 
-	function onFilesPicked(picked: FileList | null) {
-		if (!picked) return;
+	function addFiles(picked: File[]) {
+		if (picked.length === 0) return;
 		setFileError(null);
 		let room = MAX_FILES - files.length;
 		const accepted: draftFile[] = [];
-		for (const file of Array.from(picked)) {
+		for (const file of picked) {
 			if (!ACCEPTED_TYPES.includes(file.type)) {
 				setFileError("Only PNG, JPEG, WebP, GIF and PDF files can be attached.");
 				continue;
@@ -167,11 +203,30 @@ export function RemarkMarkdownField({
 			}
 			room--;
 			const localId = crypto.randomUUID();
-			accepted.push({ localId, name: file.name, contentType: file.type, previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined, state: "uploading" });
+			accepted.push({ localId, name: file.name, contentType: file.type, previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined, progress: 0, state: "uploading" });
 			void uploadFile(file, localId);
 		}
 		setFiles((current) => [...current, ...accepted]);
+	}
+
+	function onFilesPicked(picked: FileList | null) {
+		addFiles(Array.from(picked ?? []));
 		if (fileInputRef.current) fileInputRef.current.value = "";
+	}
+
+	// Win+Shift+S then Ctrl+V lands here as a clipboard image; pasted text is left alone.
+	function onPaste(e: React.ClipboardEvent) {
+		const pasted = Array.from(e.clipboardData.files);
+		if (pasted.length === 0) return;
+		e.preventDefault();
+		addFiles(pasted);
+	}
+
+	const [dragging, setDragging] = useState(false);
+	function onDrop(e: React.DragEvent) {
+		e.preventDefault();
+		setDragging(false);
+		addFiles(Array.from(e.dataTransfer.files));
 	}
 
 	async function removeFile(f: draftFile) {
@@ -181,7 +236,13 @@ export function RemarkMarkdownField({
 	}
 
 	return (
-		<div className="flex rounded-lg border gap-0 min-w-0">
+		<div
+			className={`flex rounded-lg border gap-0 min-w-0 ${dragging ? "border-primary ring-2 ring-primary/30" : ""}`}
+			onPaste={onPaste}
+			onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragging(true); } }}
+			onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false); }}
+			onDrop={onDrop}
+		>
 			<Tabs value={tab} onValueChange={(value) => setTab(value as "write" | "preview")} className="w-full min-w-0 gap-0">
 				{/* Too wide for a phone: the toolbar stays one row and scrolls sideways. */}
 				<div className="flex items-center justify-between gap-2 border-b p-2 bg-accent/50 overflow-x-auto">
@@ -305,7 +366,8 @@ export function RemarkMarkdownField({
 						{files.length > 0 && (
 							<div className="flex flex-wrap gap-2">
 								{files.map((f) => (
-									<div key={f.localId} title={f.error ?? f.name} className={`relative flex items-center gap-2 rounded-md border bg-background p-1 pr-7 text-xs max-w-48 ${f.state === "error" ? "border-destructive text-destructive" : ""}`}>
+									<div key={f.localId} title={f.error ?? f.name} className={`relative flex flex-col overflow-hidden rounded-md border bg-background text-xs max-w-48 ${f.state === "error" ? "border-destructive text-destructive" : ""}`}>
+										<div className="flex items-center gap-2 p-1 pr-7">
 										{f.previewUrl ? (
 											// eslint-disable-next-line @next/next/no-img-element
 											<img src={f.previewUrl} alt="" className="size-8 rounded object-cover" />
@@ -314,6 +376,12 @@ export function RemarkMarkdownField({
 										)}
 										<span className="truncate">{f.name}</span>
 										{f.state === "uploading" && <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+										</div>
+										{f.state === "uploading" && (
+											<div className="h-1 w-full bg-muted" role="progressbar" aria-valuenow={f.progress ?? 0} aria-valuemin={0} aria-valuemax={100}>
+												<div className="h-full bg-primary transition-[width]" style={{ width: `${f.progress ?? 0}%` }} />
+											</div>
+										)}
 										<button type="button" aria-label={`Remove ${f.name}`} onClick={() => removeFile(f)} disabled={isPending} className="absolute right-1 top-1 rounded p-0.5 hover:bg-accent">
 											<X className="size-3" />
 										</button>
