@@ -69,7 +69,7 @@ export type resultArchive = {
     archivedBy?: string;
     snapshot: {
         status: testCaseStatus;
-        steps: { step: string; status: string; remarks: { remark: string; created_at: string }[] }[];
+        steps: { step: string; status: string; remarks: { remark: string; created_at: string; attachments?: { file_name: string; size_bytes: number }[] }[] }[];
     };
 };
 

@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
 import { signAttachmentsForRemark, type signedAttachment } from "./attachment-actions";
+import { flushStorageDeletions } from "@/lib/storage/flush";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database, Json } from "./database.types";
@@ -344,6 +345,7 @@ export async function resetIteration({ iterationId }: { iterationId: string }): 
     const supabase = await createClient();
     const { error } = await supabase.rpc("reset_iteration", { p_iteration_id: iterationId });
     if (error) return fail(error);
+    await flushStorageDeletions(supabase, { maxBatches: 5 });
     refresh();
     return { ok: true, data: undefined };
 }
@@ -463,6 +465,7 @@ export async function addResultRemark({ stepResultId, remark, attachmentIds = []
     });
     if (error) return fail(error);
     const posted = data[0];
+    await flushStorageDeletions(supabase);
     const { data: author } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).maybeSingle();
     let attachments: signedAttachment[] = [];
     if (attachmentIds.length > 0) {

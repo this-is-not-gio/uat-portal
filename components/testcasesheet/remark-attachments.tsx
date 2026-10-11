@@ -5,7 +5,7 @@ import { FileText, ImageOff } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { listRemarkAttachments, type signedAttachment } from "@/lib/supabase/attachment-actions";
 
-function formatSize(bytes: number): string {
+export function formatSize(bytes: number): string {
 	return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 

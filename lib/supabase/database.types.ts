@@ -1259,6 +1259,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      clear_all_stale_drafts: { Args: Record<PropertyKey, never>; Returns: number }
+      clear_stale_drafts: { Args: Record<PropertyKey, never>; Returns: number }
+      complete_storage_deletions: { Args: { p_keys: string[] }; Returns: undefined }
+      pending_storage_deletions: { Args: { p_limit?: number }; Returns: string[] }
       create_draft_attachment: {
         Args: {
           p_content_type: string

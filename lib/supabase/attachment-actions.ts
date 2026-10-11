@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
 import * as storage from "@/lib/storage/b2";
+import { flushStorageDeletions } from "@/lib/storage/flush";
+import { can, denied } from "@/lib/auth/permissions";
 
 // Draft side of evidence attachments (#17): create -> browser PUT to the bucket -> confirm ->
 // (later tickets) link on Post. Rules live in Postgres (0062); failures come back as values.
@@ -35,6 +37,9 @@ export async function createAttachmentUpload({ stepResultId, fileName, contentTy
 }): Promise<actionResult<uploadTicket>> {
     await requireUser();
     const supabase = await createClient();
+    // The caller's own drafts left unposted for over an hour go first; their objects are flushed from the queue.
+    const { data: cleared } = await supabase.rpc("clear_stale_drafts");
+    if (cleared) await flushStorageDeletions(supabase);
     const { data, error } = await supabase.rpc("create_draft_attachment", {
         p_step_result_id: stepResultId, p_file_name: fileName, p_content_type: contentType, p_size_bytes: sizeBytes,
     });
@@ -81,15 +86,22 @@ export async function confirmAttachmentUpload({ attachmentId }: { attachmentId: 
 export async function deleteDraftAttachment({ attachmentId }: { attachmentId: string }): Promise<actionResult> {
     await requireUser();
     const supabase = await createClient();
-    const { data: key, error } = await supabase.rpc("delete_draft_attachment", { p_attachment_id: attachmentId });
+    const { error } = await supabase.rpc("delete_draft_attachment", { p_attachment_id: attachmentId });
     if (error) return fail(error);
-    try {
-        await storage.remove(key);
-    } catch (e) {
-        // The row is gone; an orphaned object is acceptable here (cleanup comes with the deletion queue).
-        console.error("Attachment object removal failed:", (e as Error).message);
-    }
+    // The delete queued the object key; a failed bucket delete leaves it queued for a later flush.
+    await flushStorageDeletions(supabase);
     return { ok: true, data: undefined };
+}
+
+// Admin backstop for automatic cleanup: clears everyone's stale drafts and drains the deletion queue.
+export async function cleanUpStorage(): Promise<actionResult<{ draftsCleared: number; objectsRemoved: number }>> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+    const supabase = await createClient();
+    const { data: draftsCleared, error } = await supabase.rpc("clear_all_stale_drafts");
+    if (error) return fail(error);
+    const objectsRemoved = await flushStorageDeletions(supabase, { maxBatches: 20 });
+    return { ok: true, data: { draftsCleared: draftsCleared ?? 0, objectsRemoved } };
 }
 
 export type signedAttachment = attachmentView & { url: string; remarkId?: string | null };

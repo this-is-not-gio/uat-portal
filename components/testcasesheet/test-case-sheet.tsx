@@ -49,7 +49,7 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
-import { AttachmentsUnavailable, RemarkAttachments, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
+import { AttachmentsUnavailable, RemarkAttachments, formatSize, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
 import type { signedAttachment } from "@/lib/supabase/attachment-actions";
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
@@ -524,6 +524,13 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 											<Badge variant="outline" className="text-xs">{step.status}</Badge>
 											{step.remarks.length > 0 && (
 												<span className="text-xs text-muted-foreground"> · {step.remarks.length} remark{step.remarks.length === 1 ? "" : "s"}</span>
+											)}
+											{step.remarks.some((r) => r.attachments?.length) && (
+												<ul className="text-xs text-muted-foreground">
+													{step.remarks.flatMap((r) => r.attachments ?? []).map((file, i) => (
+														<li key={i}>📎 {file.file_name} ({formatSize(file.size_bytes)}), removed with the reset</li>
+													))}
+												</ul>
 											)}
 										</li>
 									))}
