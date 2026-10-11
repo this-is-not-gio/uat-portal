@@ -171,7 +171,7 @@ const RESULT_SELECT = `
     order_index,
     status,
     expected_results,
-    test_remarks ( id, remark, created_at, profile:profiles ( id, full_name, role ) )
+    test_remarks ( id, remark, created_at, profile:profiles ( id, full_name, role ), attachments ( id, status ) )
   )
 ` as const;
 
@@ -450,6 +450,7 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
                 remark: remark.remark,
                 author: remark.profile ?? undefined,
                 created_at: remark.created_at,
+                attachmentCount: remark.attachments.filter((a) => a.status === "ready").length,
             })),
         })),
     }));
