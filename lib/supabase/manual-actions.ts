@@ -30,6 +30,31 @@ export async function createManualModule(input: { title: string }): Promise<acti
     return { ok: true, data: { slug } };
 }
 
+export async function createManualSection(input: { moduleId: string; title: string }): Promise<actionResult<{ moduleSlug: string; slug: string }>> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const title = input.title.trim();
+    if (!title) return { ok: false, error: "A section needs a title." };
+
+    const supabase = await createClient();
+    const { data: parent, error: parentError } = await supabase.from("manual_modules").select("slug").eq("id", input.moduleId).maybeSingle();
+    if (parentError) return { ok: false, error: parentError.message };
+    if (!parent) return { ok: false, error: "Module not found." };
+
+    const { data: existing, error: readError } = await supabase.from("manual_sections").select("slug, sort_order").eq("module_id", input.moduleId);
+    if (readError) return { ok: false, error: readError.message };
+
+    const slug = uniqueSlug(title, existing.map((s) => s.slug), [], "section");
+    const sortOrder = existing.reduce((max, s) => Math.max(max, s.sort_order), -1) + 1;
+
+    const { error } = await supabase.from("manual_sections").insert({ module_id: input.moduleId, title, slug, sort_order: sortOrder });
+    if (error) return { ok: false, error: error.message };
+
+    refresh();
+    return { ok: true, data: { moduleSlug: parent.slug, slug } };
+}
+
 export async function setManualModulePublished(input: { id: string; isPublished: boolean }): Promise<actionResult<null>> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");

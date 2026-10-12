@@ -17,7 +17,7 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 import { useCan } from "@/components/current-user-provider";
-import { createManualModule, setManualModulePublished } from "@/lib/supabase/manual-actions";
+import { createManualModule, createManualSection, setManualModulePublished } from "@/lib/supabase/manual-actions";
 
 const ManualEditContext = createContext<boolean>(false);
 const ManualEditToggleContext = createContext<() => void>(() => {});
@@ -97,6 +97,59 @@ export function NewModuleDialog({ trigger }: { trigger: React.ReactElement }) {
 						<Button type="submit" disabled={isPending || !title.trim()}>
 							<Plus className="size-4" />
 							{isPending ? "Creating…" : "Create module"}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+// Title dialog; creating a section navigates to it.
+export function NewSectionDialog({ moduleId, moduleTitle, trigger }: { moduleId: string; moduleTitle: string; trigger: React.ReactElement }) {
+	const router = useRouter();
+	const [open, setOpen] = useState(false);
+	const [title, setTitle] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
+
+	function onCreate() {
+		setError(null);
+		startTransition(async () => {
+			const result = await createManualSection({ moduleId, title });
+			if (!result.ok) {
+				setError(result.error);
+				return;
+			}
+			setOpen(false);
+			router.push(`/manual/${result.data.moduleSlug}/${result.data.slug}`);
+		});
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={(next) => { setOpen(next); if (next) { setTitle(""); setError(null); } }}>
+			<DialogTrigger render={trigger} />
+			<DialogContent className="sm:max-w-md">
+				<DialogHeader className="flex flex-col px-2 pt-3">
+					<DialogTitle className="font-heading font-semibold">New section</DialogTitle>
+					<DialogDescription className="text-xs text-muted-foreground">
+						Adds a section to {moduleTitle}.
+					</DialogDescription>
+				</DialogHeader>
+				<form
+					className="flex flex-col gap-4 px-2"
+					onSubmit={(e) => { e.preventDefault(); if (title.trim()) onCreate(); }}
+				>
+					<div className="flex flex-col gap-1">
+						<Label htmlFor="section-title" className="text-xs text-muted-foreground">Title</Label>
+						<Input id="section-title" autoFocus value={title} onChange={(e) => setTitle(e.target.value)} disabled={isPending} placeholder="e.g. Submission" />
+					</div>
+					{error && <p className="text-sm text-destructive">{error}</p>}
+					<DialogFooter>
+						<DialogClose render={<Button type="button" variant="outline" disabled={isPending} />}>Cancel</DialogClose>
+						<Button type="submit" disabled={isPending || !title.trim()}>
+							<Plus className="size-4" />
+							{isPending ? "Creating…" : "Create section"}
 						</Button>
 					</DialogFooter>
 				</form>
