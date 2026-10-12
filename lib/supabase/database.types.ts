@@ -238,6 +238,122 @@ export type Database = {
           },
         ]
       }
+      manual_blocks: {
+        Row: {
+          body: string
+          created_at: string
+          header: string
+          id: string
+          module_id: string
+          section_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          body?: string
+          created_at?: string
+          header: string
+          id?: string
+          module_id: string
+          section_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          header?: string
+          id?: string
+          module_id?: string
+          section_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_blocks_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "manual_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manual_blocks_section_id_module_id_fkey"
+            columns: ["section_id", "module_id"]
+            isOneToOne: false
+            referencedRelation: "manual_sections"
+            referencedColumns: ["id", "module_id"]
+          },
+        ]
+      }
+      manual_modules: {
+        Row: {
+          created_at: string
+          id: string
+          is_published: boolean
+          slug: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          slug: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_published?: boolean
+          slug?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      manual_sections: {
+        Row: {
+          created_at: string
+          id: string
+          module_id: string
+          slug: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          module_id: string
+          slug: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          module_id?: string
+          slug?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manual_sections_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "manual_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
