@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Pencil, Plus } from "lucide-react";
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,8 +16,17 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "@/components/ui/dialog";
+import ConfirmDialog from "@/components/confirm-dialog";
 import { useCan } from "@/components/current-user-provider";
-import { createManualModule, createManualSection, setManualModulePublished } from "@/lib/supabase/manual-actions";
+import {
+	createManualModule,
+	createManualSection,
+	deleteManualModule,
+	deleteManualSection,
+	renameManualModule,
+	renameManualSection,
+	setManualModulePublished,
+} from "@/lib/supabase/manual-actions";
 
 const ManualEditContext = createContext<boolean>(false);
 const ManualEditToggleContext = createContext<() => void>(() => {});
@@ -181,5 +190,119 @@ export function PublishModuleButton({ moduleId, isPublished }: { moduleId: strin
 			</Button>
 			{error && <p className="text-xs text-destructive">{error}</p>}
 		</div>
+	);
+}
+
+// Page title that turns into an inline input in Edit mode. The slug (and URL) never changes.
+export function EditableTitle({ kind, id, title }: { kind: "module" | "section"; id: string; title: string }) {
+	const editing = useManualEditing();
+	const [isRenaming, setIsRenaming] = useState(false);
+	const [value, setValue] = useState(title);
+	const [error, setError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
+
+	if (!editing || !isRenaming) {
+		return (
+			<div className="flex items-center gap-1">
+				<h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
+				{editing && (
+					<Button
+						type="button"
+						variant="ghost"
+						size="icon-sm"
+						aria-label={`Rename ${kind}`}
+						onClick={() => { setValue(title); setError(null); setIsRenaming(true); }}
+					>
+						<Pencil className="size-3.5" />
+					</Button>
+				)}
+			</div>
+		);
+	}
+
+	function save() {
+		if (!value.trim()) return;
+		if (value.trim() === title) { setIsRenaming(false); return; }
+		setError(null);
+		startTransition(async () => {
+			const result = kind === "module"
+				? await renameManualModule({ id, title: value })
+				: await renameManualSection({ id, title: value });
+			if (!result.ok) {
+				setError(result.error);
+				return;
+			}
+			setIsRenaming(false);
+		});
+	}
+
+	return (
+		<form className="flex flex-col gap-1" onSubmit={(e) => { e.preventDefault(); save(); }}>
+			<div className="flex items-center gap-2">
+				<Input
+					autoFocus
+					value={value}
+					onChange={(e) => setValue(e.target.value)}
+					onKeyDown={(e) => { if (e.key === "Escape") setIsRenaming(false); }}
+					disabled={isPending}
+					aria-label={`${kind === "module" ? "Module" : "Section"} title`}
+					className="h-10 text-xl font-semibold"
+				/>
+				<Button type="submit" size="sm" disabled={isPending || !value.trim()}>{isPending ? "Saving…" : "Save"}</Button>
+				<Button type="button" variant="outline" size="sm" onClick={() => setIsRenaming(false)} disabled={isPending}>Cancel</Button>
+			</div>
+			{error && <p className="text-xs text-destructive">{error}</p>}
+		</form>
+	);
+}
+
+// Deleting a module wipes its sections and blocks, so the module's name must be typed to confirm.
+export function DeleteModuleButton({ moduleId, moduleTitle }: { moduleId: string; moduleTitle: string }) {
+	const editing = useManualEditing();
+	const [typed, setTyped] = useState("");
+	if (!editing) return null;
+
+	return (
+		<ConfirmDialog
+			title={`Delete "${moduleTitle}"?`}
+			description="This permanently removes the module with all its sections and content blocks."
+			confirmLabel="Delete module"
+			confirmDisabled={typed !== moduleTitle}
+			onConfirm={() => deleteManualModule({ id: moduleId })}
+			trigger={
+				<Button variant="outline" size="sm" onClick={() => setTyped("")}>
+					<Trash2 className="size-3.5" />
+					Delete
+				</Button>
+			}
+			body={
+				<div className="flex flex-col gap-1">
+					<Label htmlFor="confirm-module-name" className="text-xs text-muted-foreground">
+						Type <span className="font-semibold text-foreground">{moduleTitle}</span> to confirm
+					</Label>
+					<Input id="confirm-module-name" autoFocus autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />
+				</div>
+			}
+		/>
+	);
+}
+
+export function DeleteSectionButton({ sectionId, sectionTitle }: { sectionId: string; sectionTitle: string }) {
+	const editing = useManualEditing();
+	if (!editing) return null;
+
+	return (
+		<ConfirmDialog
+			title={`Delete "${sectionTitle}"?`}
+			description="This removes the section and all its content blocks."
+			confirmLabel="Delete section"
+			onConfirm={() => deleteManualSection({ id: sectionId })}
+			trigger={
+				<Button variant="outline" size="sm">
+					<Trash2 className="size-3.5" />
+					Delete
+				</Button>
+			}
+		/>
 	);
 }

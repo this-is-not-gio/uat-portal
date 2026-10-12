@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
+import { DeleteSectionButton, EditableTitle } from "@/components/manual/manual-edit"
 import { DocShell } from "@/components/manual/doc-parts"
 import { ManualBlockList } from "@/components/manual/manual-blocks"
 import { blockAnchors } from "@/lib/manual/slug"
@@ -20,8 +21,11 @@ export default async function ManualSectionPage({ params }: { params: Promise<{ 
 			<section className="space-y-3">
 				<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{manualModule.title}</p>
 				<div className="flex items-center gap-3">
-					<h1 className="text-3xl font-semibold tracking-tight">{section.title}</h1>
+					<EditableTitle kind="section" id={section.id} title={section.title} />
 					{!manualModule.isPublished && <Badge variant="outline">Draft</Badge>}
+					<div className="ml-auto">
+						<DeleteSectionButton sectionId={section.id} sectionTitle={section.title} />
+					</div>
 				</div>
 			</section>
 			<ManualBlockList container={container} blocks={blocks} anchors={anchors} />

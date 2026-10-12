@@ -25,7 +25,8 @@ export default function ConfirmDialog({
 	trigger,
 	open: controlledOpen,
 	onOpenChange,
-	body
+	body,
+	confirmDisabled,
 }: {
 	title: string;
 	description: React.ReactNode;
@@ -36,6 +37,7 @@ export default function ConfirmDialog({
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
 	body?: React.ReactNode;
+	confirmDisabled?: boolean;
 }) {
 	const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
 	const open = controlledOpen ?? uncontrolledOpen;
@@ -77,7 +79,7 @@ export default function ConfirmDialog({
 				)}
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
-					<Button variant="destructive" onClick={confirm} disabled={isPending}>
+					<Button variant="destructive" onClick={confirm} disabled={isPending || confirmDisabled}>
 						<Trash2 className="h-3.5 w-3.5" />
 						{isPending ? "Working…" : confirmLabel}
 					</Button>

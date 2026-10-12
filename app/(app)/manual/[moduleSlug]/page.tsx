@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import { PublishModuleButton } from "@/components/manual/manual-edit"
+import { DeleteModuleButton, EditableTitle, PublishModuleButton } from "@/components/manual/manual-edit"
 import { DocShell } from "@/components/manual/doc-parts"
 import { ManualBlockList } from "@/components/manual/manual-blocks"
 import { blockAnchors } from "@/lib/manual/slug"
@@ -21,9 +21,10 @@ export default async function ManualModulePage({ params }: { params: Promise<{ m
 			<section className="space-y-3">
 				<p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Testing Manual</p>
 				<div className="flex items-center gap-3">
-					<h1 className="text-3xl font-semibold tracking-tight">{manualModule.title}</h1>
+					<EditableTitle kind="module" id={manualModule.id} title={manualModule.title} />
 					{!manualModule.isPublished && <Badge variant="outline">Draft</Badge>}
-					<div className="ml-auto">
+					<div className="ml-auto flex items-center gap-2">
+						<DeleteModuleButton moduleId={manualModule.id} moduleTitle={manualModule.title} />
 						<PublishModuleButton moduleId={manualModule.id} isPublished={manualModule.isPublished} />
 					</div>
 				</div>

@@ -1,6 +1,7 @@
 "use server";
 
-import { refresh } from "next/cache";
+import { refresh, revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
@@ -132,4 +133,81 @@ export async function deleteManualBlock(input: { id: string }): Promise<actionRe
 
     refresh();
     return { ok: true, data: undefined };
+}
+
+// Renaming changes the title only; the slug is fixed so existing links keep working.
+export async function renameManualModule(input: { id: string; title: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const title = input.title.trim();
+    if (!title) return { ok: false, error: "A module needs a title." };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("manual_modules")
+        .update({ title, updated_at: new Date().toISOString() })
+        .eq("id", input.id)
+        .select("id");
+    if (error) return { ok: false, error: error.message };
+    if (!data?.length) return { ok: false, error: "Module not found." };
+
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+export async function renameManualSection(input: { id: string; title: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const title = input.title.trim();
+    if (!title) return { ok: false, error: "A section needs a title." };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("manual_sections")
+        .update({ title, updated_at: new Date().toISOString() })
+        .eq("id", input.id)
+        .select("id");
+    if (error) return { ok: false, error: error.message };
+    if (!data?.length) return { ok: false, error: "Section not found." };
+
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+// Sections and blocks go with the module via ON DELETE CASCADE. The current page is gone
+// afterwards, so redirect here instead of refreshing it into a 404.
+export async function deleteManualModule(input: { id: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("manual_modules").delete().eq("id", input.id).select("id");
+    if (error) return { ok: false, error: error.message };
+    if (!data?.length) return { ok: false, error: "Module not found." };
+
+    revalidatePath("/manual", "layout");
+    redirect("/manual");
+}
+
+export async function deleteManualSection(input: { id: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const supabase = await createClient();
+    const { data: section, error: readError } = await supabase
+        .from("manual_sections")
+        .select("module:manual_modules(slug)")
+        .eq("id", input.id)
+        .maybeSingle();
+    if (readError) return { ok: false, error: readError.message };
+    if (!section) return { ok: false, error: "Section not found." };
+    const moduleSlug = (section.module as unknown as { slug: string } | null)?.slug;
+
+    const { error } = await supabase.from("manual_sections").delete().eq("id", input.id);
+    if (error) return { ok: false, error: error.message };
+
+    revalidatePath("/manual", "layout");
+    redirect(moduleSlug ? `/manual/${moduleSlug}` : "/manual");
 }
