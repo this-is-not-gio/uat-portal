@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import ConfirmDialog from "@/components/confirm-dialog";
 import { MarkdownEditor } from "@/components/markdown-editor";
 import { useManualEditing } from "@/components/manual/manual-edit";
+import { ManualSortableList, ManualSortableRow } from "@/components/manual/manual-sortable";
+import { reorderManualBlocks } from "@/lib/supabase/manual-reorder-actions";
 import { createManualBlock, deleteManualBlock, updateManualBlock } from "@/lib/supabase/manual-actions";
 import type { manualBlock, manualBlockContainer } from "@/lib/supabase/manual";
 
@@ -66,7 +68,7 @@ function BlockEditor({
 	);
 }
 
-function BlockView({ block, anchor }: { block: manualBlock; anchor: string }) {
+function BlockView({ block, anchor, handle }: { block: manualBlock; anchor: string; handle?: React.ReactNode }) {
 	const editing = useManualEditing();
 	const [isEditing, setIsEditing] = useState(false);
 	const [deleteOpen, setDeleteOpen] = useState(false);
@@ -91,7 +93,10 @@ function BlockView({ block, anchor }: { block: manualBlock; anchor: string }) {
 	return (
 		<section id={anchor} className="scroll-mt-8 space-y-3">
 			<div className="flex items-start justify-between gap-3">
-				<h2 className="text-xl font-semibold tracking-tight">{block.header}</h2>
+				<div className="flex items-center gap-1">
+					{handle}
+					<h2 className="text-xl font-semibold tracking-tight">{block.header}</h2>
+				</div>
 				{editing && (
 					<div className="flex shrink-0 items-center gap-1">
 						<Button type="button" variant="ghost" size="icon-sm" aria-label="Edit block" onClick={() => setIsEditing(true)}>
@@ -133,12 +138,22 @@ export function ManualBlockList({
 }) {
 	const editing = useManualEditing();
 	const [adding, setAdding] = useState(false);
+	// Anchors follow the saved order; keyed by id so they stay put while a drag is in flight.
+	const anchorById = new Map(blocks.map((block, i) => [block.id, anchors[i]]));
 
 	return (
 		<>
-			{blocks.map((block, i) => (
-				<BlockView key={block.id} block={block} anchor={anchors[i]} />
-			))}
+			<ManualSortableList items={blocks} onReorder={(ids) => reorderManualBlocks({ ...container, blockIds: ids })}>
+				{(ordered) => ordered.map((block) => (
+					<ManualSortableRow key={block.id} id={block.id} editing={editing}>
+						{({ setNodeRef, style, handle }) => (
+							<div ref={setNodeRef} style={style}>
+								<BlockView block={block} anchor={anchorById.get(block.id)!} handle={handle} />
+							</div>
+						)}
+					</ManualSortableRow>
+				))}
+			</ManualSortableList>
 			{editing && blocks.length === 0 && !adding && (
 				<p className="text-sm text-muted-foreground">No content yet.</p>
 			)}

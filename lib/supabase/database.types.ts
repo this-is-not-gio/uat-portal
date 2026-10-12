@@ -1672,6 +1672,18 @@ export type Database = {
         Args: { p_case_result_id: string }
         Returns: undefined
       }
+      reorder_manual_blocks: {
+        Args: { p_block_ids: string[]; p_module_id: string; p_section_id: string }
+        Returns: undefined
+      }
+      reorder_manual_modules: {
+        Args: { p_module_ids: string[] }
+        Returns: undefined
+      }
+      reorder_manual_sections: {
+        Args: { p_module_id: string; p_section_ids: string[] }
+        Returns: undefined
+      }
       reorder_sections: {
         Args: { p_section_ids: string[]; p_suite_id: string }
         Returns: undefined

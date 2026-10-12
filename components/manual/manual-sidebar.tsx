@@ -22,6 +22,8 @@ import { ChevronRight, File, Folder, Plus } from "lucide-react"
 import type { manualModule } from "@/lib/supabase/manual"
 import { manualHref, manualNav } from "./manual-nav"
 import { NewModuleDialog, NewSectionDialog, useManualEditing } from "./manual-edit"
+import { ManualSortableList, ManualSortableRow } from "./manual-sortable"
+import { reorderManualModules, reorderManualSections } from "@/lib/supabase/manual-reorder-actions"
 
 export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 	const pathname = usePathname()
@@ -47,12 +49,16 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 							{modules.length === 0 && (
 								<p className="px-2 py-1 text-xs text-muted-foreground">No modules yet.</p>
 							)}
-							{modules.map((module) => {
+							<ManualSortableList items={modules} onReorder={(ids) => reorderManualModules({ moduleIds: ids })}>
+							{(orderedModules) => orderedModules.map((module) => {
 								const moduleActive = pathname === `/manual/${module.slug}`
 								const inModule = moduleActive || pathname.startsWith(`/manual/${module.slug}/`)
 								return (
-									<Collapsible key={module.id} defaultOpen={inModule} render={<SidebarMenuItem />}>
+									<ManualSortableRow key={module.id} id={module.id} editing={editing}>
+									{({ setNodeRef, style, handle }) => (
+									<Collapsible defaultOpen={inModule} render={<SidebarMenuItem ref={setNodeRef} style={style} />}>
 										<div className="flex items-center gap-0.5">
+											{handle}
 											<CollapsibleTrigger
 												className="group/trigger flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent"
 												aria-label={`Toggle ${module.title}`}
@@ -92,8 +98,12 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 												{module.sections.length === 0 && (
 													<p className="px-2 py-1 text-xs text-muted-foreground">No sections.</p>
 												)}
-												{module.sections.map((section) => (
-													<SidebarMenuSubItem key={section.id}>
+												<ManualSortableList items={module.sections} onReorder={(ids) => reorderManualSections({ moduleId: module.id, sectionIds: ids })}>
+												{(orderedSections) => orderedSections.map((section) => (
+													<ManualSortableRow key={section.id} id={section.id} editing={editing}>
+													{({ setNodeRef: setSectionRef, style: sectionStyle, handle: sectionHandle }) => (
+													<SidebarMenuSubItem ref={setSectionRef} style={sectionStyle} className="flex items-center gap-0.5">
+														{sectionHandle}
 														<SidebarMenuSubButton
 															size="sm"
 															isActive={pathname === `/manual/${module.slug}/${section.slug}`}
@@ -103,12 +113,18 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 															<span>{section.title}</span>
 														</SidebarMenuSubButton>
 													</SidebarMenuSubItem>
+													)}
+													</ManualSortableRow>
 												))}
+												</ManualSortableList>
 											</SidebarMenuSub>
 										</CollapsibleContent>
 									</Collapsible>
+									)}
+									</ManualSortableRow>
 								)
 							})}
+							</ManualSortableList>
 						</SidebarMenu>
 					</SidebarGroupContent>
 				</SidebarGroup>
