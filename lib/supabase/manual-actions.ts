@@ -46,3 +46,65 @@ export async function setManualModulePublished(input: { id: string; isPublished:
     refresh();
     return { ok: true, data: null };
 }
+
+export async function createManualBlock(input: {
+    moduleId: string;
+    sectionId: string | null;
+    header: string;
+    body: string;
+}): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const header = input.header.trim();
+    if (!header) return { ok: false, error: "A block needs a header." };
+
+    const supabase = await createClient();
+    let siblings = supabase.from("manual_blocks").select("sort_order").eq("module_id", input.moduleId);
+    siblings = input.sectionId ? siblings.eq("section_id", input.sectionId) : siblings.is("section_id", null);
+    const { data: existing, error: readError } = await siblings;
+    if (readError) return { ok: false, error: readError.message };
+    const sortOrder = existing.reduce((max, b) => Math.max(max, b.sort_order), -1) + 1;
+
+    const { error } = await supabase.from("manual_blocks").insert({
+        module_id: input.moduleId,
+        section_id: input.sectionId,
+        header,
+        body: input.body,
+        sort_order: sortOrder,
+    });
+    if (error) return { ok: false, error: error.message };
+
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+export async function updateManualBlock(input: { id: string; header: string; body: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const header = input.header.trim();
+    if (!header) return { ok: false, error: "A block needs a header." };
+
+    const supabase = await createClient();
+    const { error } = await supabase
+        .from("manual_blocks")
+        .update({ header, body: input.body, updated_at: new Date().toISOString() })
+        .eq("id", input.id);
+    if (error) return { ok: false, error: error.message };
+
+    refresh();
+    return { ok: true, data: undefined };
+}
+
+export async function deleteManualBlock(input: { id: string }): Promise<actionResult> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const supabase = await createClient();
+    const { error } = await supabase.from("manual_blocks").delete().eq("id", input.id);
+    if (error) return { ok: false, error: error.message };
+
+    refresh();
+    return { ok: true, data: undefined };
+}

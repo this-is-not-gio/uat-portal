@@ -43,3 +43,17 @@ export const getManualTree = cache(async (): Promise<manualModule[]> => {
 export async function getManualModuleBySlug(slug: string): Promise<manualModule | null> {
     return (await getManualTree()).find((m) => m.slug === slug) ?? null;
 }
+
+export type manualBlock = { id: string; header: string; body: string };
+
+// A block container is a module's own content (sectionId null) or one of its sections.
+export type manualBlockContainer = { moduleId: string; sectionId: string | null };
+
+export async function getManualBlocks({ moduleId, sectionId }: manualBlockContainer): Promise<manualBlock[]> {
+    const supabase = await createClient();
+    let query = supabase.from("manual_blocks").select("id, header, body").eq("module_id", moduleId);
+    query = sectionId ? query.eq("section_id", sectionId) : query.is("section_id", null);
+    const { data, error } = await query.order("sort_order").order("created_at");
+    if (error) throw error;
+    return data;
+}

@@ -11,11 +11,21 @@ export function slugify(title: string): string {
 }
 
 // First free slug for a title: "sec-endorsement", then "sec-endorsement-2", "-3", ...
-export function uniqueSlug(title: string, taken: Iterable<string>, reserved: string[] = []): string {
-    const base = slugify(title) || "module";
+export function uniqueSlug(title: string, taken: Iterable<string>, reserved: string[] = [], fallback = "module"): string {
+    const base = slugify(title) || fallback;
     const used = new Set([...taken, ...reserved]);
     if (!used.has(base)) return base;
     let n = 2;
     while (used.has(`${base}-${n}`)) n++;
     return `${base}-${n}`;
+}
+
+// One anchor id per block header, in page order. Duplicate headers get "-2", "-3", ... like slugs do.
+export function blockAnchors(headers: string[]): string[] {
+    const taken: string[] = [];
+    return headers.map((header) => {
+        const anchor = uniqueSlug(header, taken, [], "section");
+        taken.push(anchor);
+        return anchor;
+    });
 }
