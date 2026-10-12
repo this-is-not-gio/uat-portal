@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus } from "lucide-react";
+import { Eye, EyeOff, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,7 @@ import {
 	DialogTrigger,
 } from "@/components/ui/dialog";
 import { useCan } from "@/components/current-user-provider";
-import { createManualModule } from "@/lib/supabase/manual-actions";
+import { createManualModule, setManualModulePublished } from "@/lib/supabase/manual-actions";
 
 const ManualEditContext = createContext<boolean>(false);
 const ManualEditToggleContext = createContext<() => void>(() => {});
@@ -102,5 +102,31 @@ export function NewModuleDialog({ trigger }: { trigger: React.ReactElement }) {
 				</form>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+// Publish/Unpublish toggle for the module page header. Admin in Edit mode only.
+export function PublishModuleButton({ moduleId, isPublished }: { moduleId: string; isPublished: boolean }) {
+	const editing = useManualEditing();
+	const [error, setError] = useState<string | null>(null);
+	const [isPending, startTransition] = useTransition();
+	if (!editing) return null;
+
+	function onToggle() {
+		setError(null);
+		startTransition(async () => {
+			const result = await setManualModulePublished({ id: moduleId, isPublished: !isPublished });
+			if (!result.ok) setError(result.error);
+		});
+	}
+
+	return (
+		<div className="flex items-center gap-2">
+			<Button variant={isPublished ? "outline" : "default"} size="sm" onClick={onToggle} disabled={isPending}>
+				{isPublished ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+				{isPending ? "Saving…" : isPublished ? "Unpublish" : "Publish"}
+			</Button>
+			{error && <p className="text-xs text-destructive">{error}</p>}
+		</div>
 	);
 }

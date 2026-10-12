@@ -29,3 +29,20 @@ export async function createManualModule(input: { title: string }): Promise<acti
     refresh();
     return { ok: true, data: { slug } };
 }
+
+export async function setManualModulePublished(input: { id: string; isPublished: boolean }): Promise<actionResult<null>> {
+    const user = await requireUser();
+    if (!can(user, "admin_area")) return denied("admin_area");
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("manual_modules")
+        .update({ is_published: input.isPublished, updated_at: new Date().toISOString() })
+        .eq("id", input.id)
+        .select("id");
+    if (error) return { ok: false, error: error.message };
+    if (!data?.length) return { ok: false, error: "Module not found." };
+
+    refresh();
+    return { ok: true, data: null };
+}

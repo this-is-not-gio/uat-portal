@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
+import { PublishModuleButton } from "@/components/manual/manual-edit"
 import { DocShell } from "@/components/manual/doc-parts"
 import { getManualModuleBySlug } from "@/lib/supabase/manual"
 
@@ -16,6 +17,9 @@ export default async function ManualModulePage({ params }: { params: Promise<{ m
 				<div className="flex items-center gap-3">
 					<h1 className="text-3xl font-semibold tracking-tight">{manualModule.title}</h1>
 					{!manualModule.isPublished && <Badge variant="outline">Draft</Badge>}
+					<div className="ml-auto">
+						<PublishModuleButton moduleId={manualModule.id} isPublished={manualModule.isPublished} />
+					</div>
 				</div>
 			</section>
 		</DocShell>
