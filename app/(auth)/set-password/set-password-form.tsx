@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { setPassword, type SetPasswordState } from "./actions";
 
-export function SetPasswordForm() {
+export function SetPasswordForm({ tokenHash }: { tokenHash?: string }) {
 	const [state, formAction, pending] = useActionState<SetPasswordState, FormData>(setPassword, null);
 
 	return (
 		<form action={formAction} className="w-full">
 			<FieldGroup>
+				{tokenHash && <input type="hidden" name="token_hash" value={tokenHash} />}
 				<Field className="flex flex-col gap-1">
 					<FieldLabel htmlFor="password" className="text-xs text-muted-foreground">New password</FieldLabel>
 					<Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required className="font-mono px-3 py-5 bg-white" placeholder="*********" />
