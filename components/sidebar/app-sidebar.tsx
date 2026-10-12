@@ -43,9 +43,11 @@ const BADGE_VARIANTS = {
 
 const data = {
 	navMain: [
-		{ title: "Manual", url: "/", icon: BookCopy },
 		{ title: "Master Plan", url: "/masterPlan", icon: BookMarked },
 		{ title: "Participants", url: "/admin/users", icon: Users },
+	],
+	navAll: [
+		{ title: "Testing Manual", url: "/manual", icon: BookCopy },
 	],
 	// navTester: [
 	// 	{ title: "Dashboard", url: "/dashboard", icon: House },
@@ -82,7 +84,7 @@ export function AppSidebar({ testingSuites, user, ...props }: React.ComponentPro
 			</SidebarHeader>
 			<SidebarContent className="px-1 py-0">
 				<NavTestCase testingSuites={testingSuites} user={user} />
-				<NavMain items={isAdmin ? data.navMain : []} />
+				<NavMain items={isAdmin ? [...data.navAll, ...data.navMain] : data.navAll} />
 			</SidebarContent>
 			<SidebarFooter>
 				<SidebarMenu>
