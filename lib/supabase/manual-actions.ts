@@ -7,6 +7,7 @@ import { requireUser } from "./auth";
 import { can, denied } from "@/lib/auth/permissions";
 import { RESERVED_MODULE_SLUGS, uniqueSlug } from "@/lib/manual/slug";
 import type { actionResult } from "./iteration-actions";
+import { defaultBlockHeader, hasBlockHeader, type blockData, type blockType } from "@/lib/manual/blocks";
 
 // Manual CMS writes. Admin only: checked here for a clear message, and again by RLS.
 
@@ -76,13 +77,15 @@ export async function setManualModulePublished(input: { id: string; isPublished:
 export async function createManualBlock(input: {
     moduleId: string;
     sectionId: string | null;
+    blockType: blockType;
     header: string;
     body: string;
-}): Promise<actionResult> {
+    data: blockData;
+}): Promise<actionResult<{ id: string }>> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
 
-    const header = input.header.trim();
+    const header = hasBlockHeader(input.blockType) ? input.header.trim() : defaultBlockHeader(input.blockType);
     if (!header) return { ok: false, error: "A block needs a header." };
 
     const supabase = await createClient();
@@ -92,20 +95,22 @@ export async function createManualBlock(input: {
     if (readError) return { ok: false, error: readError.message };
     const sortOrder = existing.reduce((max, b) => Math.max(max, b.sort_order), -1) + 1;
 
-    const { error } = await supabase.from("manual_blocks").insert({
+    const { data: created, error } = await supabase.from("manual_blocks").insert({
         module_id: input.moduleId,
         section_id: input.sectionId,
+        block_type: input.blockType,
         header,
         body: input.body,
+        data: input.data,
         sort_order: sortOrder,
-    });
+    }).select("id").single();
     if (error) return { ok: false, error: error.message };
 
     refresh();
-    return { ok: true, data: undefined };
+    return { ok: true, data: { id: created.id } };
 }
 
-export async function updateManualBlock(input: { id: string; header: string; body: string }): Promise<actionResult> {
+export async function updateManualBlock(input: { id: string; header: string; body: string; data: blockData }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
 
@@ -115,7 +120,7 @@ export async function updateManualBlock(input: { id: string; header: string; bod
     const supabase = await createClient();
     const { error } = await supabase
         .from("manual_blocks")
-        .update({ header, body: input.body, updated_at: new Date().toISOString() })
+        .update({ header, body: input.body, data: input.data, updated_at: new Date().toISOString() })
         .eq("id", input.id);
     if (error) return { ok: false, error: error.message };
 
@@ -135,8 +140,8 @@ export async function deleteManualBlock(input: { id: string }): Promise<actionRe
     return { ok: true, data: undefined };
 }
 
-// Renaming changes the title only; the slug is fixed so existing links keep working.
-export async function renameManualModule(input: { id: string; title: string }): Promise<actionResult> {
+// Saves the title and description; the slug is fixed so existing links keep working.
+export async function renameManualModule(input: { id: string; title: string; description: string }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
 
@@ -146,7 +151,7 @@ export async function renameManualModule(input: { id: string; title: string }): 
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("manual_modules")
-        .update({ title, updated_at: new Date().toISOString() })
+        .update({ title, description: input.description.trim(), updated_at: new Date().toISOString() })
         .eq("id", input.id)
         .select("id");
     if (error) return { ok: false, error: error.message };
@@ -156,7 +161,7 @@ export async function renameManualModule(input: { id: string; title: string }): 
     return { ok: true, data: undefined };
 }
 
-export async function renameManualSection(input: { id: string; title: string }): Promise<actionResult> {
+export async function renameManualSection(input: { id: string; title: string; description: string }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "admin_area")) return denied("admin_area");
 
@@ -166,7 +171,7 @@ export async function renameManualSection(input: { id: string; title: string }):
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("manual_sections")
-        .update({ title, updated_at: new Date().toISOString() })
+        .update({ title, description: input.description.trim(), updated_at: new Date().toISOString() })
         .eq("id", input.id)
         .select("id");
     if (error) return { ok: false, error: error.message };

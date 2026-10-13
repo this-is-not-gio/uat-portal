@@ -240,8 +240,10 @@ export type Database = {
       }
       manual_blocks: {
         Row: {
+          block_type: string
           body: string
           created_at: string
+          data: Json
           header: string
           id: string
           module_id: string
@@ -250,8 +252,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          block_type?: string
           body?: string
           created_at?: string
+          data?: Json
           header: string
           id?: string
           module_id: string
@@ -260,8 +264,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          block_type?: string
           body?: string
           created_at?: string
+          data?: Json
           header?: string
           id?: string
           module_id?: string
@@ -289,6 +295,7 @@ export type Database = {
       manual_modules: {
         Row: {
           created_at: string
+          description: string
           id: string
           is_published: boolean
           slug: string
@@ -298,6 +305,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string
           id?: string
           is_published?: boolean
           slug: string
@@ -307,6 +315,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string
           id?: string
           is_published?: boolean
           slug?: string
@@ -319,6 +328,7 @@ export type Database = {
       manual_sections: {
         Row: {
           created_at: string
+          description: string
           id: string
           module_id: string
           slug: string
@@ -328,6 +338,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          description?: string
           id?: string
           module_id: string
           slug: string
@@ -337,6 +348,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          description?: string
           id?: string
           module_id?: string
           slug?: string

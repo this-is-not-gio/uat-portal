@@ -17,11 +17,16 @@ import {
 	useSortable,
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
 
 type result = { ok: true } | { ok: false; error: string };
+
+// Every list here is vertical: a dragged row moves only up and down and stays inside the
+// scroll area it lives in, instead of floating loose over the page.
+const modifiers = [restrictToVerticalAxis, restrictToFirstScrollableAncestor];
 
 // Drag-to-reorder for one parent's children (modules, a module's sections, or a container's
 // blocks). Reorders optimistically, saves through `onReorder`, and rolls back with an error
@@ -69,9 +74,35 @@ export function ManualSortableList<T extends { id: string }>({
 	}
 
 	return (
-		<DndContext id={dndContextId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+		<DndContext id={dndContextId} sensors={sensors} collisionDetection={closestCenter} modifiers={modifiers} onDragEnd={handleDragEnd}>
 			<SortableContext items={order.map((item) => item.id)} strategy={verticalListSortingStrategy}>
 				{children(order)}
+			</SortableContext>
+		</DndContext>
+	);
+}
+
+// Drag-to-reorder where the parent owns the order (the manual page draft, which mixes saved
+// blocks with ones not saved yet). Reports each move; nothing is saved here.
+export function ManualOrderedSortable({ ids, onMove, children }: { ids: string[]; onMove: (activeId: string, overId: string) => void; children: ReactNode }) {
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+	);
+	const dndContextId = useId();
+
+	return (
+		<DndContext
+			id={dndContextId}
+			sensors={sensors}
+			collisionDetection={closestCenter}
+			modifiers={modifiers}
+			onDragEnd={({ active, over }) => {
+				if (over && active.id !== over.id) onMove(String(active.id), String(over.id));
+			}}
+		>
+			<SortableContext items={ids} strategy={verticalListSortingStrategy}>
+				{children}
 			</SortableContext>
 		</DndContext>
 	);
@@ -103,11 +134,11 @@ export function ManualSortableRow({
 			ref={setActivatorNodeRef}
 			aria-label="Drag to reorder"
 			title="Drag to reorder"
-			className="flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent active:cursor-grabbing"
+			className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground active:cursor-grabbing"
 			{...attributes}
 			{...listeners}
 		>
-			<GripVertical className="size-3.5" />
+			<GripVertical className="size-4" />
 		</button>
 	) : null;
 

@@ -17,7 +17,7 @@ export default async function ManualPageLayout({ children }: { children: React.R
 						<p className="text-lg font-semibold">Testing Manual</p>
 						<p className="text-xs text-muted-foreground">This is where you can find the testing manual. It contains all the information you need to know about the testing process.</p>
 					</div>
-					<ManualEditToggle />
+					
 				</div>
 				<div className="flex min-h-0 flex-1 flex-row">
 					<ManualSidebar modules={modules} />

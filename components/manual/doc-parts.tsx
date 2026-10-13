@@ -19,7 +19,7 @@ export function Callout({
 	children: React.ReactNode
 }) {
 	return (
-		<div className="my-4 flex gap-3 rounded-lg border bg-muted/50 p-4">
+		<div className="my-8 flex gap-3 rounded-lg border bg-muted/50 p-4">
 			<Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 			<div className="space-y-1 text-sm">
 				<p className="font-medium">{title}</p>
@@ -33,7 +33,7 @@ export function DocShell({ toc, children }: { toc: TocItem[]; children: React.Re
 	return (
 		<ScrollArea className="min-h-0 flex-1">
 			<div className="mx-auto flex max-w-5xl gap-10 px-8 py-10">
-				<article className="min-w-0 flex-1 space-y-10 text-sm leading-7">{children}</article>
+				<article className="min-w-0 flex-1 text-sm leading-7">{children}</article>
 				<aside className="sticky top-10 hidden h-fit w-44 shrink-0 lg:block">
 					<p className="mb-2 text-xs font-medium">On this page</p>
 					<ul className="space-y-1.5 border-l text-xs">

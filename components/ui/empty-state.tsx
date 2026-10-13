@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "cn"
 import type { LucideIcon } from "lucide-react"
+import type { ReactNode } from "react"
 
 const emptyStateVariants = cva(
 	"w-full flex flex-col items-center justify-center text-center",
@@ -23,11 +24,13 @@ function EmptyState({
 	title,
 	description,
 	size,
+	action,
 	className,
 }: {
 	icon: LucideIcon
 	title: string
 	description?: string
+	action?: ReactNode
 } & VariantProps<typeof emptyStateVariants> & { className?: string }) {
 	return (
 		<div data-slot="empty-state" className={cn(emptyStateVariants({ size }), className)}>
@@ -40,6 +43,7 @@ function EmptyState({
 					<p className="text-xs text-muted-foreground">{description}</p>
 				) : null}
 			</div>
+			{action}
 		</div>
 	)
 }
