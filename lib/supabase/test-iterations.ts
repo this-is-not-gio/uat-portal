@@ -648,6 +648,17 @@ export async function getActiveRounds(): Promise<activeRound[]> {
     }));
 }
 
+// Start dates of the running rounds by suite slug: the tester dashboard's timeline column. No counts, unlike getActiveRounds.
+export async function getRunningRoundStarts(): Promise<Map<string, string>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_iterations")
+        .select("started_at, testing_suites!inner ( slug )")
+        .eq("status", "in_progress");
+    if (error) throw error;
+    return new Map(data.map((row) => [row.testing_suites.slug, row.started_at]));
+}
+
 // The latest completed round of each in_testing / for_sign_off suite that hasn't been issued for sign-off yet
 // (a draft still counts as not issued): the vendor's "ready to issue" list. Suites with a newer round already running are skipped
 // by the caller, since that round supersedes this one.
