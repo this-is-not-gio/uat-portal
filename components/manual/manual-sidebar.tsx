@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useState } from "react"
 import {
 	SidebarContent,
 	SidebarGroup,
@@ -29,6 +30,8 @@ import { reorderManualModules, reorderManualSections } from "@/lib/supabase/manu
 export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 	const pathname = usePathname()
 	const editing = useManualEditing()
+	// Modules follow the current route until the user toggles one by hand.
+	const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({})
 
 	return (
 		<div className="w-100 border-r border-border h-full min-h-0 relative">
@@ -57,7 +60,7 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 											return (
 												<ManualSortableRow key={module.id} id={module.id} editing={editing}>
 													{({ setNodeRef, style, handle }) => (
-														<Collapsible defaultOpen={inModule} render={<SidebarMenuItem ref={setNodeRef} style={style} />}>
+														<Collapsible open={openOverrides[module.id] ?? inModule} onOpenChange={(open) => setOpenOverrides((prev) => ({ ...prev, [module.id]: open }))} render={<SidebarMenuItem ref={setNodeRef} style={style} />}>
 															<div className="flex items-center gap-0.5">
 																{handle}
 																<CollapsibleTrigger
