@@ -3,7 +3,8 @@
   "git": {
     "deploymentEnabled": {
       "main": false,
-      "dev": false
+      "dev": false,
+      "*": false
     }
   }
 }
