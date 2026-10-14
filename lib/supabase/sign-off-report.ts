@@ -1,17 +1,21 @@
 import { createClient } from "@/lib/supabase/server";
+import { presignGet } from "@/lib/storage/b2";
 import { isRemovedFromRound, type caseFlag } from "./case-states";
 import { countStatuses, type statusCounts } from "./overview";
+import { getCaseVerdicts } from "./case-verdicts";
 import { compareOrganizations, type organization } from "./organizations";
 import {
     getIterationParticipants,
+    getIterationResults,
     getRolledUpResults,
+    rollUpCopies,
     getIterationsBySuiteId,
     type iterationParticipant,
     type testIteration,
     type testResultRow,
 } from "./test-iterations";
 import type { testCaseStatus } from "./test-cases";
-import type { ReportRemark, ReportThemes } from "@/lib/report/sign-off-remarks";
+import type { ReportAttachment, ReportRemark, ReportThemes } from "@/lib/report/sign-off-remarks";
 
 // Deterministic sign-off report: every number here is computed from recorded results, so the
 // same data always gives the same report. Verdict rules: ~/.claude/plans/give-me-a-scope-calm-frog.md.
@@ -94,7 +98,11 @@ export type RoundParticipant = {
     submittedAt: string | null;
     withdrawnAt: string | null;
     counts: statusCounts;
+    // Absent on reports frozen before per-tester results were shown.
+    testers?: RoundTester[];
 };
+
+export type RoundTester = { name: string | null; roleName?: string; submittedAt: string | null; counts: statusCounts };
 
 export type RoundCaseChange = { testCaseId: string; code: string | null; title: string; fromRound: string; toRound: string };
 
@@ -133,7 +141,8 @@ export type ReportHeader = {
     roundStartedAt: string | null;
     roundCompletedAt: string | null;
     roundsCounted: string[];
-    participants: { organizationName: string; organizationType: organization["type"]; submittedAt: string | null; withdrawnAt: string | null }[];
+    // testers is absent on reports frozen before per-tester submission was shown.
+    participants: { organizationName: string; organizationType: organization["type"]; submittedAt: string | null; withdrawnAt: string | null; testers?: { name: string | null; roleName?: string; submittedAt: string | null }[] }[];
     generatedAt: string;
 };
 
@@ -171,7 +180,8 @@ export type ReportCaseResult = {
 
 // One completed round. rows are already limited to what counts: included in the run and not
 // taken out mid-round by Sync.
-export type ReportRound = { iteration: testIteration; rows: testResultRow[]; participants: iterationParticipant[] };
+// copies: every tester's own row behind the rolled-up rows, for remarks written on any of them.
+export type ReportRound = { iteration: testIteration; rows: testResultRow[]; participants: iterationParticipant[]; copies?: testResultRow[] };
 
 export type ReportLiveCase = {
     id: string;
@@ -204,6 +214,8 @@ export type RolledUp = {
     finals: FinalCaseStatus[];
     // testCaseId -> orgId -> the round row each org's final status comes from. Not part of the report.
     sourceRows: Map<string, Map<string, testResultRow>>;
+    // Same keys: every tester copy of that case and org in the source round.
+    sourceCopies: Map<string, Map<string, testResultRow[]>>;
     deletedCases: string[];
 };
 
@@ -231,9 +243,12 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
     }
 
     const sourceRows = new Map<string, Map<string, testResultRow>>();
+    const sourceCopies = new Map<string, Map<string, testResultRow[]>>();
+    const copiesByRound = new Map(rounds.map((round) => [round.iteration.id, Map.groupBy(round.copies ?? [], (c) => `${c.testCaseId}|${c.organizationId}`)]));
     const finals = liveCases.map((live): FinalCaseStatus => {
         const perOrg: FinalOrgStatus[] = [];
         const sources = new Map<string, testResultRow>();
+        const copies = new Map<string, testResultRow[]>();
         let carriedOver = false;
         let sourceRound: testIteration | null = null;
 
@@ -246,6 +261,7 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
                 if (!isExecuted(row.status)) continue;
                 perOrg.push({ organizationId: orgId, organizationName, status: row.status, roundName: round.name });
                 sources.set(orgId, row);
+                copies.set(orgId, copiesByRound.get(round.id)?.get(`${live.id}|${orgId}`) ?? [row]);
                 if (i < entries.length - 1) carriedOver = true;
                 if (!sourceRound || round.iterationNumber > sourceRound.iterationNumber) sourceRound = round;
                 found = true;
@@ -260,6 +276,7 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
             return orgA && orgB ? compareOrganizations(orgA, orgB) : a.organizationName.localeCompare(b.organizationName);
         });
         sourceRows.set(live.id, sources);
+        sourceCopies.set(live.id, copies);
 
         const executed = perOrg.map((p) => p.status).filter((s): s is ExecutedStatus => s !== "Untested");
         return {
@@ -279,7 +296,7 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
         };
     });
 
-    return { finals, sourceRows, deletedCases: [...deleted.values()].sort() };
+    return { finals, sourceRows, sourceCopies, deletedCases: [...deleted.values()].sort() };
 }
 
 // Pass rate in percent, one decimal. Untested cases count in the denominator.
@@ -371,6 +388,12 @@ export function buildRoundHistory(rounds: ReportRound[]): RoundHistory {
                     submittedAt: p.submittedAt,
                     withdrawnAt: p.withdrawnAt,
                     counts: countStatuses(round.rows.filter((row) => row.organizationId === p.organization.id).map((row) => row.status)),
+                    testers: p.testers.filter((t) => t.status === "active").map((t) => ({
+                        name: t.fullName,
+                        roleName: t.testRole.name,
+                        submittedAt: t.submittedAt,
+                        counts: countStatuses(round.rows.flatMap((row) => row.copies ?? []).filter((c) => c.testerId === t.userId).map((c) => c.status)),
+                    })),
                 })),
         };
     });
@@ -497,7 +520,7 @@ export function buildFailedCases(rolledUp: RolledUp): ReportFailedCase[] {
         }));
 }
 
-export function buildLimitations(rounds: ReportRound[], rolledUp: RolledUp): ReportLimitation[] {
+export function buildLimitations(rounds: ReportRound[], rolledUp: RolledUp, hasAttachments = false): ReportLimitation[] {
     const withdrawn = rounds.flatMap((round) =>
         round.participants.filter((p) => p.withdrawnAt).map((p) => `${p.organization.name} (${round.iteration.name})`)
     );
@@ -523,7 +546,8 @@ export function buildLimitations(rounds: ReportRound[], rolledUp: RolledUp): Rep
     ];
     return [
         ...limitations.filter((l) => l.items.length > 0),
-        { key: "no_evidence", text: "No evidence attachments or defect tracking are recorded in the portal", items: [] },
+        // Only when the report really carries no evidence files.
+        ...(hasAttachments ? [] : [{ key: "no_evidence" as const, text: "No evidence attachments or defect tracking are recorded in the portal", items: [] }]),
     ];
 }
 
@@ -546,9 +570,9 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
     for (const f of sorted) {
         // perOrg is already in organization order.
         for (const org of f.perOrg) {
-            const row = rolledUp.sourceRows.get(f.testCaseId)?.get(org.organizationId);
-            if (!row || !org.roundName) continue;
-            for (const [i, step] of (row.stepsToExecute ?? []).entries()) {
+            const copies = rolledUp.sourceCopies.get(f.testCaseId)?.get(org.organizationId);
+            if (!copies?.length || !org.roundName) continue;
+            for (const row of copies) for (const [i, step] of (row.stepsToExecute ?? []).entries()) {
                 for (const r of step.remarks ?? []) {
                     const remark = r.remark.trim();
                     if (!remark) continue;
@@ -575,12 +599,71 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
     return remarks;
 }
 
+// Posted, ready files of the given remarks, read with the viewer's own client so the read rules apply.
+// Only the remarks that have files get an `attachments` key, so reports without evidence freeze unchanged.
+export async function withRemarkAttachments(remarks: ReportRemark[]): Promise<ReportRemark[]> {
+    if (remarks.length === 0) return remarks;
+    const supabase = await createClient();
+    // Batched: the ids go in the request URL.
+    const ids = remarks.map((r) => r.id);
+    const batches = Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) => ids.slice(i * 100, (i + 1) * 100));
+    const results = await Promise.all(
+        batches.map((batch) =>
+            supabase
+                .from("attachments")
+                .select("id, remark_id, file_name, size_bytes, content_type")
+                .in("remark_id", batch)
+                .eq("status", "ready")
+                .order("created_at")
+        )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+    const byRemark = new Map<string, ReportAttachment[]>();
+    for (const row of results.flatMap((r) => r.data ?? [])) {
+        const list = byRemark.get(row.remark_id!) ?? [];
+        list.push({ id: row.id, fileName: row.file_name, sizeBytes: row.size_bytes, contentType: row.content_type });
+        byRemark.set(row.remark_id!, list);
+    }
+    return remarks.map((r) => (byRemark.has(r.id) ? { ...r, attachments: byRemark.get(r.id) } : r));
+}
+
+// Fresh viewing links for a frozen report's attachments, signed with the viewer's own client: only
+// rows it can read come back, and files deleted since (a round reset) simply have no link.
+// Admin and Internal are the only report viewers and both read every organization's remarks. If
+// report access ever widens to External users or a public export, signing must move to a
+// security-definer path.
+export async function signReportAttachmentLinks(attachmentIds: string[]): Promise<Map<string, string>> {
+    const links = new Map<string, string>();
+    if (attachmentIds.length === 0) return links;
+    const supabase = await createClient();
+    const batches = Array.from({ length: Math.ceil(attachmentIds.length / 100) }, (_, i) => attachmentIds.slice(i * 100, (i + 1) * 100));
+    const results = await Promise.all(
+        batches.map((batch) => supabase.from("attachments").select("id, object_key, file_name, content_type").in("id", batch).eq("status", "ready"))
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+    await Promise.all(
+        results.flatMap((r) => r.data ?? []).map(async (row) => {
+            links.set(row.id, await presignGet({ key: row.object_key, contentType: row.content_type, fileName: row.file_name }));
+        })
+    );
+    return links;
+}
+
 function loadRounds(iterations: testIteration[]): Promise<ReportRound[]> {
     return Promise.all(
         iterations.map(async (iteration) => {
             // One row per case and organization: its testers' copies rolled up (0059).
-            const [rows, participants] = await Promise.all([getRolledUpResults(iteration.id), getIterationParticipants(iteration.id)]);
-            return { iteration, rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)), participants };
+            const [copies, verdicts, participants] = await Promise.all([getIterationResults(iteration.id), getCaseVerdicts(iteration.id), getIterationParticipants(iteration.id)]);
+            const names = new Map(participants.flatMap((p) => p.testers.map((t) => [t.userId, t.fullName] as const)));
+            const rows = rollUpCopies(copies, verdicts, names, { breakdown: true });
+            return {
+                iteration,
+                rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)),
+                participants,
+                copies: copies.filter((row) => row.includedInRun && !isRemovedFromRound(row)),
+            };
         })
     );
 }
@@ -680,6 +763,9 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
         ).keys(),
     ];
 
+    // Evidence files per remark, frozen with the catalog.
+    const remarks = await withRemarkAttachments(buildRemarkCatalog(rolledUp, liveCases));
+
     return {
         header: {
             suiteId,
@@ -694,6 +780,7 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
                 organizationType: p.organization.type,
                 submittedAt: p.submittedAt,
                 withdrawnAt: p.withdrawnAt,
+                testers: p.testers.filter((t) => t.status === "active").map((t) => ({ name: t.fullName, roleName: t.testRole.name, submittedAt: t.submittedAt })),
             })),
             generatedAt: new Date().toISOString(),
         },
@@ -705,8 +792,8 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
         breakdowns: buildBreakdowns(rolledUp.finals, liveCases, orgOrder),
         failedCases: buildFailedCases(rolledUp),
         roundHistory: buildRoundHistory(rounds),
-        limitations: buildLimitations(rounds, rolledUp),
-        remarks: buildRemarkCatalog(rolledUp, liveCases),
+        limitations: buildLimitations(rounds, rolledUp, remarks.some((r) => r.attachments)),
+        remarks,
         caseResults: toCaseResults(rolledUp.finals),
         // Attached by issueSignOff after validation.
         themes: null,

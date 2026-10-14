@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronDown, ChevronUp, DownloadIcon, Info, MessageSquare, MoveHorizontal, PanelLeftClose, PanelLeftOpen, PrinterIcon, ScrollText, Settings2, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronUp, DownloadIcon, Info, MoveHorizontal, PanelLeftClose, PanelLeftOpen, PrinterIcon, ScrollText, Settings2, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "cn";
+import { SignOffCommentsLayer, type signOffComments } from "./sign-off-comments-layer";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 // PDF-style viewer for the Sign-off tab: a sticky toolbar over A4 sheets on a grey canvas.
 // The sheets are placeholders until the report blocks render into them.
@@ -48,8 +50,12 @@ function writePageless(on: boolean) {
 // rightPanel: content for the right-hand panel; a placeholder shows until it's passed.
 // issueAction: the Issue Report button, passed only while the vendor's draft is open.
 // notice: the open version's status strip, shown above the first sheet (screen only).
+// comments: the report's text comments, shown in a margin beside the sheets. The client (canComment) can
+// switch on comment mode, select text and comment; everyone else reads them. Absent on the vendor's draft.
 // info: sign-off details for the collapsible bottom-right panel.
-export function SignOffDocument({ leading, versions, sections = [], rightPanel, issueAction, notice, info, pages = [], pageCount = 3 }: { leading?: React.ReactNode; versions?: React.ReactNode; sections?: string[]; rightPanel?: React.ReactNode; issueAction?: React.ReactNode; notice?: React.ReactNode; info?: React.ReactNode; pages?: (React.ReactNode | null)[]; pageCount?: number }) {
+// pageHeader: the running header, shown at the top of every sheet (the first section only when pageless)
+// and repeated on every printed page.
+export function SignOffDocument({ comments, leading, versions, sections = [], rightPanel, issueAction, notice, info, pageHeader, pages = [], pageCount = 3 }: { leading?: React.ReactNode; versions?: React.ReactNode; sections?: string[]; rightPanel?: React.ReactNode; issueAction?: React.ReactNode; notice?: React.ReactNode; info?: React.ReactNode; pageHeader?: React.ReactNode; pages?: (React.ReactNode | null)[]; pageCount?: number; comments?: signOffComments }) {
 	pageCount = Math.max(pageCount, pages.length);
 	const canvasRef = useRef<HTMLDivElement>(null);
 	// The canvas's track: its side padding is the room fit-width leaves around the sheet.
@@ -66,6 +72,8 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 	const [page, setPage] = useState(1);
 	// Remembered per browser; the server renders paged and hydration switches to the saved choice.
 	const pageless = useSyncExternalStore(subscribePageless, readPageless, () => false);
+	// The margin takes room right of the sheets, so fit-width leaves it out of the zoom.
+	const marginOpen = !!comments && (comments.canComment || comments.items.length > 0);
 
 	// Fit width: scale an A4 sheet to the canvas, never above 100% so text stays crisp.
 	useEffect(() => {
@@ -80,7 +88,7 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 		const observer = new ResizeObserver(fit);
 		observer.observe(canvas);
 		return () => observer.disconnect();
-	}, [fitWidth, pageless]);
+	}, [fitWidth, pageless, marginOpen]);
 
 	// Current page: the last sheet whose top has passed the middle of the canvas (the scroll container).
 	useEffect(() => {
@@ -295,10 +303,10 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 			    The floating panels overlay it; mx-auto centres the sheets. Scrollbars are hidden (it still scrolls).
 			    Pageless: no paper at all; the canvas turns white and the sections flow on it, split by a rule. */}
 			<div ref={canvasRef} className="no-scrollbar absolute inset-0 overflow-auto print:static print:overflow-visible">
-				<div ref={trackRef} className="flex w-max min-w-full px-6 pt-20 print:block print:w-auto print:p-0">
+				<div ref={trackRef} className={cn("flex w-max min-w-full pt-20 pl-6 print:block print:w-auto print:p-0", marginOpen ? "pr-[20.5rem]" : "pr-6")}>
 				{/* Column: the notice over the sheets. The notice is sized by the sheets (w-0 min-w-full), so long
 				    text wraps instead of widening the column; it isn't zoomed, so it stays readable at any zoom. */}
-				<div className={cn("mx-auto flex flex-col gap-4 print:block", pageless ? "w-full max-w-5xl" : "w-fit")}>
+				<div className={cn("relative mx-auto flex flex-col gap-4 print:block", pageless ? "w-full max-w-5xl" : "w-fit")}>
 				{notice && <div className="w-0 min-w-full print:hidden">{notice}</div>}
 				<div
 					ref={sheetsRef}
@@ -306,13 +314,15 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 					className={cn(
 						// Print: the zero-margin sign-off page (globals.css) drops the browser's header and footer, so the
 							// 14mm margin is padding here; box-decoration-clone repeats it on every printed page. Table rows never split across pages.
-							"mx-auto flex flex-col print:gap-0 print:p-[14mm] print:[page:sign-off] print:box-decoration-clone print:[zoom:1] print:[&_tr]:break-inside-avoid",
+							"mx-auto flex flex-col print:gap-0 print:px-[14mm] print:pb-[14mm] print:pt-[40mm] print:[page:sign-off] print:box-decoration-clone print:[zoom:1] print:[&_tr]:break-inside-avoid",
 						pageless
 							? "mb-8 w-full max-w-5xl divide-y print:my-0 print:w-full print:max-w-none"
 							: "w-fit gap-6 pb-8 [zoom:var(--doc-zoom)]",
 					)}
 				>
-					{Array.from({ length: pageCount }, (_, i) => i + 1).filter((n) => pages[n - 1] !== null).map((n) => (
+					{/* Print: one fixed strip in the paper margin, which the browser repeats on every printed page. */}
+					{pageHeader && <div className="hidden print:fixed print:inset-x-[14mm] print:top-[8mm] print:block">{pageHeader}</div>}
+					{Array.from({ length: pageCount }, (_, i) => i + 1).filter((n) => pages[n - 1] !== null).map((n, index) => (
 						<div
 							key={n}
 							ref={(el) => { sheetRefs.current[n - 1] = el; }}
@@ -326,6 +336,7 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 									"min-h-[297mm] w-[210mm] bg-white p-[12mm] print:bg-transparent shadow-sm ring-1 ring-black/5 print:min-h-0 print:w-auto print:p-0 print:break-after-page print:shadow-none print:ring-0 print:last:break-after-auto",
 							)}
 						>
+							{pageHeader && (!pageless || index === 0) && <div className="mb-6 print:hidden">{pageHeader}</div>}
 							{pages[n - 1] ?? (
 								<div className={cn("flex flex-1 items-center justify-center rounded-md border border-dashed border-stone-300", pageless && "min-h-40")}>
 									<p className="text-xs text-muted-foreground">{unit} {n}</p>
@@ -334,6 +345,9 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 						</div>
 					))}
 				</div>
+				{marginOpen && comments && (
+					<SignOffCommentsLayer comments={comments} commenting={comments.canComment} sheetRefs={sheetRefs} sheetsRef={sheetsRef} layoutKey={`${zoom}-${pageless}`} />
+				)}
 				</div>
 				</div>
 			</div>
@@ -342,14 +356,12 @@ export function SignOffDocument({ leading, versions, sections = [], rightPanel, 
 			<aside className="absolute top-5 right-5 z-20 flex flex-row gap-2 rounded-lg border bg-background p-2 shadow-sm print:hidden">
 				{rightPanel ?? (
 					<>
-						<Button variant="outline" className="w-fit" title="Right panel is coming soon">
-							<MessageSquare />
-							<span className="hidden sm:inline text-xs">Comments</span>
-						</Button>
-						<Button variant="outline" className="w-fit" title="Print or save as PDF" onClick={() => window.print()}>
-							<PrinterIcon />
-							<span className="hidden sm:inline text-xs">Print Report</span>
-						</Button>
+						<Tooltip>
+							<TooltipTrigger render={<Button size="icon" variant="outline" title="Download PDF" onClick={() => window.print()}>
+							<DownloadIcon />
+						</Button>}/>
+							<TooltipContent>Download PDF</TooltipContent>
+						</Tooltip>
 						{issueAction}
 					</>
 				)}

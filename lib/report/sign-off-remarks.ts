@@ -4,6 +4,9 @@
 
 type Priority = "low" | "medium" | "high";
 
+// A file attached to a remark, frozen by name so the report stays readable after the file or its link is gone.
+export type ReportAttachment = { id: string; fileName: string; sizeBytes: number; contentType: string };
+
 // One tester remark behind a case's final result. id is the test_remarks id.
 export type ReportRemark = {
     id: string;
@@ -23,6 +26,8 @@ export type ReportRemark = {
     // before they were added; the report page backfills them by id.
     authorName?: string | null;
     createdAt?: string | null;
+    // Absent on reports frozen before evidence attachments existed.
+    attachments?: ReportAttachment[];
 };
 
 // A vendor-written observation. Quotes are whole remarks cited by id, never typed text.

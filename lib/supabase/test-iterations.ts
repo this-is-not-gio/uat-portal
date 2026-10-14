@@ -33,6 +33,8 @@ export type iterationTester = {
     fullName: string | null;
     testRole: { id: string; name: string };
     status: "active" | "dropped";
+    // This tester's own submission stamp (null until their org submits).
+    submittedAt: string | null;
 };
 
 // An org taking part in a round: its rostered testers grouped by org. Submission is still per
@@ -69,7 +71,7 @@ export type resultArchive = {
     archivedBy?: string;
     snapshot: {
         status: testCaseStatus;
-        steps: { step: string; status: string; remarks: { remark: string; created_at: string }[] }[];
+        steps: { step: string; status: string; remarks: { remark: string; created_at: string; attachments?: { file_name: string; size_bytes: number }[] }[] }[];
     };
 };
 
@@ -569,7 +571,7 @@ export async function getIterationParticipants(iterationId: string): Promise<ite
                 organization,
                 roles: [...roles.values()].sort((a, b) => a.name.localeCompare(b.name)),
                 testers: rows
-                    .map((r) => ({ userId: r.user_id, fullName: r.profile.full_name, testRole: r.test_role, status: r.status as iterationTester["status"] }))
+                    .map((r) => ({ userId: r.user_id, fullName: r.profile.full_name, testRole: r.test_role, status: r.status as iterationTester["status"], submittedAt: r.submitted_at }))
                     .sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? "")),
                 submittedAt: active.length > 0 && active.every((r) => r.submitted_at) ? latest(active.map((r) => r.submitted_at)) : null,
                 withdrawnAt: latest(rows.map((r) => r.withdrawn_at)),
@@ -646,6 +648,17 @@ export async function getActiveRounds(): Promise<activeRound[]> {
             ...orgSubmissionCounts(row.iteration_testers),
         };
     }));
+}
+
+// Start dates of the running rounds by suite slug: the tester dashboard's timeline column. No counts, unlike getActiveRounds.
+export async function getRunningRoundStarts(): Promise<Map<string, string>> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("test_iterations")
+        .select("started_at, testing_suites!inner ( slug )")
+        .eq("status", "in_progress");
+    if (error) throw error;
+    return new Map(data.map((row) => [row.testing_suites.slug, row.started_at]));
 }
 
 // The latest completed round of each in_testing / for_sign_off suite that hasn't been issued for sign-off yet

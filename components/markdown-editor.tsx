@@ -40,21 +40,25 @@ const TOOLBAR_GROUPS: { name: string; items: { label: string; Icon: LucideIcon; 
 ];
 
 // Controlled Markdown field with a formatting toolbar and Write/Preview tabs.
-// `actions` renders on the right of the footer (Cancel/Save etc.).
+// `actions` renders on the right of the footer (Cancel/Save etc.). `preview={false}`
+// drops the Write/Preview tabs and leaves just the toolbar and the textarea.
 export function MarkdownEditor({
 	value,
 	onChange,
 	placeholder,
 	disabled,
 	actions,
+	preview = true,
 }: {
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
 	disabled?: boolean;
 	actions?: ReactNode;
+	preview?: boolean;
 }) {
-	const [tab, setTab] = useState<"write" | "preview">("write");
+	const [tabState, setTab] = useState<"write" | "preview">("write");
+	const tab = preview ? tabState : "write";
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	function wrapSelection(before: string, after: string) {
@@ -116,13 +120,17 @@ export function MarkdownEditor({
 						<p className="text-sm text-muted-foreground">Nothing to preview.</p>
 					)}
 				</TabsContent>
-				<div className="flex items-center justify-between border-t p-4">
-					<TabsList>
-						<TabsTrigger value="write" className="text-sm">Write</TabsTrigger>
-						<TabsTrigger value="preview" className="text-sm">Preview</TabsTrigger>
-					</TabsList>
-					<div className="flex flex-row items-center gap-2">{actions}</div>
-				</div>
+				{(preview || actions) && (
+					<div className="flex items-center justify-between border-t p-4">
+						{preview ? (
+							<TabsList>
+								<TabsTrigger value="write" className="text-sm">Write</TabsTrigger>
+								<TabsTrigger value="preview" className="text-sm">Preview</TabsTrigger>
+							</TabsList>
+						) : <span />}
+						<div className="flex flex-row items-center gap-2">{actions}</div>
+					</div>
+				)}
 			</Tabs>
 		</div>
 	);

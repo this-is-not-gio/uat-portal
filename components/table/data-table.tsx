@@ -50,6 +50,8 @@ interface DataTableProps<TData extends RowData & { id: string }> {
 	onDetailClose?: () => void
 	// Plain click handler for rows that navigate instead of opening a detail sheet.
 	onRowClick?: (row: TData) => void
+	// Limits onRowClick to some rows; the others render as plain, non-clickable rows.
+	isRowClickable?: (row: TData) => boolean
 	// When set, rows get a drag handle and can be reordered; called with the
 	// dragged row's id and the id it was dropped onto.
 	onReorder?: (activeId: string, overId: string) => void
@@ -71,6 +73,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 	renderRowDetail,
 	onDetailClose,
 	onRowClick,
+	isRowClickable,
 	onReorder,
 	bordered = true,
 	isRowDisabled,
@@ -121,7 +124,7 @@ export function DataTable<TData extends RowData & { id: string }>({
 			setOpenRowId={setOpenRowId}
 			renderRowDetail={renderRowDetail ? () => renderRowDetail(row.original) : undefined}
 			onDetailClose={onDetailClose}
-			onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+			onClick={onRowClick && (isRowClickable?.(row.original) ?? true) ? () => onRowClick(row.original) : undefined}
 			disabled={isRowDisabled?.(row.original) ?? false}
 		/>
 	))

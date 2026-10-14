@@ -3,10 +3,13 @@
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
+import { signAttachmentsForRemark, type signedAttachment } from "./attachment-actions";
+import { flushStorageDeletions } from "@/lib/storage/flush";
 import { can, denied } from "@/lib/auth/permissions";
 import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database, Json } from "./database.types";
 import type { roundCoverage } from "./test-iterations";
+import type { roundCaseFlag } from "./case-states";
 import { buildSignOffReport, type SignOffReport } from "./sign-off-report";
 import { validateThemes, type ThemeInput } from "@/lib/report/sign-off-remarks";
 import { draftThemes, type ThemeDraft } from "@/lib/report/remark-themes";
@@ -213,17 +216,18 @@ export async function acknowledgeSignOff({ suiteId }: { suiteId: string }): Prom
 // Iterations -----------------------------------------------------------------
 
 // Plans an empty round (0027): sections and testers are picked on the round's page,
-// and begin_iteration checks there's something to test. A blank name falls back to
-// Untitled_Iteration_{n} in the DB.
+// and begin_iteration checks there's something to test. Name and planned end date are required.
 export async function startIteration({ suiteId, name, plannedEndDate }: { suiteId: string; name?: string; plannedEndDate?: string }): Promise<actionResult<{ iterationNumber: number; slug: string }>> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
+    if (!name?.trim()) return { ok: false, error: "Give the iteration a name." };
+    if (!plannedEndDate) return { ok: false, error: "Pick a planned end date." };
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("start_iteration", {
         p_suite_id: suiteId,
         p_created_by: user.id,
-        p_name: name || undefined,
-        p_planned_end_date: plannedEndDate || undefined,
+        p_name: name.trim(),
+        p_planned_end_date: plannedEndDate,
     });
     if (error) return fail(error);
     refresh();
@@ -343,6 +347,7 @@ export async function resetIteration({ iterationId }: { iterationId: string }): 
     const supabase = await createClient();
     const { error } = await supabase.rpc("reset_iteration", { p_iteration_id: iterationId });
     if (error) return fail(error);
+    await flushStorageDeletions(supabase, { maxBatches: 5 });
     refresh();
     return { ok: true, data: undefined };
 }
@@ -453,25 +458,38 @@ export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: st
     return readCaseResultState(caseResultId);
 }
 
-export async function addResultRemark({ stepResultId, remark }: { stepResultId: string; remark: string }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile }>> {
+export async function addResultRemark({ stepResultId, remark, attachmentIds = [] }: { stepResultId: string; remark: string; attachmentIds?: string[] }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile; attachments: signedAttachment[] }>> {
     const user = await requireUser();
     const supabase = await createClient();
-    const { data, error } = await supabase
-        .from("test_remarks")
-        .insert({ test_step_result_id: stepResultId, remark, created_by: user.id })
-        .select("id, remark, created_at, profile:profiles ( id, full_name, role )")
-        .single();
+    // One transaction: the remark and the links to the caller's ready drafts, or neither (0063).
+    const { data, error } = await supabase.rpc("post_remark_with_attachments", {
+        p_step_result_id: stepResultId, p_remark: remark, p_attachment_ids: attachmentIds,
+    });
     if (error) return fail(error);
-    return { ok: true, data: { id: data.id, remark: data.remark, created_at: data.created_at, author: data.profile ?? undefined } };
+    const posted = data[0];
+    await flushStorageDeletions(supabase);
+    const { data: author } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).maybeSingle();
+    let attachments: signedAttachment[] = [];
+    if (attachmentIds.length > 0) {
+        try {
+            attachments = await signAttachmentsForRemark(posted.id);
+        } catch (e) {
+            // The remark is saved; the files show after a refresh.
+            console.error("Signing attachments failed:", (e as Error).message);
+        }
+    }
+    return { ok: true, data: { id: posted.id, remark: posted.remark, created_at: posted.created_at, author: author ?? undefined, attachments } };
 }
 
-export type scopeOption = { id: string; code: string | null; title: string; issues: string[] };
+export type scopeOption = { id: string; code: string | null; title: string; issues: string[]; flags: roundCaseFlag[] };
 
 // What the Start Iteration picker lists: every section and its test cases,
 // each marked with whatever completeness issues it has (empty = pickable).
-export async function getIterationScopeOptions({ suiteId }: { suiteId: string }): Promise<actionResult<{ sections: { id: string; name: string; testCases: scopeOption[] }[] }>> {
+// With an iterationId (a planned round) each case also carries its history flags
+// vs. the latest completed round: failed / blocked / skipped / tested / changed since / not tested.
+export async function getIterationScopeOptions({ suiteId, iterationId }: { suiteId: string; iterationId?: string }): Promise<actionResult<{ sections: { id: string; name: string; testCases: scopeOption[] }[] }>> {
     const supabase = await createClient();
-    const [sectionsResult, issuesResult] = await Promise.all([
+    const [sectionsResult, issuesResult, historyResult] = await Promise.all([
         supabase
             .from("sections")
             .select("id, name, order_index, test_cases ( id, code, title, order_index )")
@@ -479,9 +497,28 @@ export async function getIterationScopeOptions({ suiteId }: { suiteId: string })
             .order("order_index", { ascending: true })
             .order("order_index", { referencedTable: "test_cases", ascending: true }),
         supabase.rpc("suite_test_case_issues", { p_suite_id: suiteId }),
+        iterationId ? supabase.rpc("get_round_case_history", { p_iteration_id: iterationId }) : Promise.resolve(null),
     ]);
     if (sectionsResult.error) return fail(sectionsResult.error);
     if (issuesResult.error) return fail(issuesResult.error);
+    if (historyResult?.error) return fail(historyResult.error);
+    const history = new Map((historyResult?.data ?? []).map((row) => [row.test_case_id, row]));
+
+    // Same flags as the round's table (round-flags.ts), minus the ones that need the round's own results.
+    const flagsFor = (testCaseId: string): roundCaseFlag[] => {
+        if (!historyResult) return [];
+        const past = history.get(testCaseId);
+        if (!past?.last_result) return [{ flag: "not_tested", roundName: null }];
+        const name = past.last_round_name;
+        const flags: roundCaseFlag[] = [
+            past.last_result === "Failed" ? { flag: "failed", roundName: name }
+                : past.last_result === "Blocked" ? { flag: "blocked", roundName: name }
+                : past.last_result === "Untested" ? { flag: "skipped", roundName: name }
+                : { flag: "tested", roundName: name },
+        ];
+        if (past.changed_since) flags.push({ flag: "changed_since", roundName: name });
+        return flags;
+    };
 
     return {
         ok: true,
@@ -494,6 +531,7 @@ export async function getIterationScopeOptions({ suiteId }: { suiteId: string })
                     code: tc.code,
                     title: tc.title,
                     issues: issuesResult.data.filter((issue) => issue.test_case_id === tc.id).map((issue) => issue.issue),
+                    flags: flagsFor(tc.id),
                 })),
             })),
         },

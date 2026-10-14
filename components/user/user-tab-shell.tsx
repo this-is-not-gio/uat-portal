@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, useSelectedLayoutSegment } from "next/navigation"
-import { Building2, IdCard, Users } from "lucide-react"
+import { Building2, HardDrive, IdCard, Users } from "lucide-react"
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs"
 
 // Each tab is a route under /admin, so the URL (not state) decides which one is active.
@@ -15,6 +15,7 @@ export default function UserTabShell() {
 					<TabsTrigger value="users" className="text-xs"><Users data-icon="inline-start" />Participants</TabsTrigger>
 					<TabsTrigger value="organizations" className="text-xs"><Building2 data-icon="inline-start" />Organization</TabsTrigger>
 					<TabsTrigger value="roles" className="text-xs"><IdCard data-icon="inline-start" />Tester Roles</TabsTrigger>
+					<TabsTrigger value="storage" className="text-xs"><HardDrive data-icon="inline-start" />Storage</TabsTrigger>
 				</TabsList>
 			</Tabs>
 		</div>

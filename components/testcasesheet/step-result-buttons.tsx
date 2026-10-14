@@ -51,15 +51,8 @@ export default function StepResultButton({
 					options.map((option) => {
 						const isSelected = currentStatus === option.value;
 						return (
-							// <Tooltip key={option.value}>
-							// 	<TooltipTrigger
-							// 		render={
-
-							// 		}
-							// 	/>
-							// 	<TooltipContent>{option.label}</TooltipContent>
-							// </Tooltip>
 							<Button
+								key={option.value}
 								type="button"
 								size="sm"
 								variant="outline"

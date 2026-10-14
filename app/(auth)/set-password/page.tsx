@@ -1,7 +1,8 @@
 import { ClipboardList } from "lucide-react";
 import { SetPasswordForm } from "./set-password-form";
 
-export default function SetPasswordPage() {
+export default async function SetPasswordPage({ searchParams }: { searchParams: Promise<{ token_hash?: string }> }) {
+	const { token_hash: tokenHash } = await searchParams;
 	return (
 		<div className="flex min-h-svh flex-col items-center justify-center bg-blue-900 p-4 sm:p-6 md:p-10">
 			<div className="bg-white p-5 sm:p-6 md:p-8 rounded-lg w-full max-w-sm sm:max-w-md flex flex-col gap-6 md:gap-8">
@@ -16,14 +17,14 @@ export default function SetPasswordPage() {
 				</div>
 				<div>
 					<p className="font-bold text-xl sm:text-2xl">Welcome Tester</p>
-					<p className="text-xs text-muted-foreground">You'll use it to sign in to the UAT Portal from now on.</p>
+					<p className="text-xs text-muted-foreground">You&apos;ll use it to sign in to the UAT Portal from now on.</p>
 				</div>
 				<div className="flex flex-col gap-2">
 					<div className="">
 						<p className="font-bold text-sm">Set your password</p>
 						<p className="text-xs text-muted-foreground">Pick something only you know, and keep it safer than your last bug report.</p>
 					</div>
-					<SetPasswordForm />
+					<SetPasswordForm tokenHash={tokenHash} />
 				</div>
 			</div>
 		</div>

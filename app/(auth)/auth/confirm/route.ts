@@ -12,6 +12,14 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get("type") as EmailOtpType | null;
     const next = safeRedirect(searchParams.get("next"));
 
+    // Invites are verified when the password is submitted (set-password/actions.ts), not here,
+    // so opening the link doesn't sign the user in or burn the one-time token.
+    if (tokenHash && type === "invite") {
+        const url = new URL("/set-password", request.url);
+        url.searchParams.set("token_hash", tokenHash);
+        return NextResponse.redirect(url);
+    }
+
     if (tokenHash && type) {
         const supabase = await createClient();
         const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });

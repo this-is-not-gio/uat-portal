@@ -42,9 +42,9 @@ export default async function TesterTestCasesTab({
 	// Internal can read every round (staff RLS), so keep only the ones the viewer's org takes part in.
 	const participantsByIteration = await Promise.all(allIterations.map((iteration) => getIterationParticipants(iteration.id)));
 	const iterations = allIterations.filter((_, index) => participantsByIteration[index].some((p) => p.organization.id === ownOrgId));
-	// Rounds the viewer's org already submitted; their sidebar badge reads "Submitted" instead of "In progress".
+	// Rounds the viewer themself already submitted; their sidebar badge reads "Submitted" instead of "In progress".
 	const ownSubmittedIterationIds = new Set(
-		allIterations.filter((_, index) => participantsByIteration[index].some((p) => p.organization.id === ownOrgId && p.submittedAt)).map((iteration) => iteration.id)
+		allIterations.filter((_, index) => participantsByIteration[index].some((p) => p.organization.id === ownOrgId && p.testers.some((t) => t.userId === currentUser.id && t.status === "active" && t.submittedAt))).map((iteration) => iteration.id)
 	);
 
 	if (!ownOrgId || iterations.length === 0) {
@@ -86,19 +86,22 @@ export default async function TesterTestCasesTab({
 	// Rows removed mid-round stay listed, flagged and view only (0036).
 	const results = rawResults.filter((row) => row.includedInRun || isRemovedFromRound(row));
 
-	const isOwnOrgSubmitted = isOwnLens && !!ownParticipation?.submittedAt;
+	// Submission is per tester: each person submits their own copies, and the org counts as
+	// submitted once all its active testers have (0069).
+	const ownTester = ownParticipation?.testers.find((t) => t.userId === currentUser.id && t.status === "active") ?? null;
+	const isOwnSubmitted = isOwnLens && !!ownTester?.submittedAt;
 	const suiteIsOpen = suiteStatus === "in_testing";
 	// Per row, the sheet also needs the viewer's own copy (0060); the components check that.
-	const canExecute = isRunning && suiteIsOpen && isOwnLens && !isOwnOrgSubmitted && can(currentUser, "execute");
+	const canExecute = isRunning && suiteIsOpen && isOwnLens && !isOwnSubmitted && can(currentUser, "execute");
 	// Remarks outlive the lock (0020) and aren't limited by role or org: anyone who can see a
 	// case can remark on it (0060).
 	const canRemark = selectedIteration.status !== "not_started" && can(currentUser, "execute");
 	// Only while the round runs (it carries Withdraw); once it ends, the notice shows the submission date.
-	const showSubmission = isRunning && isOwnLens && !!ownParticipation && can(currentUser, "submit");
+	const showSubmission = isRunning && isOwnLens && !!ownTester && can(currentUser, "submit");
 	// Until an Admin/Internal user completes or stops the round (0019).
-	const canWithdraw = isOwnOrgSubmitted && can(currentUser, "submit") && await canWithdrawParticipation(selectedIteration.id);
-	// When the lens org submitted, for the notice.
-	const lensSubmittedAt = participants.find((p) => p.organization.id === lensOrg?.id)?.submittedAt ?? null;
+	const canWithdraw = isOwnSubmitted && can(currentUser, "submit") && await canWithdrawParticipation(selectedIteration.id);
+	// For the notice: the viewer's own stamp on their lens, the org's roll-up when reviewing another org.
+	const lensSubmittedAt = isOwnLens ? ownTester?.submittedAt ?? null : participants.find((p) => p.organization.id === lensOrg?.id)?.submittedAt ?? null;
 
 	// The lens org's sections for the selected round; other rounds list the viewer's own.
 	const selectedSections = [...new Map(results.filter((row) => row.sectionSlug).map((row) => [row.sectionSlug as string, row.sectionName ?? (row.sectionSlug as string)])).entries()];
@@ -201,10 +204,13 @@ export default async function TesterTestCasesTab({
 				canWithdraw={canWithdraw}
 				// Header's Submit Result: only while the own org can still submit. Untested cases span
 				// the whole round, not just the visible section.
-				submit={showSubmission && ownParticipation && !ownParticipation.submittedAt ? {
+				submit={showSubmission && ownParticipation && ownTester && !ownTester.submittedAt ? {
 					organizationName: ownParticipation.organization.name,
+					// Teammates still to submit; 0 means this submit completes the org.
+					teammatesPending: ownParticipation.testers.filter((t) => t.status === "active" && t.userId !== currentUser.id && !t.submittedAt).length,
+					// Only the viewer's own copies: that's what they're submitting.
 					untestedCases: results
-						.filter((row) => !isTested(row.status) && !isRemovedFromRound(row))
+						.filter((row) => row.testerId === currentUser.id && !isTested(row.status) && !isRemovedFromRound(row))
 						.map((row) => ({ id: row.id, code: row.code ?? null, title: row.title, sectionName: row.sectionName })),
 				} : null}
 			/>

@@ -19,7 +19,6 @@ import StartIterationDialog from "@/components/testsuite-layout/shared/start-ite
 import type { iterationStatus } from "@/lib/supabase/test-iterations";
 import { TruncatedText } from "@/components/sidebar/nav-secondary";
 import { SignOffStatusBadge } from "@/components/testsuite-layout/sign-off/sign-off-status-badge";
-import { AcknowledgeSignOffDialog, RejectSignOffDialog } from "@/components/testsuite-layout/sign-off/sign-off-dialog";
 import BackToTestingButton from "@/components/testsuite-layout/sign-off/back-to-testing-button";
 import DraftSignOffButton from "@/components/testsuite-layout/sign-off/draft-sign-off-button";
 
@@ -227,29 +226,12 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 															<p className="text-xs">Draft Sign-off Report</p>
 														</Button>
 													)}
-													{pendingSignOff && (
-														<RejectSignOffDialog
-															suiteId={testSuite.id}
-															signOff={pendingSignOff}
-															trigger={
-																<Button variant="outline" className="flex flex-row items-center gap-2">
-																	<p className="text-xs">Reject</p>
-																</Button>
-															}
-														/>
-													)}
 													{pendingSignOff ? (
-														<AcknowledgeSignOffDialog
-															suiteId={testSuite.id}
-															signOff={pendingSignOff}
-															reportHref={pendingSignOff.hasReport ? `/testsuite/${testSuite.slug}/sign-off?signOff=${pendingSignOff.id}` : null}
-															trigger={
-																<Button className="flex flex-row items-center gap-2">
-																	{NextIcon && <NextIcon className="h-4 w-4" />}
-																	<p className="text-xs">Acknowledge Sign-off</p>
-																</Button>
-															}
-														/>
+														// Acknowledge and Reject live on the report itself (Sign-off tab).
+														<Button nativeButton={false} render={<Link href={`/testsuite/${testSuite.slug}/sign-off?signOff=${pendingSignOff.id}`} />} className="flex flex-row items-center gap-2">
+															<Stamp className="h-4 w-4" />
+															<p className="text-xs">Review Sign-off</p>
+														</Button>
 													) : testSuite.status === "signed_off" && can(currentUser, "archive") ? (
 														<SuiteStatusButton suiteId={testSuite.id} targetStatus="archived">
 															{NextIcon && <NextIcon className="h-4 w-4" />}

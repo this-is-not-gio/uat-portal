@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, CircleCheck, ClipboardIcon, ClipboardList, ListCheck, Plus, TestTubes, TriangleAlert, UserGroup, UsersRound, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, ClipboardIcon, ClipboardList, ClipboardPlus, ListCheck, Plus, TestTubes, TriangleAlert, UserGroup, UserPlus, UsersRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { type filterToken } from "./search-filter-combox";
 import type { testCase } from "@/lib/supabase/test-cases";
@@ -9,6 +9,9 @@ import type { iterationParticipant, roundCoverage, testIteration, testResultRow 
 import { DataTable } from "@/components/table/data-table";
 import { createIterationTestCaseColumns, type iterationCaseRow } from "@/components/table/iteration-test-cases-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
+import AddSectionDialog from "./add-section-dialog";
+import AddParticipantsDialog from "./add-participants-dialog";
+import IterationSectionsTable from "@/components/testsuite-layout/test-cases/iteration-sections-table";
 import IterationParticipantsTable from "./iteration-participants-table";
 import { setCaseResultInclusion } from "@/lib/supabase/iteration-actions";
 import { useIterationSelection } from "@/components/testsuite-layout/shared/iteration-selection-context";
@@ -19,6 +22,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { roundCaseFlag, roundFlag } from "@/lib/supabase/case-states";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Stable default so groupByCase's memo doesn't rerun every render.
 const EMPTY_FLAGS: Record<string, roundCaseFlag[]> = {};
@@ -70,6 +74,7 @@ export function IterationTestCaseList({
 	sectionSlug,
 	roundActions,
 	participants = [],
+	testerResults,
 	coverage,
 	caseFlags = EMPTY_FLAGS,
 }: {
@@ -85,12 +90,15 @@ export function IterationTestCaseList({
 	roundActions?: { suiteId: string; testSuiteSlug: string; sectionsNotIncluded: notIncludedSection[] };
 	// Orgs taking part in this round (its roster by org; empty until it starts).
 	participants?: iterationParticipant[];
+	// Every tester's own copies (testCases is rolled up to one row per case), for the participants table's progress.
+	testerResults?: testResultRow[];
 	// A planned round's coverage: replaces the participants list with the tester picker.
 	coverage?: roundCoverage;
 	// Per-case flags for this round (getRoundCaseFlags), keyed by testCaseId ?? result id.
 	caseFlags?: Record<string, roundCaseFlag[]>;
 }) {
 	const [addSectionOpen, setAddSectionOpen] = useState(false);
+	const [addParticipantsOpen, setAddParticipantsOpen] = useState(false);
 	// Read once at mount: Base UI warns if an uncontrolled Collapsible's defaultOpen changes later.
 	const [participantsDefaultOpen] = useState(participants.length > 0);
 	// A started round's case set is locked (apply_iteration_sync, 0023).
@@ -171,9 +179,65 @@ export function IterationTestCaseList({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[selectable, locked, selectedIds, allSelected, someSelected, sectionSlug]
 	);
+	// Live cases the round already holds, so the add dialog can mark them.
+	const includedCaseIds = useMemo(() => new Set(testCases.map((tc) => tc.testCaseId).filter((id): id is string => !!id)), [testCases]);
+	const [tab, setTab] = useState<"cases" | "participants">("cases");
 
 	return (
 		<div className="flex-1 flex flex-col gap-3">
+			<div className="w-full flex flex-row justify-between">
+				<Tabs value={tab} onValueChange={(value) => setTab(value as "cases" | "participants")} className="flex flex-col gap-2">
+					<TabsList>
+						<TabsTrigger value="cases" className="text-xs">
+							<ClipboardList data-icon="inline-start" />Test Cases
+						</TabsTrigger>
+						<TabsTrigger value="participants" className="text-xs">
+							<UserGroup data-icon="inline-start" />Iteration Participants
+						</TabsTrigger>
+					</TabsList>
+				</Tabs>
+				{
+					tab === "cases" ?
+					canAddSection && (
+						<Button className="text-xs" onClick={() => setAddSectionOpen(true)}>
+							<ClipboardPlus className="size-4" />
+							Add Test Cases
+						</Button>
+					)
+					: canAddSection && coverage && (
+						<Button className="text-xs" onClick={() => setAddParticipantsOpen(true)}>
+							<UserPlus className="size-4" />
+							Add Participants
+						</Button>
+					)
+				}
+			</div>
+
+			{roundActions && iteration && canAddSection && (
+				<AddSectionDialog
+					suiteId={roundActions.suiteId}
+					iterationId={iteration.id}
+					includedCaseIds={includedCaseIds}
+					open={addSectionOpen}
+					onOpenChange={setAddSectionOpen}
+				/>
+			)}
+
+			{iteration && canAddSection && coverage && (
+				<AddParticipantsDialog
+					iterationId={iteration.id}
+					coverage={coverage}
+					open={addParticipantsOpen}
+					onOpenChange={setAddParticipantsOpen}
+				/>
+			)}
+
+			{tab === "cases" ? (
+				<IterationSectionsTable testCases={testCases} />
+			) : (
+				<IterationParticipantsTable participants={participants} testCases={testerResults ?? testCases} coverage={coverage} iterationNumber={iteration?.iterationNumber} />
+			)}
+
 			{/* <SearchFilterCombobox filters={filters} onFiltersChange={setFilters} roleAssigneeValues={roleAssigneeValues} disabled /> */}
 			{/* <div className="flex flex-row items-center justify-between gap-2">
 				<p className="text-xs font-medium text-muted-foreground">Included Test Cases</p>
@@ -183,8 +247,8 @@ export function IterationTestCaseList({
 			</div> */}
 			{/* <DataTable columns={columns} data={visibleTestCases} /> */}
 			{/* A single section only needs its case table; testers are a round-wide concern. */}
-			{!sectionSlug && coverage && iteration && <CoveragePanel iterationId={iteration.id} coverage={coverage} />}
-			{!sectionSlug && !coverage && <Collapsible defaultOpen={participantsDefaultOpen}>
+			{/* {!sectionSlug && coverage && iteration && <CoveragePanel iterationId={iteration.id} coverage={coverage} />} */}
+			{/* {!sectionSlug && !coverage && <Collapsible defaultOpen={participantsDefaultOpen}>
 				<div className="border rounded-md overflow-hidden">
 					<div className="p-4 bg-gray-200/10 flex flex-row items-center justify-between gap-2">
 						<div className="flex flex-row items-center gap-4 w-full">
@@ -214,12 +278,12 @@ export function IterationTestCaseList({
 								description="Nobody took part in this round."
 							/>
 						) : (
-							<IterationParticipantsTable participants={participants} testCases={testCases} iterationNumber={iteration?.iterationNumber} bordered={false} />
+							<IterationParticipantsTable participants={participants} testCases={testerResults ?? testCases} iterationNumber={iteration?.iterationNumber} bordered={false} />
 						)}
 					</CollapsibleContent>
 				</div>
-			</Collapsible>}
-			{sectionSlug && (
+			</Collapsible>} */}
+			{/* {sectionSlug && (
 				// Mobile: the filters collapse into a dropdown.
 				<DropdownMenu>
 					<DropdownMenuTrigger render={<Button variant="outline" size="sm" className="w-full justify-between md:hidden" />}>
@@ -241,8 +305,8 @@ export function IterationTestCaseList({
 						))}
 					</DropdownMenuContent>
 				</DropdownMenu>
-			)}
-			{sectionSlug && (
+			)} */}
+			{/* {sectionSlug && (
 				<div className="hidden md:flex flex-row flex-wrap items-center gap-2">
 					{FLAG_FILTERS.map((filter) => {
 						const Icon = filter.icon;
@@ -260,19 +324,50 @@ export function IterationTestCaseList({
 						);
 					})}
 				</div>
-			)}
-			{inclusionError && (
+			)} */}
+			{/* {inclusionError && (
 				<p role="alert" className="text-xs text-destructive bg-red-50 border border-red-600/30 rounded-md px-3 py-2">{inclusionError}</p>
-			)}
-			<div className="border rounded-md overflow-hidden">
-				{/* A section page already names the section, so it shows just the table. */}
+			)} */}
+
+			{/* {roundActions && iteration && canAddSection && (
+				<SectionDialog
+					suiteId={roundActions.suiteId}
+					testSuiteSlug={roundActions.testSuiteSlug}
+					open={addSectionOpen}
+					onOpenChange={setAddSectionOpen}
+					sectionsNotIncluded={roundActions.sectionsNotIncluded}
+					iterationId={iteration.id}
+				/>
+			)} */}
+		</div>
+	);
+}
+
+// Matches the "No test cases yet" empty state used across the suite page.
+// function IterationEmptyState({ icon, title, description, action }: { icon: React.ReactNode; title: string; description: string; action?: React.ReactNode }) {
+// 	return (
+// 		<div className="flex-1 flex items-center justify-center h-full ">
+// 			<div className="flex flex-col items-center justify-center text-center gap-5 py-12">
+// 				<div className="justify-center bg-muted/50 rounded-xl size-20 flex flex-col items-center gap-2">
+// 					{icon}
+// 				</div>
+// 				<div className="flex flex-col items-center justify-center gap-1">
+// 					<p className="font-semibold text-muted-foreground text-lg">{title}</p>
+// 					<p className="text-xs text-muted-foreground">{description}</p>
+// 				</div>
+// 				{action}
+// 			</div>
+// 		</div>
+// 	);
+// }
+{/* <div className="border rounded-md overflow-hidden">
 				{!sectionSlug && (
 					<div className="p-4 bg-gray-200/10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
 						<div className="flex flex-row items-center gap-2">
 							<ClipboardIcon className="size-5" />
 							<div className="flex flex-row items-center gap-2">
 								<p className="text-xs font-medium">Test Cases</p>
-								{/* caseRows is one row per case; testCases has a copy per tester. */}
+								NOTE: caseRows is one row per case; testCases has a copy per tester.
 								{
 									caseRows.length === 0 ?
 									<Badge variant="secondary" className="text-xs">No test cases</Badge>
@@ -310,35 +405,4 @@ export function IterationTestCaseList({
 						/>
 					)}
 				</div>
-			</div>
-			{roundActions && iteration && canAddSection && (
-				<SectionDialog
-					suiteId={roundActions.suiteId}
-					testSuiteSlug={roundActions.testSuiteSlug}
-					open={addSectionOpen}
-					onOpenChange={setAddSectionOpen}
-					sectionsNotIncluded={roundActions.sectionsNotIncluded}
-					iterationId={iteration.id}
-				/>
-			)}
-		</div>
-	);
-}
-
-// Matches the "No test cases yet" empty state used across the suite page.
-function IterationEmptyState({ icon, title, description, action }: { icon: React.ReactNode; title: string; description: string; action?: React.ReactNode }) {
-	return (
-		<div className="flex-1 flex items-center justify-center h-full ">
-			<div className="flex flex-col items-center justify-center text-center gap-5 py-12">
-				<div className="justify-center bg-muted/50 rounded-xl size-20 flex flex-col items-center gap-2">
-					{icon}
-				</div>
-				<div className="flex flex-col items-center justify-center gap-1">
-					<p className="font-semibold text-muted-foreground text-lg">{title}</p>
-					<p className="text-xs text-muted-foreground">{description}</p>
-				</div>
-				{action}
-			</div>
-		</div>
-	);
-}
+			</div> */}

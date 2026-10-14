@@ -144,7 +144,7 @@ export default function TesterTestCasesComponents({
 	// Own org submitted and the round is still in progress: the notice carries Withdraw.
 	canWithdraw: boolean;
 	// Set while the own org can still submit this round: the header shows Submit Result.
-	submit: { organizationName: string; untestedCases: untestedCase[] } | null;
+	submit: { organizationName: string; teammatesPending: number; untestedCases: untestedCase[] } | null;
 }) {
 	const router = useRouter();
 	const [rows, setRows] = useState<testResultRow[]>(results);
@@ -187,13 +187,13 @@ export default function TesterTestCasesComponents({
 	// it ended and when the org submitted.
 	const hasEnded = iteration.status === "completed" || iteration.status === "stopped";
 	const orgLabel = organizationName ?? "Your organization";
-	const submittedNote = submittedAt ? `${orgLabel} submitted its results on ${formatDateTime(submittedAt)}.` : null;
+	const submittedNote = submittedAt ? (isOwnLens ? `You submitted your results on ${formatDateTime(submittedAt)}.` : `${orgLabel} submitted its results on ${formatDateTime(submittedAt)}.`) : null;
 	const notice =
 		!isOwnLens ? [`Viewing ${organizationName ?? "another organization"}'s results. Review only.`, submittedNote].filter(Boolean).join(" ")
 			: iteration.status === "not_started" ? "This round hasn't started yet. Testing opens once it begins."
 				: hasEnded ? [
 					`This round ${iteration.status === "stopped" ? "was stopped" : "ended"}${iteration.completedAt ? ` on ${formatDateTime(iteration.completedAt)}` : ""}.`,
-					submittedNote ?? `${orgLabel} didn't submit before it closed.`,
+					submittedNote ?? (isOwnLens ? "You didn't submit before it closed." : `${orgLabel} didn't submit before it closed.`),
 					"Results are view only.",
 				].join(" ")
 					: submittedNote ? `${submittedNote} Results are view only${canWithdraw ? "; withdraw the submission to make changes until the round is completed" : ""}.`
@@ -238,6 +238,7 @@ export default function TesterTestCasesComponents({
 							<SubmitDialog
 								iteration={iteration}
 								organizationName={submit.organizationName}
+								teammatesPending={submit.teammatesPending}
 								untestedCases={submit.untestedCases}
 								trigger={
 									<Button className="w-fit">

@@ -69,7 +69,7 @@ export default function SectionMenu({
 				title={`Delete "${section.name}"?`}
 				description={
 					<>
-						<p>Are you sure you want to delete <span className="font-mono">"{section.name}"</span> section? {confirmationDeleteStatement}</p>
+						<p>Are you sure you want to delete <span className="font-mono">&quot;{section.name}&quot;</span> section? {confirmationDeleteStatement}</p>
 					</>
 				}
 				confirmLabel="Delete section"

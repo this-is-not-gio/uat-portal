@@ -4,7 +4,7 @@ import { Badge, ChartColumn, ClipboardIcon, FolderClock, IterationCw, MoreHorizo
 import { Button } from "@/components/ui/button";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getIterationTestSections, getIterationTestCaseIds, getIterationParticipants, getIterationCoverage } from "@/lib/supabase/test-iterations";
+import { getIterationTestSections, getIterationTestCaseIds, getIterationParticipants, getIterationCoverage, getIterationResults } from "@/lib/supabase/test-iterations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 import { getIterationScopeOptions } from "@/lib/supabase/iteration-actions";
 import { format } from "date-fns";
@@ -24,9 +24,9 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 	// Set only while the round is planned/running — enables its Add Section button.
 	sectionsNotIncluded?: notIncludedSection[];
 }): Promise<import("react").JSX.Element> {
-	const [sections, participants] = iteration
-		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id)])
-		: [[], []];
+	const [sections, participants, testerResults] = iteration
+		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id), getIterationResults(iteration.id)])
+		: [[], [], []];
 	// A planned round picks its testers from coverage; Start is gated on it like begin_iteration.
 	const coverage = iteration?.status === "not_started" ? await getIterationCoverage(iteration.id) : undefined;
 	// A user holds one test role, so per-role ticked counts never overlap.
@@ -130,6 +130,7 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 					iteration={iteration}
 					roundActions={sectionsNotIncluded ? { suiteId: testSuiteId, testSuiteSlug, sectionsNotIncluded } : undefined}
 					participants={participants}
+					testerResults={testerResults}
 					coverage={coverage}
 				/>
 			</div>

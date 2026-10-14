@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import {
 	Sheet,
@@ -49,6 +49,8 @@ import {
 	AccordionTrigger,
 } from "@/components/ui/accordion";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
+import { AttachmentsUnavailable, RemarkAttachments, formatSize, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
+import type { signedAttachment } from "@/lib/supabase/attachment-actions";
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
 import type { caseCopy, resultArchive } from "@/lib/supabase/test-iterations";
@@ -196,6 +198,20 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 			return testCase.stepsToExecute?.reduce((acc, step) => ({ ...acc, [step.id]: step.remarks || [] }), {}) || {};
 		}
 	);
+	// Posted evidence per remark, signed with the viewer's own session; loaded once when the sheet opens.
+	const [remarkFiles, setRemarkFiles] = useState<Record<string, signedAttachment[]>>({});
+	const [filesUnavailable, setFilesUnavailable] = useState(false);
+	const stepIdsKey = showResults ? (testCase.stepsToExecute ?? []).map((step) => step.id).join(",") : "";
+	useEffect(() => {
+		if (!stepIdsKey) return;
+		let cancelled = false;
+		loadRemarkAttachments(stepIdsKey.split(",")).then((res) => {
+			if (cancelled) return;
+			if (res.ok) setRemarkFiles((current) => ({ ...res.data, ...current }));
+			else setFilesUnavailable(true);
+		});
+		return () => { cancelled = true; };
+	}, [stepIdsKey]);
 	const [caseState, setCaseState] = useState<caseResultState>({
 		status: testCase.status,
 		statusOverridden: testCase.statusOverridden ?? false,
@@ -389,6 +405,8 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																	<MessagesSquare size="12" />
 																	<p className="text-xs font-medium">Remarks:</p>
 																</div>
+																{/* The listing failed, so which remarks have files is unknown: one notice per thread, not per remark. */}
+																{filesUnavailable && remarks?.length > 0 && <AttachmentsUnavailable />}
 																<div className="group/with-remark">
 																	{
 																		remarks?.length > 0 ? (
@@ -420,9 +438,12 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																							<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
 																						</div>
 																						<div className="p-3 sm:p-4 overflow-x-auto">
-																							<div className="typeset text-sm break-words">
-																								<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
-																							</div>
+																							{remark.remark.trim() && (
+																								<div className="typeset text-sm break-words">
+																									<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
+																								</div>
+																							)}
+																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} />
 																						</div>
 																					</div>
 																				</div>
@@ -448,6 +469,10 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																				step={step}
 																				placeholder="Leave a remark for this step"
 																				onSubmitted={(insertedRemark) => {
+																					if (insertedRemark.attachments?.length) {
+																						invalidateRemarkAttachments();
+																						setRemarkFiles((current) => ({ ...current, [insertedRemark.id]: insertedRemark.attachments! }));
+																					}
 																					const nextRemarks = { ...stepRemarks, [step.id]: [...(stepRemarks[step.id] || []), insertedRemark] };
 																					setStepRemarks(nextRemarks);
 																					emitChange(stepStatuses, nextRemarks, caseState);
@@ -499,6 +524,13 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 											<Badge variant="outline" className="text-xs">{step.status}</Badge>
 											{step.remarks.length > 0 && (
 												<span className="text-xs text-muted-foreground"> · {step.remarks.length} remark{step.remarks.length === 1 ? "" : "s"}</span>
+											)}
+											{step.remarks.some((r) => r.attachments?.length) && (
+												<ul className="text-xs text-muted-foreground">
+													{step.remarks.flatMap((r) => r.attachments ?? []).map((file, i) => (
+														<li key={i}>📎 {file.file_name} ({formatSize(file.size_bytes)}), removed with the reset</li>
+													))}
+												</ul>
 											)}
 										</li>
 									))}

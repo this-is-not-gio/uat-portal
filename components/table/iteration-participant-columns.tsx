@@ -2,20 +2,22 @@
 
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { Ban, CheckCircle, CircleCheck, CircleDashed, CircleX, TestTubeDiagonal, Users } from "lucide-react"
+import { Ban, CheckCircle, CircleCheck, CircleX, Hourglass } from "lucide-react"
+import { BADGE_VARIANTS } from "@/components/sidebar/app-sidebar"
+import { cn, initials } from "@/lib/utils"
 
-// One participating org in a round, shaped by IterationParticipantsTable.
+// One rostered tester in a round, shaped by IterationParticipantsTable.
 export type iterationParticipantRow = {
+	// The tester's user id.
 	id: string
 	name: string
-	typeLabel: string
-	// Catalog roles its rostered testers hold (0058).
-	roles: { id: string; name: string }[]
-	// Its active testers on the round's roster.
-	testerCount: number
+	roleName: string
+	organizationId: string
+	organizationName: string
+	organizationType: string
 	tested: number
 	total: number
-	// Included cases by result, for the Iteration Summary chips (same buckets as the Test Results summary).
+	// Their included cases by result, for the Iteration Summary chips (same buckets as the Test Results summary).
 	passed: number
 	failed: number
 	blocked: number
@@ -31,51 +33,39 @@ const SUMMARY_CHIPS = [
 	{ key: "blocked", label: "Blocked", icon: Ban, className: "bg-gray-600/5 text-gray-800" },
 ] as const
 
-// Where an org is in the round: submitted, started testing, or not started.
-const PARTICIPATION_STATES = {
-	submitted: { label: "Submitted Result", icon: CheckCircle, className: "bg-green-200/10 text-green-800" },
-	testing: { label: "Currently Testing", icon: TestTubeDiagonal, className: "bg-blue-200/10 text-blue-800" },
-	notTesting: { label: "Not Testing", icon: CircleDashed, className: "bg-gray-600/5 text-gray-800" },
+// Whether the tester's org has handed in its results yet.
+const SUBMISSION_STATES = {
+	submitted: { label: "Submitted", icon: CheckCircle, className: "bg-green-200/10 text-green-800" },
+	awaiting: { label: "Awaiting Response", icon: Hourglass, className: "bg-gray-600/5 text-gray-800" },
 } as const
 
 export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.accessor("name", {
-		header: "Organization",
+		header: "Tester",
+		cell: (info) => 
+		<div className="flex flex-row items-center gap-2">
+			<div className={cn("size-8 shrink-0 rounded-full flex items-center justify-center", (BADGE_VARIANTS[info.row.original.organizationType as keyof typeof BADGE_VARIANTS] ?? BADGE_VARIANTS.fallback).UserClassName)}>
+				<p className="text-xs font-bold text-white">{initials(info.getValue())}</p>
+			</div>
+			<div className="flex flex-col gap-0">
+				<p className="text-xs font-semibold">{info.getValue()}</p>
+				<p className="text-xs text-muted-foreground font-mono">{info.row.original.organizationName}</p>
+			</div>
+		</div>
+	}),
+	columnHelper.display({
+		id: "role",
+		header: "Role",
+		meta: { className: "hidden md:table-cell" },
 		cell: (info) => (
 			<div>
-				<p className="text-xs">{info.getValue()}</p>
-				<p className="text-xs text-muted-foreground font-mono">{info.row.original.typeLabel}</p>
+				<p className="text-xs">{info.row.original.roleName}</p>
 			</div>
 		),
 	}),
-	columnHelper.accessor("roles", {
-		header: "Roles",
-		meta: { className: "hidden md:table-cell" },
-		cell: (info) => {
-			const roles = info.getValue()
-			return roles.length > 0 ? (
-				<div className="flex flex-row flex-wrap gap-1 max-w-64">
-					{roles.map((role) => (
-						<span key={role.id} className="rounded-md py-0.5 px-1.5 bg-gray-600/5 text-xs text-gray-800">{role.name}</span>
-					))}
-				</div>
-			) : <p className="text-xs text-muted-foreground">No roles</p>
-		},
-	}),
-	columnHelper.accessor("testerCount", {
-		header: "Testers",
-		meta: { className: "hidden lg:table-cell" },
-		cell: (info) => <div className="flex flex-row items-center gap-1 rounded-md py-1 px-1.5 bg-gray-600/5 w-fit">
-			<Users size={15} className="text-gray-800" />
-			<div className="flex flex-row items-center gap-0.5">
-				<p className="font-mono text-xs text-gray-800">{info.row.original.testerCount}</p>
-				<p className="text-xs text-gray-800 font-semibold">Testers</p>
-			</div>
-		</div>,
-	}),
 	columnHelper.display({
 		id: "progress",
-		header: "Progress",
+		header: "Test Cases",
 		meta: { className: "hidden lg:table-cell" },
 		cell: (info) => {
 			const { tested, total } = info.row.original
@@ -85,7 +75,6 @@ export const iterationParticipantColumns = columnHelper.columns([
 					<div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
 						<div className="h-full bg-green-600" style={{ width: `${percent}%` }} />
 					</div>
-
 					<p className="text-xs text-muted-foreground"><span className="text-xs font-mono text-muted-foreground">{tested}/{total}</span> Tested Test Cases</p>
 				</div>
 			)
@@ -98,11 +87,9 @@ export const iterationParticipantColumns = columnHelper.columns([
 		cell: (info) => (
 			<div className="flex flex-row items-center gap-1">
 				{SUMMARY_CHIPS.map(({ key, label, icon: Icon, className }) => (
-					<div key={key} className={`flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit ${className}`}>
+					<div key={key} title={label} className={`flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit ${className}`}>
 						<Icon size={15} />
-						<div className="flex flex-row items-center gap-0.5">
-							<p className="font-mono text-xs">{info.row.original[key]}</p>
-						</div>
+						<p className="font-mono text-xs">{info.row.original[key]}</p>
 					</div>
 				))}
 			</div>
@@ -111,30 +98,16 @@ export const iterationParticipantColumns = columnHelper.columns([
 	columnHelper.display({
 		id: "Submitted",
 		cell: (info) => {
-			const { submittedAt, tested } = info.row.original
-			const state = PARTICIPATION_STATES[submittedAt ? "submitted" : tested > 0 ? "testing" : "notTesting"]
+			const state = SUBMISSION_STATES[info.row.original.submittedAt ? "submitted" : "awaiting"]
 			const Icon = state.icon
-
-
 			return (
-				<div className="flex flex-row justify-end gap-2">
-					<div className="w-full flex flex-row items-center gap-1 justify-end">
-						<div className={`w-fit flex flex-row items-center gap-1 rounded-md py-1 px-1.5 ${state.className}`}>
-							<Icon size={15} />
-							<p className="text-xs font-semibold">{state.label}</p>
-						</div>
+				<div className="flex flex-row items-center gap-1 justify-end">
+					<div className={`w-fit flex flex-row items-center gap-1 rounded-md py-1 px-1.5 ${state.className}`}>
+						<Icon size={15} />
+						<p className="text-xs font-semibold">{state.label}</p>
 					</div>
 				</div>
 			)
 		},
-
-		//{submittedAt ? format(new Date(submittedAt), "MMM dd yyyy") : "Not submitted"}
 	}),
-	// columnHelper.display({
-	// 	id: "action",
-	// 	cell: (info) => {
-	// 		const { id, name, iterationId } = info.row.original
-	// 		return
-	// 	},
-	// }),
 ])

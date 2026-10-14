@@ -1,9 +1,12 @@
-import { REPORT_SECTIONS, reportPages, SignOffReportView } from "@/components/sign-off-report/sign-off-report-view";
+import { REPORT_SECTIONS, ReportPageHeader, reportPages, SignOffReportView } from "@/components/sign-off-report/sign-off-report-view";
 import { SignOffPicker } from "@/components/sign-off-report/sign-off-picker";
 import { PrintButton } from "@/components/sign-off-report/print-button";
 import { buildSignOffReport, getSignOffReport, type FrozenSignOffReport } from "@/lib/supabase/sign-off-report";
 import { getTestSuiteBySlug } from "@/lib/supabase/test-suite";
+import { Button } from "@/components/ui/button";
+import { can } from "@/lib/auth/permissions";
 import { IssueReportButton } from "./issue-report-button";
+import { AcknowledgeSignOffDialog, RejectSignOffDialog } from "./sign-off-dialog";
 import { SignOffDocument } from "./sign-off-document";
 import { SignOffNotice } from "./sign-off-notice";
 import { SignOffInfo } from "./sign-off-info";
@@ -12,6 +15,8 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 import type { signOff, signOffDraft } from "@/lib/supabase/overview";
 import { getSuiteEndpoints, getSuiteOverviewSections, getSuiteTestAccounts } from "@/lib/supabase/test-accounts";
 import { overviewTemplates, type OverviewTemplate } from "@/lib/report/report-details";
+import { getSignOffComments } from "@/lib/supabase/sign-off-comments";
+import { CircleCheck, CircleX } from "lucide-react";
 
 // Sign-off tab (Admin and Internal): the frozen report inline, with a picker for earlier or
 // withdrawn sign-offs. Download PDF prints this page; @media print in globals.css drops the app and suite chrome.
@@ -26,12 +31,27 @@ export default async function SignOffTab({ suiteId, suiteSlug, signOffs, selecte
 	const selected = signOffs.find((s) => s.id === selectedId);
 	const status = isDraft || !selected ? "drafting" : signOffStatusOf(selected, currentUser?.role === "Admin" ? "vendor" : "client");
 
+	// The client answers an issued sign-off here: only the one still awaiting a decision.
+	const answerActions = !isDraft && selected?.status === "issued" && can(currentUser, "sign_off") ? (
+		<>
+			<RejectSignOffDialog suiteId={suiteId} signOff={selected} trigger={<Button variant="outline" className="w-fit"><CircleX/> <span className="text-xs">Reject</span></Button>} />
+			<AcknowledgeSignOffDialog suiteId={suiteId} signOff={selected} reportHref={null} trigger={<Button className="w-fit"><CircleCheck/> <span className="text-xs">Acknowledge Sign-off</span></Button>} />
+		</>
+	) : undefined;
+
+	// Text comments on an issued report (none on the draft): the client writes while it awaits a decision, the vendor reads.
+	const comments = selectedId && currentUser
+		? { signOffId: selectedId, items: await getSignOffComments(selectedId), canComment: selected?.status === "issued" && can(currentUser, "sign_off"), currentUserId: currentUser.id }
+		: undefined;
+
 	return (
 		<SignOffDocument
+			comments={comments}
 			pages={frozen ? reportPages(frozen, { draft: isDraft, templates }) : []}
 			sections={frozen ? REPORT_SECTIONS : []}
+			pageHeader={frozen ? <ReportPageHeader /> : undefined}
 			versions={<SignOffPicker suiteSlug={suiteSlug} signOffs={signOffs} selectedId={selectedId} hasDraft={!!draft} />}
-			issueAction={isDraft && draft ? <IssueReportButton suiteId={suiteId} draft={draft} /> : undefined}
+			issueAction={isDraft && draft ? <IssueReportButton suiteId={suiteId} draft={draft} /> : answerActions}
 			notice={frozen ? <SignOffNotice frozen={frozen} draft={isDraft} /> : undefined}
 			info={<SignOffInfo status={status} frozen={frozen} isDraft={isDraft} />}
 		/>

@@ -49,6 +49,8 @@ export default async function TestResultsTab({
 	sectionSlug,
 	iterationNumber,
 	orgId,
+	view,
+	testerId,
 }: {
 	testSuiteId: string;
 	testSuiteSlug: string;
@@ -58,6 +60,9 @@ export default async function TestResultsTab({
 	iterationNumber?: string;
 	// ?org= from the URL; falls back to the viewer's own org, then the first participant.
 	orgId?: string;
+	// "overall": every org's rows rolled up per case. "submitted": one submitted tester's own copies (?tester=).
+	view: "overall" | "submitted";
+	testerId?: string;
 }) {
 	const [iterations, sectionsByIteration] = await Promise.all([
 		getIterationsBySuiteId(testSuiteId),
@@ -85,23 +90,52 @@ export default async function TestResultsTab({
 		? await Promise.all([getParticipationProgress(selectedIteration.id), getCurrentUser()])
 		: [[], null];
 	const participantOrgs = participants.map((p) => p.organization);
-	const selectedOrg =
+	const defaultOrg =
 		participantOrgs.find((o) => o.id === orgId) ??
 		participantOrgs.find((o) => o.id === currentUser?.organization?.id) ??
 		participantOrgs[0] ??
 		null;
+	// Submitted Test Results: testers who submitted (0069), grouped by their org for the picker.
+	const submittedGroups = participants
+		.map((p) => ({
+			organization: p.organization,
+			testers: p.testers
+				.filter((t) => t.status === "active" && t.submittedAt)
+				.map((t) => ({ userId: t.userId, fullName: t.fullName, roleName: t.testRole.name, submittedAt: t.submittedAt as string })),
+		}))
+		.filter((group) => group.testers.length > 0);
+	const submittedTesters = submittedGroups.flatMap((group) => group.testers.map((t) => ({ ...t, orgId: group.organization.id })));
+	const selectedTester =
+		submittedTesters.find((t) => t.userId === testerId) ??
+		submittedTesters.find((t) => t.orgId === defaultOrg?.id) ??
+		submittedTesters[0] ??
+		null;
+	const isSubmittedView = view === "submitted";
+	// The picked tester decides the org in the Submitted view; Overall keeps the ?org= lens for the sidebar.
+	const selectedOrg = (isSubmittedView && selectedTester ? participantOrgs.find((o) => o.id === selectedTester.orgId) : null) ?? defaultOrg;
 
 	// The vendor's Sync banner: same changes as the Test Cases tab's (every org; nothing is added
 	// once a round starts, 0023, but edits and removals still sync, 0036).
 	const showSyncBanner = selectedIteration?.status === "in_progress" && can(currentUser, "sync");
-	const [rawResults, changes, orgSectionsByIteration, allChanges] = selectedIteration
+	const [rolledResults, changes, orgSectionsByIteration, allChanges] = selectedIteration
 		? await Promise.all([
-			getRolledUpResults(selectedIteration.id, selectedOrg?.id, { viewerId: currentUser?.id, breakdown: can(currentUser, "view_all_results") }),
+			// Overall: every org at once, one row per case. Submitted: the picked tester's org, with
+			// that tester's copy standing for each case (viewerId) and the breakdown to find it.
+			getRolledUpResults(selectedIteration.id, isSubmittedView ? selectedOrg?.id : undefined, {
+				viewerId: isSubmittedView ? selectedTester?.userId : currentUser?.id,
+				breakdown: isSubmittedView || can(currentUser, "view_all_results"),
+				perOrg: isSubmittedView,
+			}),
 			selectedIteration.id === activeIteration?.id ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
 			selectedOrg ? getSectionsByIteration(testSuiteId, selectedOrg.id) : Promise.resolve(null),
 			showSyncBanner ? getIterationChanges(selectedIteration.id) : Promise.resolve([]),
 		])
 		: [[], [], null, []];
+	// Submitted: only cases the tester has a copy of, each showing their own result, not the roll-up.
+	const rawResults = !isSubmittedView ? rolledResults : rolledResults.flatMap((row) => {
+		const copy = selectedTester ? row.copies?.find((c) => c.testerId === selectedTester.userId) : undefined;
+		return copy ? [{ ...row, status: copy.status, completedAt: copy.completedAt }] : [];
+	});
 	const syncChanges = allChanges.filter((change) => change.change !== "added");
 	// Tree counts follow the picked participant (its links keep ?org=); rounds it
 	// isn't part of keep the all-participants counts.
@@ -131,20 +165,22 @@ export default async function TestResultsTab({
 	// Phase 6: External submits its own org's rows; once submitted they're read-only (0014's guard).
 	const ownParticipation = participants.find((p) => p.organization.id === currentUser?.organization?.id) ?? null;
 	const isViewingOwnOrg = !!ownParticipation && selectedOrg?.id === ownParticipation.organization.id;
-	const isOwnOrgSubmitted = isViewingOwnOrg && !!ownParticipation.submittedAt;
 	// Whoever is looking, a submitted org's results open read-only. The DB only locks the
 	// org's own users (0014); this keeps Admin/Internal from editing them by accident too.
 	const selectedParticipation = participants.find((p) => p.organization.id === selectedOrg?.id) ?? null;
-	const isSelectedOrgSubmitted = !!selectedParticipation?.submittedAt;
+	// Submitted view only lists submitted testers, so it is always read-only.
+	const isSelectedOrgSubmitted = !!selectedParticipation?.submittedAt || isSubmittedView;
 	const participationStatus: participationStatus | null =
 		!selectedParticipation || selectedIteration?.status === "not_started" ? null
 		: selectedParticipation.submittedAt ? { kind: "submitted", at: selectedParticipation.submittedAt }
 		: selectedParticipation.withdrawnAt ? { kind: "withdrawn", at: selectedParticipation.withdrawnAt }
 		: selectedIteration?.status === "in_progress" ? { kind: "in_progress", at: null }
 		: { kind: "not_submitted", at: null };
-	const showSubmission = isViewingOwnOrg && can(currentUser, "submit");
+	// Submission is per tester (0069): the bar acts on the signed-in person's own roster row.
+	const ownTester = ownParticipation?.testers.find((t) => t.userId === currentUser?.id && t.status === "active") ?? null;
+	const showSubmission = isViewingOwnOrg && !!ownTester && can(currentUser, "submit");
 	// Until an Admin/Internal user completes or stops the round (0019).
-	const canWithdraw = isOwnOrgSubmitted && can(currentUser, "submit") && !!selectedIteration && await canWithdrawParticipation(selectedIteration.id);
+	const canWithdraw = !!ownTester?.submittedAt && can(currentUser, "submit") && !!selectedIteration && await canWithdrawParticipation(selectedIteration.id);
 	// Remarks outlive the lock (0020): any started round, own org's rows (Admin: any org's).
 	const canRemark = !!selectedIteration && selectedIteration.status !== "not_started" && can(currentUser, "execute")
 		&& (isViewingOwnOrg || currentUser?.role === "Admin");
@@ -255,7 +291,7 @@ export default async function TestResultsTab({
 			) : selectedIteration ? (
 				<TestResultsComponents
 					// Remount on iteration/section/org switch so client state reseeds from the new rows.
-					key={`${selectedIteration.id}:${selectedIteration.status}:${sectionSlug ?? "all"}:${selectedOrg?.id ?? ""}`}
+					key={`${selectedIteration.id}:${selectedIteration.status}:${sectionSlug ?? "all"}:${selectedOrg?.id ?? ""}:${view}:${selectedTester?.userId ?? ""}`}
 					iteration={selectedIteration}
 					testSuiteSlug={testSuiteSlug}
 					sectionName={sectionName}
@@ -264,8 +300,9 @@ export default async function TestResultsTab({
 					isLocked={isSelectedOrgSubmitted}
 					canRemark={canRemark}
 					unsubmittedOrgs={unsubmittedParticipantOrgs(participants)}
-					participantOrgs={participantOrgs}
-					selectedOrgId={selectedOrg?.id ?? null}
+					view={view}
+					submittedGroups={submittedGroups}
+					selectedTesterId={selectedTester?.userId ?? null}
 					participationStatus={participationStatus}
 					headerActions={headerActions}
 					syncBanner={showSyncBanner && syncChanges.length > 0 ? (
@@ -278,7 +315,8 @@ export default async function TestResultsTab({
 							iteration={selectedIteration}
 							organizationName={ownParticipation.organization.name}
 							counts={ownParticipation.counts}
-							submittedAt={ownParticipation.submittedAt}
+							submittedAt={ownTester?.submittedAt ?? null}
+							teammatesPending={ownParticipation.testers.filter((t) => t.status === "active" && t.userId !== currentUser?.id && !t.submittedAt).length}
 							canWithdraw={canWithdraw}
 							untestedCases={results
 								.filter((row) => row.status === "Untested" || row.status === "In Progress")

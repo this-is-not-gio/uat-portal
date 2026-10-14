@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "./auth";
+import { flushStorageDeletions } from "@/lib/storage/flush";
 import { can, denied } from "@/lib/auth/permissions";
 import type { actionResult } from "./iteration-actions";
 
@@ -44,6 +45,7 @@ export async function forceRefreshCaseResult({ caseResultId, reason }: { caseRes
         p_reason: reason,
     });
     if (error) return fail(error);
+    await flushStorageDeletions(supabase);
     refresh();
     return { ok: true, data: undefined };
 }

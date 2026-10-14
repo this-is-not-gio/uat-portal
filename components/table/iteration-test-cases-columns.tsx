@@ -25,7 +25,7 @@ export type iterationCaseRow = testResultRow & { orgResults: iterationOrgResult[
 const columnHelper = createColumnHelper<DataTableFeatures, iterationCaseRow>()
 
 // Same palette as the Test Cases tab's flags (columns.tsx TestCaseFlags).
-const ROUND_FLAG_STYLES: Record<roundFlag, { className: string; icon: LucideIcon }> = {
+export const ROUND_FLAG_STYLES: Record<roundFlag, { className: string; icon: LucideIcon }> = {
 	incomplete: { className: "bg-amber-50 text-amber-800 border-amber-600/40", icon: TriangleAlert },
 	removed: { className: "bg-red-50 text-red-800 border-red-600/40", icon: Trash2 },
 	update_pending: { className: "bg-blue-50 text-blue-800 border-blue-600/40", icon: GitCompare },
