@@ -73,7 +73,8 @@ if (dryRun) process.exit(0);
 
 for (const f of pending) {
     // One request = one implicit transaction, so the file and its tracking row commit together.
-    const sql = readFileSync(join(dir, f), "utf8");
+    // LF only: a local Windows run would otherwise store \r inside function bodies.
+    const sql = readFileSync(join(dir, f), "utf8").replaceAll("\r\n", "\n");
     process.stdout.write(`Applying ${f} … `);
     try {
         await run(`${sql}\n;\ninsert into repo_ops.applied_migrations (name) values (${quote(f)});`);
