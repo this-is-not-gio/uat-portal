@@ -25,7 +25,9 @@ Keep each env's variables separate (`.env.example` lists them): never put prod k
 - Preview pending: `SUPABASE_PROJECT_REF=... SUPABASE_ACCESS_TOKEN=... node scripts/migrate.mjs --dry-run`.
 - Don't apply migrations by hand. Anything applied outside the pipeline is invisible to it, so the next run would re-run it: only merge files through a PR to `dev`.
 - Regenerate `lib/supabase/database.types.ts` after schema changes.
-- Known gap: the repo has no base schema (see `~/.claude/plans/infra-hardening.md` I1), so prod can't be rebuilt from the repo yet. Prod must be brought to the same state before the first `main` run.
+- The repo rebuilds an empty database from scratch: `0000_baseline_core.sql` + `0000b_baseline_iterations.sql` (dev's history before `0001`, in two files because enum values added by `ADD VALUE` can't be used in the same transaction) then `0001` onward. A new empty project: `node scripts/migrate.mjs --init-empty`. Verified 2026-10-14: prod was rebuilt this way and matches dev (tables, columns, constraints, indexes, enums, policies, grants, triggers, and every function body ignoring comments).
+- Never edit an applied migration file in place to fix a change: add a new file, or dev/prod will silently diverge (this is how `0064` once went unapplied on dev).
+- To compare two databases, fingerprint `information_schema.columns`, `pg_constraint`, `pg_indexes`, `pg_proc` (`pg_get_functiondef`, comments and whitespace stripped), `pg_policies` and the ACLs on both and diff.
 
 ## One-time setup (manual)
 
