@@ -2,10 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import { presignGet } from "@/lib/storage/b2";
 import { isRemovedFromRound, type caseFlag } from "./case-states";
 import { countStatuses, type statusCounts } from "./overview";
+import { getCaseVerdicts } from "./case-verdicts";
 import { compareOrganizations, type organization } from "./organizations";
 import {
     getIterationParticipants,
+    getIterationResults,
     getRolledUpResults,
+    rollUpCopies,
     getIterationsBySuiteId,
     type iterationParticipant,
     type testIteration,
@@ -95,7 +98,11 @@ export type RoundParticipant = {
     submittedAt: string | null;
     withdrawnAt: string | null;
     counts: statusCounts;
+    // Absent on reports frozen before per-tester results were shown.
+    testers?: RoundTester[];
 };
+
+export type RoundTester = { name: string | null; roleName?: string; submittedAt: string | null; counts: statusCounts };
 
 export type RoundCaseChange = { testCaseId: string; code: string | null; title: string; fromRound: string; toRound: string };
 
@@ -134,7 +141,8 @@ export type ReportHeader = {
     roundStartedAt: string | null;
     roundCompletedAt: string | null;
     roundsCounted: string[];
-    participants: { organizationName: string; organizationType: organization["type"]; submittedAt: string | null; withdrawnAt: string | null }[];
+    // testers is absent on reports frozen before per-tester submission was shown.
+    participants: { organizationName: string; organizationType: organization["type"]; submittedAt: string | null; withdrawnAt: string | null; testers?: { name: string | null; roleName?: string; submittedAt: string | null }[] }[];
     generatedAt: string;
 };
 
@@ -172,7 +180,8 @@ export type ReportCaseResult = {
 
 // One completed round. rows are already limited to what counts: included in the run and not
 // taken out mid-round by Sync.
-export type ReportRound = { iteration: testIteration; rows: testResultRow[]; participants: iterationParticipant[] };
+// copies: every tester's own row behind the rolled-up rows, for remarks written on any of them.
+export type ReportRound = { iteration: testIteration; rows: testResultRow[]; participants: iterationParticipant[]; copies?: testResultRow[] };
 
 export type ReportLiveCase = {
     id: string;
@@ -205,6 +214,8 @@ export type RolledUp = {
     finals: FinalCaseStatus[];
     // testCaseId -> orgId -> the round row each org's final status comes from. Not part of the report.
     sourceRows: Map<string, Map<string, testResultRow>>;
+    // Same keys: every tester copy of that case and org in the source round.
+    sourceCopies: Map<string, Map<string, testResultRow[]>>;
     deletedCases: string[];
 };
 
@@ -232,9 +243,12 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
     }
 
     const sourceRows = new Map<string, Map<string, testResultRow>>();
+    const sourceCopies = new Map<string, Map<string, testResultRow[]>>();
+    const copiesByRound = new Map(rounds.map((round) => [round.iteration.id, Map.groupBy(round.copies ?? [], (c) => `${c.testCaseId}|${c.organizationId}`)]));
     const finals = liveCases.map((live): FinalCaseStatus => {
         const perOrg: FinalOrgStatus[] = [];
         const sources = new Map<string, testResultRow>();
+        const copies = new Map<string, testResultRow[]>();
         let carriedOver = false;
         let sourceRound: testIteration | null = null;
 
@@ -247,6 +261,7 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
                 if (!isExecuted(row.status)) continue;
                 perOrg.push({ organizationId: orgId, organizationName, status: row.status, roundName: round.name });
                 sources.set(orgId, row);
+                copies.set(orgId, copiesByRound.get(round.id)?.get(`${live.id}|${orgId}`) ?? [row]);
                 if (i < entries.length - 1) carriedOver = true;
                 if (!sourceRound || round.iterationNumber > sourceRound.iterationNumber) sourceRound = round;
                 found = true;
@@ -261,6 +276,7 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
             return orgA && orgB ? compareOrganizations(orgA, orgB) : a.organizationName.localeCompare(b.organizationName);
         });
         sourceRows.set(live.id, sources);
+        sourceCopies.set(live.id, copies);
 
         const executed = perOrg.map((p) => p.status).filter((s): s is ExecutedStatus => s !== "Untested");
         return {
@@ -280,7 +296,7 @@ export function rollUpFinalStatuses(rounds: ReportRound[], liveCases: ReportLive
         };
     });
 
-    return { finals, sourceRows, deletedCases: [...deleted.values()].sort() };
+    return { finals, sourceRows, sourceCopies, deletedCases: [...deleted.values()].sort() };
 }
 
 // Pass rate in percent, one decimal. Untested cases count in the denominator.
@@ -372,6 +388,12 @@ export function buildRoundHistory(rounds: ReportRound[]): RoundHistory {
                     submittedAt: p.submittedAt,
                     withdrawnAt: p.withdrawnAt,
                     counts: countStatuses(round.rows.filter((row) => row.organizationId === p.organization.id).map((row) => row.status)),
+                    testers: p.testers.filter((t) => t.status === "active").map((t) => ({
+                        name: t.fullName,
+                        roleName: t.testRole.name,
+                        submittedAt: t.submittedAt,
+                        counts: countStatuses(round.rows.flatMap((row) => row.copies ?? []).filter((c) => c.testerId === t.userId).map((c) => c.status)),
+                    })),
                 })),
         };
     });
@@ -548,9 +570,9 @@ export function buildRemarkCatalog(rolledUp: RolledUp, liveCases: ReportLiveCase
     for (const f of sorted) {
         // perOrg is already in organization order.
         for (const org of f.perOrg) {
-            const row = rolledUp.sourceRows.get(f.testCaseId)?.get(org.organizationId);
-            if (!row || !org.roundName) continue;
-            for (const [i, step] of (row.stepsToExecute ?? []).entries()) {
+            const copies = rolledUp.sourceCopies.get(f.testCaseId)?.get(org.organizationId);
+            if (!copies?.length || !org.roundName) continue;
+            for (const row of copies) for (const [i, step] of (row.stepsToExecute ?? []).entries()) {
                 for (const r of step.remarks ?? []) {
                     const remark = r.remark.trim();
                     if (!remark) continue;
@@ -633,8 +655,15 @@ function loadRounds(iterations: testIteration[]): Promise<ReportRound[]> {
     return Promise.all(
         iterations.map(async (iteration) => {
             // One row per case and organization: its testers' copies rolled up (0059).
-            const [rows, participants] = await Promise.all([getRolledUpResults(iteration.id), getIterationParticipants(iteration.id)]);
-            return { iteration, rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)), participants };
+            const [copies, verdicts, participants] = await Promise.all([getIterationResults(iteration.id), getCaseVerdicts(iteration.id), getIterationParticipants(iteration.id)]);
+            const names = new Map(participants.flatMap((p) => p.testers.map((t) => [t.userId, t.fullName] as const)));
+            const rows = rollUpCopies(copies, verdicts, names, { breakdown: true });
+            return {
+                iteration,
+                rows: rows.filter((row) => row.includedInRun && !isRemovedFromRound(row)),
+                participants,
+                copies: copies.filter((row) => row.includedInRun && !isRemovedFromRound(row)),
+            };
         })
     );
 }
@@ -751,6 +780,7 @@ export async function buildSignOffReport(suiteId: string): Promise<SignOffReport
                 organizationType: p.organization.type,
                 submittedAt: p.submittedAt,
                 withdrawnAt: p.withdrawnAt,
+                testers: p.testers.filter((t) => t.status === "active").map((t) => ({ name: t.fullName, roleName: t.testRole.name, submittedAt: t.submittedAt })),
             })),
             generatedAt: new Date().toISOString(),
         },

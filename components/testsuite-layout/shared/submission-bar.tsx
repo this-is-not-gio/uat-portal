@@ -27,6 +27,7 @@ export default function SubmissionBar({
 	organizationName,
 	counts,
 	submittedAt,
+	teammatesPending = 0,
 	canWithdraw = false,
 	untestedCases,
 }: {
@@ -34,6 +35,8 @@ export default function SubmissionBar({
 	organizationName: string;
 	counts: statusCounts;
 	submittedAt: string | null;
+	// Teammates still to submit (this bar acts on the signed-in tester only).
+	teammatesPending?: number;
 	// Round still in progress (can_withdraw_participation, 0019).
 	canWithdraw?: boolean;
 	// Across the whole round for this org, not just the visible section.
@@ -48,9 +51,9 @@ export default function SubmissionBar({
 				<div className="flex flex-row items-center gap-3">
 					<CircleCheck className="size-5 text-green-800" />
 					<div>
-						<p className="text-sm font-medium">{organizationName} submitted its results on <span className="font-mono">{format(parseISO(submittedAt), "MMM d yyyy, h:mm a")}</span></p>
+						<p className="text-sm font-medium">You submitted your results on <span className="font-mono">{format(parseISO(submittedAt), "MMM d yyyy, h:mm a")}</span></p>
 						<p className="text-xs text-muted-foreground">
-							{canWithdraw ? "Results are read-only. Withdraw the submission to make changes until the round is completed." : "Results are read-only."}
+							{canWithdraw ? "Your results are read-only. Withdraw your submission to make changes until the round is completed." : "Results are read-only."}
 						</p>
 					</div>
 				</div>
@@ -67,16 +70,18 @@ export default function SubmissionBar({
 				<p className="text-sm font-medium">{tested} / {counts.total} tested</p>
 				<p className="text-xs text-muted-foreground">
 					{untestedCases.length > 0 ? `${untestedCases.length} left. ` : "Everything has a result. "}
-					Submit when {organizationName} is done testing this round.
+					Submit when you are done testing this round.
 				</p>
 			</div>
-			<SubmitDialog iteration={iteration} organizationName={organizationName} untestedCases={untestedCases} />
+			<SubmitDialog iteration={iteration} organizationName={organizationName} teammatesPending={teammatesPending} untestedCases={untestedCases} />
 		</div>
 	);
 }
 
 // trigger: a custom button to open it (the tester header's "Submit Result"); defaults to the bar's own.
-export function SubmitDialog({ iteration, organizationName, untestedCases, trigger }: { iteration: testIteration; organizationName: string; untestedCases: untestedCase[]; trigger?: React.ReactElement }) {
+// Submission is per tester (0069): this submits only the signed-in person's own results. The org
+// counts as submitted once every active tester has. teammatesPending: others still to submit.
+export function SubmitDialog({ iteration, organizationName, teammatesPending = 0, untestedCases, trigger }: { iteration: testIteration; organizationName: string; teammatesPending?: number; untestedCases: untestedCase[]; trigger?: React.ReactElement }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -110,15 +115,15 @@ export function SubmitDialog({ iteration, organizationName, untestedCases, trigg
 			)} />
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Submit {organizationName}&apos;s results for {iteration.name}?</DialogTitle>
+					<DialogTitle>Submit your results for {iteration.name}?</DialogTitle>
 					<DialogDescription>
-						Your team can&apos;t change results after submitting. You can withdraw the submission while the round is still open.
+						You can&apos;t change your results after submitting. You can withdraw your submission while the round is still open.
 					</DialogDescription>
 				</DialogHeader>
 				{untestedCases.length > 0 && (
 					<div className="text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3 flex flex-col gap-2">
 						<p>
-							{untestedCases.length} test case{untestedCases.length === 1 ? " wasn't" : "s weren't"} tested and will be submitted as not tested.
+							{untestedCases.length} of your test case{untestedCases.length === 1 ? " wasn't" : "s weren't"} tested and will be submitted as not tested.
 						</p>
 						<div className="max-h-48 overflow-y-auto flex flex-col gap-2">
 							{[...bySection].map(([section, cases]) => (
@@ -134,6 +139,11 @@ export function SubmitDialog({ iteration, organizationName, untestedCases, trigg
 						</div>
 					</div>
 				)}
+				<p className="text-xs text-muted-foreground">
+					{teammatesPending === 0
+						? `You're the last one: submitting completes ${organizationName}'s submission for this round.`
+						: `${organizationName} is submitted once everyone on its team has. ${teammatesPending} teammate${teammatesPending === 1 ? " is" : "s are"} still to submit.`}
+				</p>
 				{error && <p className="text-xs text-destructive">{error}</p>}
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Go back</DialogClose>

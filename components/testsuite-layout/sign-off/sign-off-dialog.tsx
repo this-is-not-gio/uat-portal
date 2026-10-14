@@ -357,38 +357,6 @@ export function AcknowledgeSignOffDialog({ suiteId, signOff, reportHref, trigger
 						{signOff.signedOffBy ?? "The Development Team"} issued the sign-off based on {signOff.iterationName}. Acknowledging it closes the suite.
 					</DialogDescription>
 				</DialogHeader>
-				<div className="flex flex-col gap-4">
-					{reportHref && (
-						<div className="flex items-center justify-between gap-3 rounded-md border p-3">
-							<p className="text-sm">Read the sign-off report before acknowledging: verdict, failed cases, round history and limitations.</p>
-							{/* New tab, so the dialog stays open to acknowledge afterwards. */}
-							<Button variant="outline" size="sm" nativeButton={false} render={<Link href={reportHref} target="_blank" rel="noopener" />}>
-								<FileTextIcon />
-								Open report
-							</Button>
-						</div>
-					)}
-					<div className="grid grid-cols-5 gap-2 text-center">
-						{([
-							["Total", counts.total, ""],
-							["Passed", counts.passed, "text-green-800"],
-							["Failed", counts.failed, "text-red-800"],
-							["Blocked", counts.blocked, ""],
-							["Not tested", counts.untested + counts.inProgress, "text-muted-foreground"],
-						] as const).map(([label, value, className]) => (
-							<div key={label} className="border rounded-md p-2">
-								<p className={`font-mono font-semibold text-lg ${className}`}>{value}</p>
-								<p className="text-xs text-muted-foreground">{label}</p>
-							</div>
-						))}
-					</div>
-					{/* {signOff.note && (
-						<div className="flex flex-col gap-1">
-							<Label>Development Team note</Label>
-							<p className="text-sm">{signOff.note}</p>
-						</div>
-					)} */}
-				</div>
 				{error && <p className="text-xs text-destructive">{error}</p>}
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>

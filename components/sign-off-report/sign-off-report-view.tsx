@@ -59,7 +59,7 @@ export const REPORT_SECTIONS = ["Report details", "Testing outcome", "Iteration 
 // templates: Overview content the draft's Add section menu can copy in (draft only).
 export function reportPages(frozen: FrozenSignOffReport, { draft = false, templates = [] }: { draft?: boolean; templates?: OverviewTemplate[] } = {}): (React.ReactNode | null)[] {
 	const { report } = frozen;
-	return [
+	const pages = [
 		<ReportHeaderSection key="header" frozen={frozen} draft={draft} templates={templates} />,
 		<VerdictSection key="verdict" report={report} />,
 		report.roundHistory.rounds.length > 0 ? <RoundHistorySection key="round_history" report={report} /> : null,
@@ -67,9 +67,54 @@ export function reportPages(frozen: FrozenSignOffReport, { draft = false, templa
 		// report.failedCases.length > 0 ? <FailedCasesSection key="failed_cases" report={report} /> : null,
 		(report.remarks ?? []).length > 0 ? <RemarksSection key="remarks" report={report} /> : null,
 	];
+	// "Prepared by" closes the document, on whichever section ends up last.
+	const last = pages.findLastIndex((page) => page !== null);
+	pages[last] = (
+		<div key="last" className="flex flex-col gap-10">
+			{pages[last]}
+			<PreparedBySection />
+		</div>
+	);
+	return pages;
 }
 
-function Section({ title, description, className, children }: { title: string; description?: string; className?: string; children: React.ReactNode }) {
+// Closing block of the document. TODO: content to be supplied.
+function PreparedBySection() {
+	return (
+		< div className="" >
+			{/* Prepared by: From DCI
+Name: Rogelio Gio C. Talingdan
+Position: Product Analyst 
+Company name: DBP Data Center, Inc.
+ */}
+			<p className="font-semibold text-sm">Prepared by: From DCI</p>
+			<p className="text-xs">Name: Rogelio Gio C. Talingdan</p>
+			<p className="text-xs">Position: Product Analyst</p>
+			<p className="text-xs">Company name: DBP Data Center, Inc.</p>
+		</div >
+	);
+}
+
+// The running header: one line repeated at the top of every sheet (and every printed page), so a loose
+// page still says which suite and report it belongs to. The big title on the first sheet is separate.
+export function ReportPageHeader() {
+	return (
+		<div className="flex items-center justify-between gap-4 border-b pb-2 text-center text-[8.5pt] leading-tight text-muted-foreground">
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img src="/DCI.png" alt="DBP Data Center, Inc." className="h-18 w-auto shrink-0" />
+			<div className="flex min-w-0 flex-col items-center gap-0.5">
+				<p className="font-semibold text-foreground">DBP Data Center, Inc.</p>
+				<p>9/F DBP Building, Sen. Gil Puyat Avenue, Makati City, Philippines 1200</p>
+				<p>Tel No. 8818-9511 local 2913</p>
+				<p>www.dci.ph | www.dci.gov.ph</p>
+			</div>
+			{/* eslint-disable-next-line @next/next/no-img-element */}
+			<img src="/Bagong%20Pilipinas.png" alt="Bagong Pilipinas" className="h-20 w-auto shrink-0" />
+		</div>
+	);
+}
+
+function Section({ title, description, className, children }: { title: string; description?: string; className?: string; children?: React.ReactNode }) {
 	return (
 		<section className={cn("flex flex-col gap-4", className)}>
 			<div className="flex flex-col gap-1 pb-2 print:break-after-avoid">
@@ -117,7 +162,7 @@ export function ReportHeaderSection({ frozen, draft = false, templates = [] }: {
 			</dl>
 			{header.participants.length > 0 && (
 				<div className="flex flex-col gap-2">
-					<p className="text-xs text-muted-foreground">Participants</p>
+					<p className="text-xs text-muted-foreground">Testing Participants</p>
 					<ParticipantsTable participants={header.participants} />
 				</div>
 			)}
@@ -725,6 +770,7 @@ function RemarkEvidence({ attachments, links }: { attachments: NonNullable<Repor
 
 async function RemarksSection({ report }: { report: SignOffReport }) {
 	const groups = groupRemarks(report.remarks ?? []);
+	const finalStatus = new Map((report.caseResults ?? []).map((c) => [c.testCaseId, c.status === "Untested" ? "Not tested" : c.status] as const));
 	const attachmentIds = (report.remarks ?? []).flatMap((r) => (r.attachments ?? []).map((a) => a.id));
 	// Storage trouble (not configured, daily cap) must not take the report down: names still show.
 	const links = await signReportAttachmentLinks(attachmentIds).catch((e) => {
@@ -750,7 +796,10 @@ async function RemarksSection({ report }: { report: SignOffReport }) {
 							{group.cases.map((c) => (
 								<div key={c.testCaseId} className="border rounded-md ">
 									<div className="p-3 border-b bg-gray-500/10 justify-between flex flex-row items-center gap-2 print:break-after-avoid">
-										<p className="text-sm font-medium">{caseLabel(c)}</p>
+										<div className="flex min-w-0 flex-row items-center gap-2">
+											<p className="text-sm font-medium">{caseLabel(c)}</p>
+											{finalStatus.has(c.testCaseId) && <span className={cn("rounded-md px-1.5 py-0.5 text-xs font-semibold", STATUS_STYLES[finalStatus.get(c.testCaseId)!].badge)}>{finalStatus.get(c.testCaseId)}</span>}
+										</div>
 										<p className="text-xs text-muted-foreground">Remarked {c.remarks.length} times</p>
 									</div>
 									{
@@ -764,21 +813,21 @@ async function RemarksSection({ report }: { report: SignOffReport }) {
 													<StepStatusChip status={remark.stepStatus} />
 												</div>
 												<div className="flex flex-col gap-1 px-3 py-2">
-													<div className="typeset text-sm break-words">
+													<div className="typeset text-sm break-words py-2">
 														<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
 													</div>
 													<p className="text-xs text-muted-foreground">
-														<span className="font-medium text-foreground">{remark.authorName ?? "Unknown tester"}</span>
+														<span className="font-medium text-muted-foreground">{remark.authorName ?? "Unknown tester"}</span>
 														{" · "}{remark.organizationName}
 														{remark.createdAt && <> · {formatTimestamp(remark.createdAt)}</>}
 													</p>
-																					{remark.attachments?.length ? <RemarkEvidence attachments={remark.attachments} links={links} /> : null}
+													{remark.attachments?.length ? <RemarkEvidence attachments={remark.attachments} links={links} /> : null}
 												</div>
 											</div>
 										))
 									}
 								</div>
-							))} 
+							))}
 						</div>
 					))}
 				</div>

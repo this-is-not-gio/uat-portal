@@ -14,7 +14,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/colla
 import NavTestCase from "./nav-testcase";
 
 
-const BADGE_VARIANTS = {
+export const BADGE_VARIANTS = {
 	external: {
 		Label: "Regulated Entity",
 		BadgeClassName: "bg-blue-600/20 text-blue-800",

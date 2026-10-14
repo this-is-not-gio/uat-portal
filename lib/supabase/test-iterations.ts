@@ -33,6 +33,8 @@ export type iterationTester = {
     fullName: string | null;
     testRole: { id: string; name: string };
     status: "active" | "dropped";
+    // This tester's own submission stamp (null until their org submits).
+    submittedAt: string | null;
 };
 
 // An org taking part in a round: its rostered testers grouped by org. Submission is still per
@@ -569,7 +571,7 @@ export async function getIterationParticipants(iterationId: string): Promise<ite
                 organization,
                 roles: [...roles.values()].sort((a, b) => a.name.localeCompare(b.name)),
                 testers: rows
-                    .map((r) => ({ userId: r.user_id, fullName: r.profile.full_name, testRole: r.test_role, status: r.status as iterationTester["status"] }))
+                    .map((r) => ({ userId: r.user_id, fullName: r.profile.full_name, testRole: r.test_role, status: r.status as iterationTester["status"], submittedAt: r.submitted_at }))
                     .sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? "")),
                 submittedAt: active.length > 0 && active.every((r) => r.submitted_at) ? latest(active.map((r) => r.submitted_at)) : null,
                 withdrawnAt: latest(rows.map((r) => r.withdrawn_at)),

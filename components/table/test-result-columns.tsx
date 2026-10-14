@@ -137,7 +137,57 @@ export function ResultSummaryCell({ row }: { row: testResultRow }) {
 	);
 }
 
+// Overall tab: one chip per verdict across the case's testers (Passed, Passed, Failed -> 2 check, 1 x).
+// Verdicts only: copies still Untested / In Progress, and dropped testers' frozen copies, don't count.
+// The tooltip names who gave each verdict.
+export function SubmittedResultCell({ row }: { row: testResultRow }) {
+	const copies = (row.copies ?? []).filter((copy) => !copy.dropped)
+	const chips = [
+		{ status: "Passed", Icon: CircleCheck, className: "bg-green-600/20 text-green-800" },
+		{ status: "Failed", Icon: CircleX, className: "bg-red-600/20 text-red-800" },
+		{ status: "Blocked", Icon: CircleOffIcon, className: "bg-gray-600/20 text-gray-800" },
+	].map((chip) => ({ ...chip, testers: copies.filter((copy) => copy.status === chip.status).map((copy) => copy.testerName ?? "Unnamed tester") }))
+		.filter((chip) => chip.testers.length > 0)
+	if (chips.length === 0) return <p className="text-xs text-muted-foreground">No results yet</p>
+	return (
+		<div className="flex flex-row gap-1">
+			{chips.map(({ status, Icon, className, testers }) => (
+				<Tooltip key={status}>
+					<TooltipTrigger render={
+						<div className={cn("flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit", className)} aria-label={`${testers.length} ${status}`}>
+							<Icon size={15} />
+							<p className="font-mono text-xs">{testers.length}</p>
+						</div>
+					} />
+					<TooltipContent className="flex flex-col items-start gap-0.5 max-w-64">
+						<p className="font-semibold">{status}</p>
+						{testers.map((name, index) => <p key={index}>{name}</p>)}
+					</TooltipContent>
+				</Tooltip>
+			))}
+		</div>
+	)
+}
+
 const columnHelper = createColumnHelper<DataTableFeatures, testResultRow>()
+
+const resultSummaryColumn = columnHelper.display({
+	header: "Result Summary",
+	meta: { className: "hidden md:table-cell" },
+	cell: (info) => <ResultSummaryCell row={info.row.original} />,
+})
+
+const remarksColumn = columnHelper.display({
+	header: "Remarks",
+	meta: { className: "hidden lg:table-cell" },
+	cell: (info) => <RemarkCountCell row={info.row.original} />,
+})
+
+const submittedResultColumn = columnHelper.display({
+	header: "Submitted Result",
+	meta: { className: "hidden md:table-cell" },
+	cell: (info) => <SubmittedResultCell row={info.row.original} />,
+})
 
 // " · Failed · Updated mid-round": the result (once tested) and the highest-priority change flag.
 function mobileStatusText(row: testResultRow) {
@@ -162,36 +212,28 @@ export const testResultColumns = columnHelper.columns([
 		),
 	}),
 
-	columnHelper.accessor("executor", {
-		header: "Executed By",
-		meta: { className: "hidden lg:table-cell" },
-		cell: (info) => {
-			const executor = info.getValue();
-			if (!executor) return <p className="text-xs text-muted-foreground">—</p>;
-			return (
-				<div className="flex items-center gap-2">
-					<div className="size-6 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
-						<p className="text-xs font-semi-bold">{executor.full_name?.charAt(0) || 'U'}{executor.full_name?.charAt(1).toUpperCase() || 'U'}</p>
-					</div>
-					<div className="flex flex-col">
-						<p className="text-xs font-semibold">{executor.full_name}</p>
-						<p className="text-xs text-muted-foreground">{executor.role}</p>
-					</div>
-				</div>
-			);
-		},
-	}),
-	columnHelper.display({
-		header: "Remarks",
-		meta: { className: "hidden lg:table-cell" },
-		cell: (info) => <RemarkCountCell row={info.row.original} />,
-	}),
+	// columnHelper.accessor("executor", {
+	// 	header: "Executed By",
+	// 	meta: { className: "hidden lg:table-cell" },
+	// 	cell: (info) => {
+	// 		const executor = info.getValue();
+	// 		if (!executor) return <p className="text-xs text-muted-foreground">—</p>;
+	// 		return (
+	// 			<div className="flex items-center gap-2">
+	// 				<div className="size-6 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
+	// 					<p className="text-xs font-semi-bold">{executor.full_name?.charAt(0) || 'U'}{executor.full_name?.charAt(1).toUpperCase() || 'U'}</p>
+	// 				</div>
+	// 				<div className="flex flex-col">
+	// 					<p className="text-xs font-semibold">{executor.full_name}</p>
+	// 					<p className="text-xs text-muted-foreground">{executor.role}</p>
+	// 				</div>
+	// 			</div>
+	// 		);
+	// 	},
+	// }),
 
-	columnHelper.display({
-		header: "Result Summary",
-		meta: { className: "hidden md:table-cell" },
-		cell: (info) => <ResultSummaryCell row={info.row.original} />,
-	}),
+	remarksColumn,
+	resultSummaryColumn,
 	columnHelper.accessor("previousStatus", {
 		meta: { className: "hidden lg:table-cell" },
 		header: () => (
@@ -233,7 +275,7 @@ export const testResultColumns = columnHelper.columns([
 						<Badge variant="outline" className="text-xs">Overridden</Badge>
 					)}
 					{
-					    info.getValue() !== "Untested" ? (
+						info.getValue() !== "Untested" ? (
 							<div className={cn("rounded-md py-1 px-1.5 w-fit flex flex-row items-center gap-1.5", status?.className ?? "bg-gray-100 text-gray-800")}>
 								<Icon size={12} />
 								<p className="text-xs font-semibold whitespace-nowrap">{info.getValue()}</p>
@@ -246,3 +288,9 @@ export const testResultColumns = columnHelper.columns([
 		},
 	}),
 ])
+
+// The Overall tab: the same columns, with the testers' verdicts instead of one tester's step counts,
+// and no Remarks (those belong to one tester's submitted results).
+export const testResultOverallColumns = testResultColumns
+	.filter((column) => column !== remarksColumn)
+	.map((column) => column === resultSummaryColumn ? submittedResultColumn : column) as typeof testResultColumns

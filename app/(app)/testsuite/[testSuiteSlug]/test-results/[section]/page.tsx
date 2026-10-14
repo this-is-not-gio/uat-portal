@@ -9,6 +9,8 @@ export default async function TestResultsSectionPage({ params, searchParams }: P
 	const [{ testSuiteSlug, section }, query] = await Promise.all([params, searchParams]);
 	const iteration = typeof query.iteration === "string" ? query.iteration : undefined;
 	const org = typeof query.org === "string" ? query.org : undefined;
+	const view = query.view === "submitted" ? "submitted" : "overall";
+	const tester = typeof query.tester === "string" ? query.tester : undefined;
 
 	const [testSuite, currentUser] = await Promise.all([getTestSuiteBySlug(testSuiteSlug), getCurrentUser()]);
 	if (!testSuite || !currentUser) notFound();
@@ -31,6 +33,8 @@ export default async function TestResultsSectionPage({ params, searchParams }: P
 			sectionSlug={section}
 			iterationNumber={iteration}
 			orgId={org}
+			view={view}
+			testerId={tester}
 		/>
 	);
 }

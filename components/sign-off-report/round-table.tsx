@@ -3,7 +3,7 @@
 import { Ban, CircleCheck, CircleDashed, CircleX } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { statusCounts } from "@/lib/supabase/overview";
-import type { RoundParticipant, RoundSummary } from "@/lib/supabase/sign-off-report";
+import type { RoundParticipant, RoundSummary, RoundTester } from "@/lib/supabase/sign-off-report";
 import { cn, formatTimestamp } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Badge } from "../ui/badge";
@@ -86,9 +86,9 @@ function RoundCards({ rounds }: { rounds: RoundSummary[] }) {
 		<div className="flex flex-col gap-6">
 			{
 				rounds.map((round) => (
-					<div key={round.iterationId} className="flex flex-col gap-2 print:hidden">
-						<div className="flex flex-col border rounded-md">
-							<div className="p-4 bg-gray-100/10 flex flex-col md:flex-row md:justify-between gap-2 border-b">
+					<div key={round.iterationId} className="flex flex-col gap-2 items-center print:break-inside-avoid">
+						<div className="flex flex-col border rounded-md w-full">
+							<div className="p-4 bg-gray-100/10 flex flex-row justify-between gap-2 border-b">
 								<div className="flex flex-col gap-1 justify-center">
 									<div className="flex flex-row gap-2">
 										<p className="min-w-0 break-words text-sm font-semibold">{round.name}</p>
@@ -99,16 +99,28 @@ function RoundCards({ rounds }: { rounds: RoundSummary[] }) {
 									</p>
 								</div>
 								<div className="flex-shrink-0 flex flex-row gap-4">
-									<div className="flex flex-col gap-2 md:items-end">
+									<div className="flex flex-col items-end gap-2">
 										<p className="text-xs text-muted-foreground">Iteration Summary</p>
 										<StatusChips counts={round.counts} className="justify-start" />
 									</div>
 								</div>
 							</div>
 							{/* Reports frozen before participants were recorded per round don't have them. */}
-							{round.participants && round.participants.length > 0 && (
-								<RoundParticipantsTable participants={round.participants} />
-							)}
+							{round.participants?.map((p) => (
+								<div key={p.organizationName} className="border-b last:border-b-0 print:break-inside-avoid">
+								<div className="p-4 bg-gray-100/10 flex flex-row justify-between gap-2 border-b">
+									<div className="flex flex-col gap-1 justify-center">
+										<p className="min-w-0 break-words text-sm font-semibold">{p.organizationName}</p>
+										<p className="text-xs text-muted-foreground">{plural(p.testers?.length ?? 0, "participant")}</p>
+									</div>
+									<div className="flex flex-col items-end gap-2">
+										<p className="text-xs text-muted-foreground">Organization Result</p>
+										<StatusChips counts={p.counts} className="justify-start" />
+									</div>
+								</div>
+								{p.testers && p.testers.length > 0 && <RoundTestersTable testers={p.testers} orgName={p.organizationName} />}
+								</div>
+							))}
 						</div>
 						<p className="text-xs px-1">{summarizeRound(round)}</p>
 					</div>
@@ -144,6 +156,32 @@ function RoundParticipantsTable({ participants }: { participants: RoundParticipa
 	return (
 		<DataTable columns={columns} data={participants.map((p) => ({ ...p, id: p.organizationName }))} bordered={false} />
 	);
+}
+
+// One row per tester of an org in the round: name, when they submitted, and their own results.
+function RoundTestersTable({ testers, orgName }: { testers: RoundTester[]; orgName: string }) {
+	type TesterRow = RoundTester & { id: string };
+	const columnHelper = createColumnHelper<DataTableFeatures, TesterRow>();
+	const columns = columnHelper.columns([
+		columnHelper.accessor("name", {
+			header: "Participant",
+			cell: (info) => (
+				<div className="flex flex-col">
+					<p className="text-xs font-semibold">{info.getValue() ?? "Unknown"}</p>
+					{info.row.original.roleName && <p className="text-xs text-muted-foreground">{info.row.original.roleName}</p>}
+				</div>
+			),
+		}),
+		columnHelper.accessor("submittedAt", {
+			header: "Date of Submission",
+			cell: (info) => <p className="text-xs text-muted-foreground">{info.getValue() ? formatTimestamp(info.getValue()!) : "Not submitted"}</p>,
+		}),
+		columnHelper.accessor("counts", {
+			header: "Summary",
+			cell: (info) => <StatusChips counts={info.getValue()} className="justify-end" />,
+		}),
+	]);
+	return <DataTable columns={columns} data={testers.map((t, i) => ({ ...t, id: `${orgName}-${i}` }))} bordered={false} />;
 }
 
 function SubmissionText({ participant: p }: { participant: RoundParticipant }) {

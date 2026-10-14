@@ -572,6 +572,58 @@ export type Database = {
           },
         ]
       }
+      sign_off_comments: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          page: number
+          parent_id: string | null
+          prefix: string
+          quote: string
+          sign_off_id: string
+          suffix: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          id?: string
+          page: number
+          prefix?: string
+          quote: string
+          sign_off_id: string
+          suffix?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          page?: number
+          prefix?: string
+          quote?: string
+          sign_off_id?: string
+          suffix?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sign_off_comments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sign_off_comments_sign_off_id_fkey"
+            columns: ["sign_off_id"]
+            isOneToOne: false
+            referencedRelation: "suite_sign_offs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suite_sign_offs: {
         Row: {
           acknowledged_at: string | null
@@ -1271,6 +1323,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_sign_off_comment: {
+        Args: { p_body: string; p_page: number; p_prefix: string; p_quote: string; p_sign_off_id: string; p_suffix: string }
+        Returns: Database["public"]["Tables"]["sign_off_comments"]["Row"]
+      }
+      delete_sign_off_comment: {
+        Args: { p_comment_id: string }
+        Returns: undefined
+      }
+      reply_sign_off_comment: {
+        Args: { p_body: string; p_parent_id: string }
+        Returns: Database["public"]["Tables"]["sign_off_comments"]["Row"]
+      }
+      update_sign_off_comment: {
+        Args: { p_comment_id: string; p_body: string }
+        Returns: undefined
+      }
       acknowledge_sign_off: {
         Args: { p_by?: string; p_suite_id: string }
         Returns: {

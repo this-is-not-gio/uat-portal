@@ -1,24 +1,25 @@
 "use client";
 
-import { Ban, CalendarClock, CircleCheck, CircleDashed, CircleDot, CircleX, Clipboard, FileClock, FileUpIcon, FolderClock, History, RefreshCw, Undo2 } from "lucide-react";
+import { Ban, CalendarClock, ChartNoAxesCombined, CircleCheck, CircleDashed, CircleDot, CircleX, Clipboard, FileClock, FileUpIcon, FolderClock, History, RefreshCw, Send, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
-import { testResultColumns } from "@/components/table/test-result-columns";
+import { testResultColumns, testResultOverallColumns } from "@/components/table/test-result-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { useState } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { testIteration, testResultRow } from "@/lib/supabase/test-iterations";
 import { isRemovedFromRound } from "@/lib/supabase/case-states";
-import { cn, formatIterationTimestamp } from "@/lib/utils";
+import { cn, formatIterationTimestamp, formatTimestamp, humanizeTimestamp, initials } from "@/lib/utils";
+import { BADGE_VARIANTS } from "@/components/sidebar/app-sidebar";
 import { format, isBefore, parseISO, startOfToday } from "date-fns";
 import IterationActions from "@/components/testsuite-layout/shared/iteration-actions";
 import type { organization } from "@/lib/supabase/organizations";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 import { TestCasesSidebarTrigger } from "../test-cases/test-cases-sidebar";
-// import { SelectTrigger } from "@base-ui/react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 function SummaryCard({ label, count, icon, iconClassName }: { label: string; count: number; icon: React.ReactNode; iconClassName?: string }) {
@@ -40,6 +41,12 @@ function SummaryCard({ label, count, icon, iconClassName }: { label: string; cou
 
 // The viewed org's part of the round: testing, submitted, or pulled back after submitting.
 // "not_submitted" is a finished round the org never submitted.
+// Testers who submitted this round, grouped by org: what the Submitted Test Results picker lists.
+export type submittedGroup = {
+	organization: organization;
+	testers: { userId: string; fullName: string | null; roleName: string; submittedAt: string }[];
+};
+
 export type participationStatus = { kind: "in_progress" | "submitted" | "withdrawn" | "not_submitted"; at: string | null };
 
 const PARTICIPATION_BADGES: Record<participationStatus["kind"], { label: string; Icon: typeof CircleDot; className: string; prefix: string }> = {
@@ -90,8 +97,9 @@ export default function TestResultsComponents({
 	unsubmittedOrgs = [],
 	participation,
 	submission,
-	participantOrgs = [],
-	selectedOrgId = null,
+	view = "overall",
+	submittedGroups = [],
+	selectedTesterId = null,
 	participationStatus = null,
 	syncBanner = null,
 	headerActions = null,
@@ -111,9 +119,11 @@ export default function TestResultsComponents({
 	// Participation panel (Admin/Internal) and Submit bar (External), rendered by the server tab.
 	participation?: React.ReactNode;
 	submission?: React.ReactNode;
-	// The round's participants; picking one sets ?org= and the server tab refetches its rows.
-	participantOrgs?: organization[];
-	selectedOrgId?: string | null;
+	// Overall: the whole round, every org. Submitted: one submitted tester's results, picked from
+	// submittedGroups; both live in the URL (?view=, ?tester=&org=) so the server tab refetches.
+	view?: "overall" | "submitted";
+	submittedGroups?: submittedGroup[];
+	selectedTesterId?: string | null;
 	// null for a planned round (nothing to report yet).
 	participationStatus?: participationStatus | null;
 	// Vendor only, while the round runs: edits to tested cases waiting for Sync (server tab renders it).
@@ -125,13 +135,27 @@ export default function TestResultsComponents({
 	const router = useRouter();
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
-	const selectedOrg = participantOrgs.find((org) => org.id === selectedOrgId) ?? null;
+	const selectedGroup = submittedGroups.find((group) => group.testers.some((t) => t.userId === selectedTesterId)) ?? null;
+	const selectedTester = selectedGroup?.testers.find((t) => t.userId === selectedTesterId) ?? null;
 
-	function pickParticipant(id: string | null) {
-		if (!id || id === selectedOrgId) return;
+	function pushParams(update: (params: URLSearchParams) => void) {
 		const params = new URLSearchParams(searchParams.toString());
-		params.set("org", id);
+		update(params);
 		router.push(`${pathname}?${params.toString()}`);
+	}
+	function pickView(next: string | number | null) {
+		if (next !== "overall" && next !== "submitted") return;
+		if (next === view) return;
+		pushParams((params) => params.set("view", next));
+	}
+	function pickTester(userId: string | null) {
+		const group = submittedGroups.find((g) => g.testers.some((t) => t.userId === userId));
+		if (!userId || !group || userId === selectedTesterId) return;
+		pushParams((params) => {
+			params.set("view", "submitted");
+			params.set("org", group.organization.id);
+			params.set("tester", userId);
+		});
 	}
 	const [testResultRows, setTestResultRows] = useState<testResultRow[]>(results);
 	const [onlyFailedLastRound, setOnlyFailedLastRound] = useState(false);
@@ -157,7 +181,7 @@ export default function TestResultsComponents({
 
 	return (
 		<div className="flex-1 min-w-0 p-4 flex flex-col gap-4">
-			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4">
+			<div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:gap-4 border bg-gray-100/50 p-4 rounded-md">
 				<div className="flex flex-row gap-3 items-center">
 					<TestCasesSidebarTrigger />
 					<FolderClock size={30} className="hidden lg:block" />
@@ -167,14 +191,71 @@ export default function TestResultsComponents({
 					</div>
 				</div>
 				{headerActions}
-
 			</div>
-			{/* {submission} */}
-			{/* {participation} */}
-			<div className="flex flex-col gap-1 font-semibold">
-				<div className="">
-					<p className="text-xs">Overview</p>
+			{syncBanner}
+			<div className="flex flex-col gap-4 font-semibold">
+				<div className="flex flex-row justify-between items-center gap-2">
+					<Tabs value={view} onValueChange={pickView}>
+						<TabsList>
+							<TabsTrigger value="overall" className="text-xs">
+								<ChartNoAxesCombined />
+								Overall Iteration Results
+							</TabsTrigger>
+							<TabsTrigger value="submitted" className="text-xs">
+								<Send />
+								Submitted Test Results
+							</TabsTrigger>
+						</TabsList>
+					</Tabs>
+					{view === "submitted" && (
+						<Select value={selectedTesterId} onValueChange={pickTester} disabled={submittedGroups.length === 0}>
+							<SelectTrigger className="w-full min-w-0 md:w-64">
+								<SelectValue>
+									<p className="text-xs font-medium">
+										{selectedTester && selectedGroup ? `${selectedTester.fullName ?? "Unnamed tester"}` : "No submitted results"}
+									</p>
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent alignItemWithTrigger={false}>
+								{submittedGroups.map((group) => (
+									<SelectGroup key={group.organization.id}>
+										<SelectLabel>{group.organization.name}</SelectLabel>
+										{group.testers.map((tester) => (
+											<SelectItem key={tester.userId} value={tester.userId}>
+												<div className="flex flex-col">
+													<p className="text-xs">{tester.fullName ?? "Unnamed tester"}</p>
+													<p className="text-xs text-muted-foreground">{tester.roleName}</p>
+												</div>
+											</SelectItem>
+										))}
+									</SelectGroup>
+								))}
+							</SelectContent>
+						</Select>
+					)}
 				</div>
+				{
+					view === "submitted" && selectedTester && (
+						<div className="flex flex-row items-center justify-between gap-4">
+							<div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+								<p>Showing results submitted by:</p>
+								<div className="flex flex-row items-center gap-2">
+									<div className={cn("size-10 shrink-0 rounded-full flex items-center justify-center", (BADGE_VARIANTS[selectedGroup?.organization.type as keyof typeof BADGE_VARIANTS] ?? BADGE_VARIANTS.fallback).UserClassName)}>
+										<p className="text-sm font-bold text-white">{initials(selectedTester.fullName ?? "?")}</p>
+									</div>
+									<div className="flex flex-col">
+										<p className="text-xs font-medium text-foreground">{selectedTester.fullName ?? "Unnamed tester"}</p>
+										<p className="text-xs text-muted-foreground">{selectedGroup?.organization.name} - {selectedTester.roleName}</p>
+									</div>
+								</div>
+							</div>
+							<div className="flex flex-col items-end gap-1.5 text-xs text-muted-foreground">
+								<p>Submitted on</p>
+								<p className="text-xs font-medium text-foreground" title={formatTimestamp(selectedTester.submittedAt)}>{humanizeTimestamp(selectedTester.submittedAt)}</p>
+							</div>
+						</div>
+					)
+				}
 				<div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
 					<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
 					<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
@@ -182,75 +263,28 @@ export default function TestResultsComponents({
 					<SummaryCard label="Blocked Test Cases" count={blocked} icon={<Ban className="text-gray-800" />} />
 					{/* <SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} /> */}
 				</div>
-			</div>
-			{/* {(hasPreviousRound || hasMidRoundChanges) && (
-					<div className="flex flex-row items-center gap-2">
-						{hasPreviousRound && (
-							<Button
-								size="sm"
-								variant={onlyFailedLastRound ? "default" : "outline"}
-								onClick={() => setOnlyFailedLastRound((current) => !current)}
-							>
-								<History className="h-3.5 w-3.5" />
-								<p className="text-xs">Failed / Blocked last round</p>
-							</Button>
-						)}
-						{hasMidRoundChanges && (
-							<Button
-								size="sm"
-								variant={onlyChangedMidRound ? "default" : "outline"}
-								onClick={() => setOnlyChangedMidRound((current) => !current)}
-							>
-								<RefreshCw className="h-3.5 w-3.5" />
-								<p className="text-xs">Changed mid-round</p>
-							</Button>
-						)}
-					</div>
-				)} */}
-			{syncBanner}
-			<div className="min-h-0 flex-1 flex flex-col gap-2">
-				<div className="flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:justify-between">
-					{/* <p className="text-xs">{`${selectedOrg?.name ?? "Organization"}'s Test Results`}</p> */}
-					<Select value={selectedOrgId} onValueChange={pickParticipant} disabled={participantOrgs.length < 2}>
-						<SelectTrigger className="w-full min-w-0 md:w-50">
-							<SelectValue>
-								<p className="text-xs font-medium">{selectedOrg ? `${selectedOrg.name} - ${ORG_TYPE_LABELS[selectedOrg.type]}` : "No participants"}</p>
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent alignItemWithTrigger={false}>
-							{participantOrgs.map((org) => (
-								<SelectItem key={org.id} value={org.id}>
-									<div className="flex flex-col">
-										<p className="text-xs">{org.name}</p>
-										<p className="text-xs text-muted-foreground">{ORG_TYPE_LABELS[org.type]}</p>
-									</div>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-					{participationStatus && <ParticipationBadge status={participationStatus} />}
-				</div>
 				<DataTable
-					columns={testResultColumns}
-					data={visibleRows}
-					// Removed from the suite: its results stay in this round, but there's nothing left to execute.
-					isRowDisabled={(row) => row.pendingChange === "removed" || isRemovedFromRound(row)}
-					// Result writes don't revalidate and the root layout doesn't re-render on
-					// navigation, so refresh once on close to keep the sidebar's "N left" current.
-					onDetailClose={() => router.refresh()}
-					renderRowDetail={(row) => (
-						<TestCaseSheet
-							testCase={row}
-							// A row is a roll-up of several testers' copies: only its own tester records on it.
-							mode={isRunning && !isLocked && !!currentUser && row.testerId === currentUser.id ? "execute" : "review"}
-							canRemark={canRemark}
-							onChangeTestCase={(updated) => {
-								setTestResultRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
-							}}
-						/>
-					)}
-				/>
+						columns={view === "overall" ? testResultOverallColumns : testResultColumns}
+						data={visibleRows}
+						// Removed from the suite: its results stay in this round, but there's nothing left to execute.
+						isRowDisabled={(row) => row.pendingChange === "removed" || isRemovedFromRound(row)}
+						// Result writes don't revalidate and the root layout doesn't re-render on
+						// navigation, so refresh once on close to keep the sidebar's "N left" current.
+						onDetailClose={() => router.refresh()}
+						renderRowDetail={(row) => (
+							<TestCaseSheet
+								testCase={row}
+								// A row is a roll-up of several testers' copies: only its own tester records on it.
+								mode={isRunning && !isLocked && !!currentUser && row.testerId === currentUser.id ? "execute" : "review"}
+								canRemark={canRemark}
+								onChangeTestCase={(updated) => {
+									setTestResultRows((current) => current.map((r) => r.id === updated.id ? { ...r, ...updated } : r));
+								}}
+							/>
+						)}
+					/>
 			</div>
+
 		</div>
 	)
 }
