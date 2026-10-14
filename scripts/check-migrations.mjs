@@ -5,7 +5,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const dir = join(resolve(import.meta.dirname, ".."), "supabase", "migrations");
-const LEGACY_SEEDS = new Set(["0003_organizations.sql", "0010_lockdown_grants.sql"]);
+// The 0000 baseline files only match because handle_new_user() inserts into profiles (a trigger function, not seed data).
+const LEGACY_SEEDS = new Set(["0000_baseline_core.sql", "0000b_baseline_iterations.sql", "0003_organizations.sql", "0010_lockdown_grants.sql"]);
 const SEED_PATTERNS = [/insert\s+into\s+(public\.)?profiles/i, /insert\s+into\s+auth\.users/i, /@(example|acme|whitecloak)\./i];
 
 const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
