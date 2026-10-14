@@ -83,12 +83,17 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 		return map;
 	}, [allItems]);
 	const containerRef = useRef<HTMLDivElement>(null);
-	const cardRefs = useRef(new Map<string, HTMLElement>());
+	// A stable Map (not a ref) so card elements can be tracked from callback refs without reading `.current` in render.
+	const [cardRefs] = useState(() => new Map<string, HTMLElement>());
 	const rangesRef = useRef(new Map<string, Range | null>());
 	const [tick, setTick] = useState(0);
 	const [activeId, setActiveId] = useState<string | null>(null);
-	const [selection, setSelection] = useState<selection | null>(null);
-	const [draft, setDraft] = useState<draft | null>(null);
+	const [selectionState, setSelection] = useState<selection | null>(null);
+	const [draftState, setDraft] = useState<draft | null>(null);
+	// Leaving comment mode drops the selection button and any unsent comment.
+	const selection = commenting && canComment ? selectionState : null;
+	const draft = commenting ? draftState : null;
+	const [anchoredIds, setAnchoredIds] = useState<Set<string>>(() => new Set());
 	const [text, setText] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
@@ -110,7 +115,11 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 			map.set(c.id, sheet ? rangeFromAnchor(sheet, c) : null);
 		}
 		rangesRef.current = map;
+		// Measuring the DOM, then re-rendering with the result, is what this effect is for.
+		/* eslint-disable react-hooks/set-state-in-effect */
+		setAnchoredIds(new Set([...map].filter(([, r]) => r).map(([id]) => id)));
 		setTick((n) => n + 1);
+		/* eslint-enable react-hooks/set-state-in-effect */
 	}, [items, sheetRefs]);
 
 	useEffect(() => {
@@ -131,7 +140,7 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 
 	// The comment button follows the selection in comment mode.
 	useEffect(() => {
-		if (!commenting || !canComment) { setSelection(null); return; }
+		if (!commenting || !canComment) return;
 		const onChange = () => {
 			const sel = document.getSelection();
 			const container = containerRef.current;
@@ -145,11 +154,6 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 		document.addEventListener("selectionchange", onChange);
 		return () => document.removeEventListener("selectionchange", onChange);
 	}, [commenting, canComment, sheetOf]);
-
-	// Leaving comment mode drops an unsent comment.
-	useEffect(() => {
-		if (!commenting) { setDraft(null); setText(""); setError(null); }
-	}, [commenting]);
 
 	// Clicking highlighted text opens its comment.
 	useEffect(() => {
@@ -184,7 +188,7 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 		for (const entry of entries) {
 			const top = Math.max(entry.natural === NO_ANCHOR ? 0 : entry.natural, bottom);
 			next[entry.id] = top;
-			bottom = top + (cardRefs.current.get(entry.id)?.offsetHeight ?? 0) + GAP;
+			bottom = top + (cardRefs.get(entry.id)?.offsetHeight ?? 0) + GAP;
 		}
 		setTops((current) => {
 			const keys = Object.keys(next);
@@ -248,8 +252,8 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 	};
 
 	const register = (id: string) => (el: HTMLElement | null) => {
-		if (el) cardRefs.current.set(id, el);
-		else cardRefs.current.delete(id);
+		if (el) cardRefs.set(id, el);
+		else cardRefs.delete(id);
 	};
 
 	return (
@@ -283,7 +287,7 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 
 			{items.map((c) => {
 				const active = activeId === c.id;
-				const anchored = !!rangesRef.current.get(c.id);
+				const anchored = anchoredIds.has(c.id);
 				const isEditing = editing?.id === c.id;
 				return (
 					<div

@@ -17,7 +17,7 @@ export default async function SetPasswordPage({ searchParams }: { searchParams: 
 				</div>
 				<div>
 					<p className="font-bold text-xl sm:text-2xl">Welcome Tester</p>
-					<p className="text-xs text-muted-foreground">You'll use it to sign in to the UAT Portal from now on.</p>
+					<p className="text-xs text-muted-foreground">You&apos;ll use it to sign in to the UAT Portal from now on.</p>
 				</div>
 				<div className="flex flex-col gap-2">
 					<div className="">
