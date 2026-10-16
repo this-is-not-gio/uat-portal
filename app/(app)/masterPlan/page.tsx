@@ -1,6 +1,6 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { DailyTargetTable } from "./daily-target-table";
-import { BadgeCheck, Bug, Building2, CalendarCheck, FileSignature, ListChecks, Headset, Timer, Users, Video, Check, CalendarDays, ClipboardList, GraduationCap, Laptop, MessageSquareWarning, PlayCircle, Target, BugOff } from "lucide-react";
+import { PlanNav } from "./plan-nav";
+import { ChevronDown, BadgeCheck, Bug, Building2, CalendarCheck, FileSignature, ListChecks, Headset, Timer, Users, Video, Check, CalendarDays, ClipboardList, GraduationCap, Laptop, MessageSquareWarning, PlayCircle, Target, BugOff } from "lucide-react";
 
 function Mono({ children }: { children: string }) {
 	return children
@@ -122,12 +122,13 @@ const SCHEDULE = [
 
 export default function MasterPlanPage() {
 	return (
-		<ScrollArea className="min-h-0 flex-1">
-			<div className="flex flex-col gap-30 py-10 sm:gap-60 sm:py-16 sm:pb-50">
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
-					<section className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-muted/60 via-background to-muted/30 px-6 py-10 sm:px-10 sm:py-14">
+		<div className="min-h-0 flex-1 snap-y snap-mandatory overflow-y-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+			<div className="flex flex-col">
+				<PlanNav />
+				<section id="hero" className="relative mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+					<section className="relative overflow-hidden flex flex-row items-center gap-6 justify-between">
 						<div className="flex max-w-2xl flex-col gap-3">
-							<BugOff strokeWidth={1.5} className="size-70 absolute right-6 top-6" aria-hidden />
+
 							<p className="text-xs text-muted-foreground">
 								INSURANCE COMMISSION LICENSING SYSTEM · MILESTONE 4 · PHASE 6: TESTING & HARDENING
 							</p>
@@ -138,9 +139,19 @@ export default function MasterPlanPage() {
 								Onsite Knowledge Transfer, asynchronous testing
 							</p>
 						</div>
+						<div className="">
+							<BugOff strokeWidth={1} className="size-60" />
+						</div>
 					</section>
-				</div>
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+					<a
+						href="#what-is-uat"
+						aria-label="Scroll to next section"
+						className="absolute bottom-6 left-1/2 flex size-10 -translate-x-1/2 animate-bounce items-center justify-center rounded-full border bg-background transition-colors hover:bg-muted"
+					>
+						<ChevronDown className="size-5" aria-hidden />
+					</a>
+				</section>
+				<section id="what-is-uat" className="mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
 					<div className="pb-8 mb-10 border-b flex flex-col gap-4">
 						<p className="text-sm text-black uppercase">
 							What is User Acceptance Testing
@@ -174,8 +185,8 @@ export default function MasterPlanPage() {
 						</p>
 					</div>
 
-				</div>
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+				</section>
+				<section id="how-it-runs" className="mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
 					<div className="pb-8 mb-10 border-b flex flex-col gap-4">
 						<p className="text-sm text-black uppercase">
 							How User Acceptance Testing run
@@ -204,8 +215,8 @@ export default function MasterPlanPage() {
 							</div>
 						))}
 					</dl>
-				</div>
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+				</section>
+				<section id="scope" className="mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
 					<div className="pb-8 mb-10 border-b flex flex-col gap-4">
 						<p className="text-sm text-black uppercase">
 							User Acceptance Testing Scope
@@ -243,8 +254,8 @@ export default function MasterPlanPage() {
 							Test cases run across three weeks, split into weekly batches so testers can focus on one area of ICLS at a time. Week 1 covers Company Licensing, Week 2 covers Renewal and Agent, and Week 3 wraps up Agency, Admin and other workflows.
 						</p>
 					</div>
-				</div>
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+				</section>
+				<section id="weekly-cycle" className="mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
 					<div className="pb-8 mb-10 border-b flex flex-col gap-4">
 						<p className="text-sm text-black uppercase">
 							User Acceptance Testing Phases
@@ -281,8 +292,8 @@ export default function MasterPlanPage() {
 							Defects logged on Tuesday and Wednesday are fixed and deployed the same evening, so retesting happens throughout the week, not just on Friday.
 						</p>
 					</div>
-				</div>
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+				</section>
+				<section id="support-desk" className="mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
 					<div className="pb-8 mb-10 border-b flex flex-col gap-4">
 						<p className="text-sm text-black uppercase">
 							Support Desk
@@ -306,8 +317,8 @@ export default function MasterPlanPage() {
 						</p>
 					</div>
 
-				</div>
-				<div className="mx-4 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
+				</section>
+				<section id="targets" className="mx-4 flex snap-center min-h-[calc(100svh-var(--header-height))] flex-col justify-center py-12 sm:mx-8 lg:mx-16 xl:mx-40 2xl:mx-70">
 					<div className="pb-8 mb-10 border-b flex flex-col gap-4">
 						<p className="text-sm text-black uppercase">
 							Targets
@@ -338,8 +349,8 @@ export default function MasterPlanPage() {
 						))}
 					</dl>
 
-				</div>
+				</section>
 			</div>
-		</ScrollArea>
+		</div>
 	);
 }
