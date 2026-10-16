@@ -19,7 +19,7 @@ export function SignOffNotice({ frozen, draft = false }: { frozen: FrozenSignOff
 	if (frozen.revokedAt) {
 		return (
 			<Strip tone="gray" icon={<Ban />} title={`Withdrawn on ${formatTimestamp(frozen.revokedAt)}`}>
-				A new test iteration started after this sign-off. It is kept for the record.
+				A new test iteration started after this report. It is kept for the record.
 			</Strip>
 		);
 	}

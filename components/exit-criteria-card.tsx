@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { updateExitCriteria } from "@/lib/supabase/authoring-actions";
 import type { ExitCriteria } from "@/lib/supabase/sign-off-report";
 
-// Overview "Exit criteria": the bar the sign-off report's verdict is measured against.
+// Overview "Exit criteria": the bar the report's verdict is measured against.
 // Editable by authors while the suite is draft/ready; the DB trigger locks it after that.
 export function ExitCriteriaCard({ suiteId, criteria, canEdit, locked }: { suiteId: string; criteria: ExitCriteria; canEdit: boolean; locked: boolean }) {
 	const [editing, setEditing] = useState(false);
@@ -53,7 +53,7 @@ export function ExitCriteriaCard({ suiteId, criteria, canEdit, locked }: { suite
 						<p className="text-xs">Edit</p>
 					</Button>
 				) : (
-					<p className="text-xs text-muted-foreground">The sign-off report&apos;s verdict is measured against these.</p>
+					<p className="text-xs text-muted-foreground">The report&apos;s verdict is measured against these.</p>
 				)}
 			</div>
 			<div className="border rounded-md p-4">

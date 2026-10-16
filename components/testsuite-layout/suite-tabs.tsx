@@ -52,7 +52,7 @@ export default function SuiteTabs({ suiteSlug, showTestResults, showSignOff }: S
 				{showSignOff && (
 					<TabsTrigger value="sign-off" className="w-full hidden lg:inline-flex">
 						<ClipboardCheck data-icon="inline-start" />
-						Sign-off
+						Reports
 					</TabsTrigger>
 				)}
 				{(showTestResults || showSignOff) && (
@@ -72,7 +72,7 @@ export default function SuiteTabs({ suiteSlug, showTestResults, showSignOff }: S
 							{showSignOff && (
 								<DropdownMenuItem className="lg:hidden" onClick={() => goTo("sign-off")}>
 									<ClipboardCheck />
-									Sign-off
+									Reports
 									{value === "sign-off" && <Check className="ml-auto" />}
 								</DropdownMenuItem>
 							)}

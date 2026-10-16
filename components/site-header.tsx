@@ -25,7 +25,7 @@ const TAB_LABELS: Record<string, string> = {
 	overview: "Overview",
 	"test-cases": "Test Cases",
 	"test-results": "Test Results",
-	"sign-off": "Sign-off",
+	"sign-off": "Report",
 };
 
 function labelForSegment(segment: string, testingSuites: SidebarSuite[]) {

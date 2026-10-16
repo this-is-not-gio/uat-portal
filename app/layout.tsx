@@ -25,7 +25,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
 	title: "UAT Portal",
-	description: "Plan, run and sign off user acceptance testing rounds across development, client and external teams.",
+	description: "Plan, run and acknowledge user acceptance testing rounds across development, client and external teams.",
 };
 
 

@@ -26,7 +26,7 @@ type suiteFields = { id: string; name: string; code: string | null; slug: string
 
 // Create a testing suite (starts as Draft) or edit an existing one. Pass a
 // trigger, or open/onOpenChange when it's opened from a menu (SuiteHeaderMenu).
-// Both also set the exit criteria the sign-off report's verdict is measured
+// Both also set the exit criteria the report's verdict is measured
 // against (new suites start from the defaults); they lock once the suite is past
 // Ready (the lock_exit_criteria trigger).
 export default function SuiteDialog({ suite, exitCriteria, trigger, open: controlledOpen, onOpenChange }: { suite?: suiteFields; exitCriteria?: ExitCriteria; trigger?: React.ReactElement; open?: boolean; onOpenChange?: (open: boolean) => void }) {
@@ -116,7 +116,7 @@ export default function SuiteDialog({ suite, exitCriteria, trigger, open: contro
 									Locked once testing starts
 								</p>
 							) : (
-								<p className="text-xs text-muted-foreground">The sign-off report&apos;s verdict is measured against these.</p>
+								<p className="text-xs text-muted-foreground">The report&apos;s verdict is measured against these.</p>
 							)}
 						</div>
 						<ExitCriteriaFields value={criteria} onChange={setCriteria} disabled={isPending || criteriaLocked} />

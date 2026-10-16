@@ -2,7 +2,7 @@ import { formatTimestamp } from "@/lib/utils";
 import type { FrozenSignOffReport } from "@/lib/supabase/sign-off-report";
 import { SignOffStatusBadge, type signOffStatus } from "./sign-off-status-badge";
 
-// Sign-off details for the document's bottom-right panel: status, round, and who issued, acknowledged,
+// Report details for the document's bottom-right panel: status, round, and who issued, acknowledged,
 // rejected or withdrew it. Rows the sign-off hasn't reached yet are left out.
 export function SignOffInfo({ status, frozen, isDraft }: { status: signOffStatus; frozen: FrozenSignOffReport | null; isDraft: boolean }) {
 	return (

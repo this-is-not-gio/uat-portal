@@ -9,7 +9,7 @@ import { getTestSuiteBySlug } from "@/lib/supabase/test-suite";
 // Also the default file name of the PDF saved from Download PDF.
 export async function generateMetadata({ params }: PageProps<"/testsuite/[testSuiteSlug]/sign-off">): Promise<Metadata> {
 	const testSuite = await getTestSuiteBySlug((await params).testSuiteSlug);
-	return { title: testSuite ? `${testSuite.name} – Sign-off report` : "Sign-off report" };
+	return { title: testSuite ? `${testSuite.name} – Acknowledgement Report` : "Acknowledgement Report" };
 }
 
 // ?signOff= picks one of the suite's sign-offs; without it, the current (not withdrawn) one opens.
@@ -20,7 +20,7 @@ export default async function TestSuiteSignOffPage({ params, searchParams }: Pag
 	if (!testSuite) notFound();
 
 	// Same rule as the layout's Sign-off tab: staff only, once a sign-off with a frozen report exists
-	// (withdrawn ones included), or the vendor's draft while the suite is For Sign-off. Anyone else lands on Overview.
+	// (withdrawn ones included), or the vendor's draft while the suite is For Acknowledgement. Anyone else lands on Overview.
 	const canView = can(currentUser, "view_all_results") && testSuite.status !== "draft" && testSuite.status !== "ready";
 	const [signOffs, draft] = await Promise.all([
 		canView ? getSuiteSignOffs(testSuite.id).then((all) => all.filter((s) => s.hasReport)) : [],

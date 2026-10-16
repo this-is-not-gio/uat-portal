@@ -341,7 +341,7 @@ function ResultsSection({ report }: { report: SignOffReport }) {
 		>
 			<div className="flex flex-col gap-4">
 				{totals.total === 0 ? (
-					<p className="text-sm text-muted-foreground">No test cases were in scope for this sign-off.</p>
+					<p className="text-sm text-muted-foreground">No test cases were in scope for this report.</p>
 				) : (
 					<div className="flex flex-col gap-2">
 						<p className="text-sm font-semibold">
@@ -409,7 +409,7 @@ function ResultsDistribution({ report }: { report: SignOffReport }) {
 			{!cases ? (
 				<p className="text-sm text-muted-foreground">Per-case results aren&apos;t available for reports issued before this view was added.</p>
 			) : cases.length === 0 ? (
-				<p className="text-sm text-muted-foreground">No test cases were in scope for this sign-off.</p>
+				<p className="text-sm text-muted-foreground">No test cases were in scope for this report.</p>
 			) : (
 				<CaseResultsTable cases={cases} orgs={orgs} />
 			)}
@@ -720,7 +720,7 @@ function ObservationsSection({ report }: { report: SignOffReport }) {
 	return (
 		<Section
 			title="Tester observations"
-			description="Written by the Development Team when issuing the sign-off. Each observation cites the tester remarks it is based on."
+			description="Written by the Development Team when issuing the report. Each observation cites the tester remarks it is based on."
 			className="print:break-before-page"
 		>
 			<ol className="flex flex-col gap-6">

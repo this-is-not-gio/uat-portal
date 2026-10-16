@@ -167,7 +167,7 @@ export function StopIterationButton({ iteration }: { iteration: testIteration })
 				<DialogHeader className="px-2 pt-2">
 					<DialogTitle>Stop {iteration.name}?</DialogTitle>
 					<DialogDescription className="text-xs">
-						Ends the round early. Recorded results are kept as read-only history, but a stopped round can&apos;t be used to sign off the suite.
+						Ends the round early. Recorded results are kept as read-only history, but a stopped round can&apos;t be used to create a report for the suite.
 					</DialogDescription>
 				</DialogHeader>
 				{error && <p className="text-xs text-destructive">{error}</p>}

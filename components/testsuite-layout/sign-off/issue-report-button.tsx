@@ -16,7 +16,7 @@ import {
 import { issueSignOff } from "@/lib/supabase/iteration-actions";
 import type { signOffDraft } from "@/lib/supabase/overview";
 
-// For Sign-off → Sign-off Issued (vendor): publishes the draft to the client with its saved note
+// For Acknowledgement → Report Issued (vendor): publishes the draft to the client with its saved note
 // observations and report sections. issueSignOff rebuilds and freezes the report on the server.
 export function IssueReportButton({ suiteId, draft }: { suiteId: string; draft: signOffDraft }) {
 	const [open, setOpen] = useState(false);
@@ -45,7 +45,7 @@ export function IssueReportButton({ suiteId, draft }: { suiteId: string; draft: 
 			} />
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Issue this sign-off report?</DialogTitle>
+					<DialogTitle>Issue this report?</DialogTitle>
 					<DialogDescription className="text-xs">
 						The report is frozen as it is now and sent to the client, who can acknowledge or reject it. It can&apos;t be edited after issuing.
 					</DialogDescription>

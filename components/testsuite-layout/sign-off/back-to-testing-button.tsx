@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { discardSignOffDraft } from "@/lib/supabase/iteration-actions";
 
-// For Sign-off → In Testing (vendor): drops the sign-off draft so rounds and authoring reopen.
+// For Acknowledgement → In Testing (vendor): drops the sign-off draft so rounds and authoring reopen.
 export default function BackToTestingButton({ signOffId }: { signOffId: string }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export default function BackToTestingButton({ signOffId }: { signOffId: string }
 				<DialogHeader>
 					<DialogTitle>Back to testing?</DialogTitle>
 					<DialogDescription className="text-xs">
-						The sign-off draft and its note are deleted and the suite returns to In Testing. You can create a new draft later.
+						The report draft and its note are deleted and the suite returns to In Testing. You can create a new draft later.
 					</DialogDescription>
 				</DialogHeader>
 				{error && <p className="text-xs text-destructive">{error}</p>}
