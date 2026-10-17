@@ -4,16 +4,18 @@ import { statusMapping } from "@/components/testsuite-layout/suite-status-badge"
 import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActiveRounds, getRecentResults, getRoundsAwaitingSignOff, getRunningRoundStarts, getSignOffsAwaitingAck } from "@/lib/supabase/test-iterations";
-import { BellRing, BookAlert, CalendarClock, CircleAlert, CircleCheck, ClipboardList, Clock, FileSignature, FlaskConical, History, Hourglass, Send, SquarePen, Stamp } from "lucide-react";
+import { BellRing, BookAlert, CalendarClock, CalendarRange, CircleAlert, CircleCheck, ClipboardList, Clock, FileSignature, FlaskConical, History, Hourglass, Send, SquarePen, Stamp } from "lucide-react";
 import Link from "next/link";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
 import { Badge } from "@/components/ui/badge";
 import ActiveIterationTable from "@/components/dashboard/active-iteration-table";
-import YourTestingTable from "@/components/dashboard/your-testing-table";
+import ActionItemsTable, { type ActionItemRow } from "@/components/dashboard/action-items-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DismissibleNotice from "@/components/dashboard/dismissible-notice";
-import { DashboardPanel, DashboardRow } from "@/components/dashboard/dashboard-panel";
+import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
+import { DashboardCard } from "@/components/dashboard/dashboard-card";
+import { TestingSchedule } from "@/components/dashboard/testing-schedule";
 
 
 // Local copy of the TestStatusMapping colours: that map lives in a "use client" file, which a Server Component can't read values from.
@@ -52,7 +54,23 @@ function UrgentPulse({ tone }: { tone: string }) {
 	);
 }
 
-export default async function DashboardPage() {
+// Dev-only sample rows (open /dashboard?mock=1) to preview every action type without touching the database. Remove once the design is settled.
+const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+const MOCK_ACTION_ROWS: ActionItemRow[] = [
+	{ id: "mock-ack-1", action: "review", href: "#", suiteCode: "UAT-101", suiteName: "Licensing Renewal Portal", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-ack-2", action: "review", href: "#", suiteCode: "UAT-087", suiteName: "Permit Applications", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-returned", action: "review_returned", href: "#", suiteCode: "UAT-059", suiteName: "Billing Statements", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-followup", action: "follow_up", href: "#", suiteCode: "UAT-081", suiteName: "Document Uploads", roundName: "Round 2: Regression", timeline: { start: daysFromNow(-15), end: daysFromNow(-2) }, overdue: false, remaining: 0 },
+	{ id: "mock-followup-review", action: "follow_up_review", href: "#", suiteCode: "UAT-045", suiteName: "Audit Trail", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-submit-1", action: "submit", href: "#", suiteCode: "UAT-094", suiteName: "Payments Gateway", roundName: "Round 2: Regression", timeline: { start: daysFromNow(-9), end: daysFromNow(3) }, overdue: false, remaining: 0 },
+	{ id: "mock-test-overdue", action: "test", href: "#", suiteCode: "UAT-072", suiteName: "Citizen Registry", roundName: "Round 1: Initial pass", timeline: { start: daysFromNow(-21), end: daysFromNow(-4) }, overdue: true, remaining: 14 },
+	{ id: "mock-submit-overdue", action: "submit", href: "#", suiteCode: "UAT-066", suiteName: "Reports Dashboard", roundName: "Round 3: Fixes", timeline: { start: daysFromNow(-12), end: daysFromNow(-1) }, overdue: true, remaining: 0 },
+	{ id: "mock-test-1", action: "test", href: "#", suiteCode: "UAT-110", suiteName: "Notifications", roundName: "Round 1: Initial pass", timeline: { start: daysFromNow(-3), end: daysFromNow(11) }, overdue: false, remaining: 27 },
+	{ id: "mock-test-2", action: "test", href: "#", suiteCode: null, suiteName: "Profile Settings", roundName: "Round 2: Regression", timeline: { start: daysFromNow(-1), end: null }, overdue: false, remaining: 1 },
+];
+
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ mock?: string }> }) {
+	const useMock = process.env.NODE_ENV !== "production" && (await searchParams).mock === "1";
 	const user = await requireUser();
 	// Same cached call as the sidebar in the layout, so no extra round trip.
 	const suites = await getSidebarSuites(user);
@@ -107,17 +125,48 @@ export default async function DashboardPage() {
 	const submitted = myRunning.filter((suite) => suite.mine.submittedAt);
 	const upcoming = suites.filter((suite) => suite.openRound?.status === "not_started" && suite.mine.inOpenRound);
 	const roundStarts = user.role === "Admin" || toTest.length === 0 ? new Map<string, string>() : await getRunningRoundStarts();
-	const yourTestingRows = toTest.map(({ id, slug, code, title, openRound, mine }) => ({
+	const liveTestingRows: ActionItemRow[] = toTest.map(({ id, slug, code, title, openRound, mine }) => ({
 		id,
-		suiteSlug: slug,
+		// Nothing left to test but not handed in yet: the action becomes submitting.
+		action: mine.remaining === 0 ? "submit" : "test",
+		href: `/testsuite/${slug}/test-cases/all`,
 		suiteCode: code,
 		suiteName: title,
-		roundNumber: openRound!.number,
 		roundName: openRound!.name,
 		timeline: { start: roundStarts.get(slug) ?? null, end: openRound!.plannedEnd },
 		overdue: openRound!.plannedEnd != null && openRound!.plannedEnd < today,
 		remaining: mine.remaining,
 	}));
+	// Issued reports aren't tied to a running round, so they carry no timeline.
+	const liveAcknowledgeRows: ActionItemRow[] = awaitingMySignOff.map(({ id, slug, code, title }) => ({
+		id: `ack-${id}`,
+		action: "review",
+		href: `/testsuite/${slug}/sign-off`,
+		suiteCode: code,
+		suiteName: title,
+		roundName: null,
+		timeline: { start: null, end: null },
+		overdue: false,
+		remaining: 0,
+	}));
+	// A rejected report is back with the vendor; the client only sees it so the outcome isn't lost.
+	const liveReturnedRows: ActionItemRow[] = canAcknowledge
+		? suites.filter((suite) => suite.status === "sign_off_rejected").map(({ id, slug, code, title }) => ({
+			id: `returned-${id}`,
+			action: "review_returned",
+			href: `/testsuite/${slug}/sign-off`,
+			suiteCode: code,
+			suiteName: title,
+			roundName: null,
+			timeline: { start: null, end: null },
+			overdue: false,
+			remaining: 0,
+		}))
+		: [];
+	const yourTestingRows = useMock ? MOCK_ACTION_ROWS.filter((row) => row.action === "test" || row.action === "submit") : liveTestingRows;
+	const acknowledgeRows = useMock ? MOCK_ACTION_ROWS.filter((row) => row.action !== "test" && row.action !== "submit") : [...liveAcknowledgeRows, ...liveReturnedRows];
+	// Reports first: they block the vendor's sign-off.
+	const actionItemRows = [...acknowledgeRows, ...yourTestingRows];
 	const overdueCount = yourTestingRows.filter((row) => row.overdue).length;
 	const casesLeft = yourTestingRows.reduce((sum, row) => sum + row.remaining, 0);
 	// Notice card: what the tester has to do, most urgent first. Each item jumps to its section.
@@ -129,7 +178,7 @@ export default async function DashboardPage() {
 	// One sentence for the notice: "5 rounds are past the planned end date, 7 sign-offs need your acknowledgement, and 42 cases left to test across 13 rounds."
 	const actionSummary = new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(testerActions.map((action) => action.text));
 	const testerStats = [
-		{ label: "Rounds to test", href: "#continue-testing", value: yourTestingRows.length, unit: yourTestingRows.length === 1 ? "round" : "rounds", Icon: ClipboardList, tagline: yourTestingRows.length === 0 ? "Inbox zero, enjoy it" : "Waiting on your org", tile: "bg-emerald-50 text-emerald-600 border-emerald-600/40" },
+		{ label: "Iteration to test", href: "#continue-testing", value: yourTestingRows.length, unit: yourTestingRows.length === 1 ? "round" : "rounds", Icon: ClipboardList, tagline: yourTestingRows.length === 0 ? "Inbox zero, enjoy it" : "Waiting on your submission", tile: "bg-emerald-50 text-emerald-600 border-emerald-600/40" },
 		{ label: "Cases left", href: "#continue-testing", value: casesLeft, unit: casesLeft === 1 ? "case" : "cases", Icon: Clock, tagline: casesLeft === 0 ? "Nothing left to break" : "Bugs won't find themselves", tile: "bg-amber-50 text-amber-600 border-amber-600/40" },
 		...(canAcknowledge ? [{ label: "Needs acknowledgement", href: "#acknowledgement", value: awaitingMySignOff.length, unit: awaitingMySignOff.length === 1 ? "acknowledgement" : "acknowledgements", Icon: Stamp, tagline: awaitingMySignOff.length === 0 ? "Nothing waiting on you" : "Read it, then answer", tile: "bg-orange-50 text-orange-600 border-orange-600/40" }] : []),
 	];
@@ -368,132 +417,69 @@ export default async function DashboardPage() {
 							)}
 						</div>
 					)}
-						{user.role !== "Admin" && (
-							<div className="flex flex-col gap-4">
-								{testerActions.length > 0 && (
-									<DismissibleNotice tone={testerActions[0].urgent ? "destructive" : "amber"}>
-										<div className="flex flex-row items-center gap-2">
-											<BellRing className="size-5 shrink-0" />
-											<div>
-												<p className="font-heading text-sm font-semibold">You have pending actions to take</p>
-												<p className="text-xs opacity-80 first-letter:uppercase">{actionSummary}.</p>
-											</div>
+					{user.role !== "Admin" && (
+						<div className="flex flex-col gap-4">
+							{testerActions.length > 0 && (
+								<DismissibleNotice tone={testerActions[0].urgent ? "destructive" : "amber"}>
+									<div className="flex flex-row items-center gap-2">
+										<BellRing className="size-5 shrink-0" />
+										<div>
+											<p className="font-heading text-sm font-semibold">You have pending actions to take</p>
+											<p className="text-xs opacity-80 first-letter:uppercase">{actionSummary}.</p>
 										</div>
-									</DismissibleNotice>
-								)}
+									</div>
+								</DismissibleNotice>
+							)}
+							<DashboardCard Icon={CalendarRange} tone="blue" title="Testing Timeline" description="Key dates for the rounds your org is part of, from kickoff to the planned end of testing">
+								<TestingSchedule />
+							</DashboardCard>
 
-								<div className={cn("grid grid-cols-1 gap-3", canAcknowledge ? "md:grid-cols-3" : "md:grid-cols-2")}>
-									{testerStats.map(({ label, href, value, unit, Icon, tagline, tile }) => (
-										<Link key={label} href={href} className="group/card block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2">
-											<Card
-												size="sm"
-												className={cn(
-													"rounded-md! border border-gray-600/40 bg-gray-50/10! ring-0! transition-[translate,box-shadow] duration-200 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-md",
-													value === 0 && "opacity-60",
-												)}
-											>
-												<CardHeader>
-													<CardDescription className="text-xs font-medium">{label}</CardDescription>
-													<CardTitle className="font-bold font-mono tabular-nums">
-														<div className="flex flex-wrap items-baseline gap-x-2 px-1 text-3xl">
-															{value}
-															<span className="text-xs font-normal text-muted-foreground">{unit}</span>
-														</div>
-													</CardTitle>
-													<CardAction>
-														<div className={cn("rounded-lg border p-2 transition-transform duration-200 motion-safe:group-hover/card:-rotate-12 motion-safe:group-hover/card:scale-110", tile)}>
-															<Icon className="size-4" />
-														</div>
-													</CardAction>
-												</CardHeader>
-												<CardContent>
-													<p className="text-xs text-muted-foreground">{tagline}</p>
-												</CardContent>
-											</Card>
-										</Link>
-									))}
-								</div>
-
-								{/* The client's own to-do comes first: a report waiting for its answer is what blocks the vendor. */}
-								{canAcknowledge && (
-									<DashboardPanel
-										id="acknowledgement"
-										Icon={Stamp}
-										tone="orange"
-										title="Needs Your Acknowledgement"
-										description="Read each report, then acknowledge or reject it."
-										action={awaitingMySignOff.length > 0 ? <Badge variant="secondary">{awaitingMySignOff.length} waiting</Badge> : undefined}
-										empty={awaitingMySignOff.length === 0 ? { title: "Nothing to acknowledge", description: "Reports issued for your review will be listed here." } : undefined}
-									>
-										{awaitingMySignOff.map((suite) => (
-											<DashboardRow
-												key={suite.id}
-												href={`/testsuite/${suite.slug}/sign-off`}
-												Icon={FileSignature}
-												iconClassName="text-orange-600"
-												title={<>{suite.code && <span className="mr-1 font-mono text-muted-foreground">{suite.code}</span>}{suite.title}</>}
-												detail="Report ready for review"
-												trailing={<Badge variant="outline" className="border-orange-600/40 bg-orange-50 text-orange-700">Review</Badge>}
-											/>
-										))}
-									</DashboardPanel>
-								)}
-
-								<DashboardPanel
-									id="continue-testing"
-									Icon={FlaskConical}
-									tone="emerald"
-									title="Continue Testing"
-									description="Open iterations that still need your results and submission"
-									action={overdueCount > 0 ? <Badge variant="destructive">{overdueCount} overdue</Badge> : undefined}
-									empty={yourTestingRows.length === 0 ? { title: "Nothing to test right now", description: "You're all caught up. New rounds will show up here once your org is invited." } : undefined}
-									scroll={false}
-								>
-									<YourTestingTable rows={yourTestingRows} />
-								</DashboardPanel>
-
-								<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-									<DashboardPanel
-										Icon={Send}
-										tone="blue"
-										title="Submitted"
-										description="Iteration still open: withdraw from the suite to change something"
-										empty={submitted.length === 0 ? { title: "No submissions yet", description: "Finish a round and hand it in. It will wait here." } : undefined}
-									>
-										{submitted.map((suite) => (
-											<DashboardRow
-												key={suite.id}
-												href={`/testsuite/${suite.slug}/test-cases/all`}
-												Icon={CircleCheck}
-												iconClassName="text-emerald-600"
-												title={suite.title}
-												detail={`Round ${suite.openRound!.number}: ${suite.openRound!.name}`}
-												trailing={formatDate(suite.mine.submittedAt!)}
-											/>
-										))}
-									</DashboardPanel>
-									<DashboardPanel
-										Icon={CalendarClock}
-										tone="violet"
-										title="Coming Up"
-										description="Planned iterations your org is invited to"
-										empty={upcoming.length === 0 ? { title: "Nothing scheduled", description: "Planned rounds you're invited to will be listed here." } : undefined}
-									>
-										{upcoming.map((suite) => (
-											<DashboardRow
-												key={suite.id}
-												href={`/testsuite/${suite.slug}/overview`}
-												Icon={CalendarClock}
-												iconClassName="text-violet-600"
-												title={suite.title}
-												detail={`Round ${suite.openRound!.number}: ${suite.openRound!.name}`}
-												trailing={suite.openRound!.plannedEnd ? `ends ${formatDate(suite.openRound!.plannedEnd)}` : "no end date"}
-											/>
-										))}
-									</DashboardPanel>
-								</div>
+							<div className={"grid grid-cols-1 gap-3 md:grid-cols-3"}>
+								{testerStats.map(({ label, href, value, unit, Icon, tagline, tile }) => (
+									<Link key={label} href={href} className="group/card block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2">
+										<Card
+											size="sm"
+											className={cn(
+												"rounded-md! border border-gray-600/40 bg-gray-50/10! ring-0! transition-[translate,box-shadow] duration-200 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-md",
+												value === 0 && "opacity-60",
+											)}
+										>
+											<CardHeader>
+												<CardDescription className="text-xs font-medium">{label}</CardDescription>
+												<CardTitle className="font-bold font-mono tabular-nums">
+													<div className="flex flex-wrap items-baseline gap-x-2 px-1 text-3xl">
+														{value}
+														<span className="text-xs font-normal text-muted-foreground">{unit}</span>
+													</div>
+												</CardTitle>
+												<CardAction>
+													<div className={cn("rounded-lg border p-2 transition-transform duration-200 motion-safe:group-hover/card:-rotate-12 motion-safe:group-hover/card:scale-110", tile)}>
+														<Icon className="size-4" />
+													</div>
+												</CardAction>
+											</CardHeader>
+											<CardContent>
+												<p className="text-xs text-muted-foreground">{tagline}</p>
+											</CardContent>
+										</Card>
+									</Link>
+								))}
 							</div>
-						)}
+
+							<DashboardPanel
+								id="continue-testing"
+								Icon={FlaskConical}
+								tone="emerald"
+								title="Your Action Items"
+								description="Everything waiting on you: record results, submit your round, or acknowledge a report"
+								action={overdueCount > 0 ? <Badge variant="destructive">{overdueCount} overdue</Badge> : undefined}
+								empty={actionItemRows.length === 0 ? { title: "No action items", description: "You're all caught up. Rounds that need your results will show up here once your org is invited." } : undefined}
+								scroll={false}
+							>
+								<ActionItemsTable rows={actionItemRows} />
+							</DashboardPanel>
+						</div>
+					)}
 				</div>
 			</div>
 		</ScrollArea>
