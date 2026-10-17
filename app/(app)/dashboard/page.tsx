@@ -13,6 +13,7 @@ import YourTestingTable from "@/components/dashboard/your-testing-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DismissibleNotice from "@/components/dashboard/dismissible-notice";
+import { DashboardPanel, DashboardRow } from "@/components/dashboard/dashboard-panel";
 
 
 // Local copy of the TestStatusMapping colours: that map lives in a "use client" file, which a Server Component can't read values from.
@@ -96,7 +97,8 @@ export default async function DashboardPage() {
 	const signOffTracker = attention.filter((item) => /^(signoff|rejected|ack)-/.test(item.key));
 
 	// The client's in-app notice: issued sign-offs waiting for its answer.
-	const awaitingMySignOff = user.role === "Internal" ? suites.filter((suite) => suite.status === "sign_off_issued") : [];
+	const canAcknowledge = user.role === "Internal";
+	const awaitingMySignOff = canAcknowledge ? suites.filter((suite) => suite.status === "sign_off_issued") : [];
 
 	// Tester view: rounds their org is in, split by whether the org has submitted yet.
 	// Planned (not_started) rounds already list their participants, but can't be tested yet.
@@ -129,7 +131,7 @@ export default async function DashboardPage() {
 	const testerStats = [
 		{ label: "Rounds to test", href: "#continue-testing", value: yourTestingRows.length, unit: yourTestingRows.length === 1 ? "round" : "rounds", Icon: ClipboardList, tagline: yourTestingRows.length === 0 ? "Inbox zero, enjoy it" : "Waiting on your org", tile: "bg-emerald-50 text-emerald-600 border-emerald-600/40" },
 		{ label: "Cases left", href: "#continue-testing", value: casesLeft, unit: casesLeft === 1 ? "case" : "cases", Icon: Clock, tagline: casesLeft === 0 ? "Nothing left to break" : "Bugs won't find themselves", tile: "bg-amber-50 text-amber-600 border-amber-600/40" },
-		{ label: "Needs acknowledgement", href: "#acknowledgement", value: awaitingMySignOff.length, unit: awaitingMySignOff.length === 1 ? "acknowledgement" : "acknowledgements", Icon: Stamp, tagline: awaitingMySignOff.length === 0 ? "Nothing waiting on you" : "Read it, then answer", tile: "bg-orange-50 text-orange-600 border-orange-600/40" },
+		...(canAcknowledge ? [{ label: "Needs acknowledgement", href: "#acknowledgement", value: awaitingMySignOff.length, unit: awaitingMySignOff.length === 1 ? "acknowledgement" : "acknowledgements", Icon: Stamp, tagline: awaitingMySignOff.length === 0 ? "Nothing waiting on you" : "Read it, then answer", tile: "bg-orange-50 text-orange-600 border-orange-600/40" }] : []),
 	];
 
 	return (
@@ -140,7 +142,9 @@ export default async function DashboardPage() {
 					<p className="text-xs text-muted-foreground">
 						{user.role === "Admin"
 							? "Your testing command center — see which rounds are moving, who's submitted, and what's ready for acknowledgement."
-							: "Your turn to put it through its paces. Pick up where you left off and make every click count."}
+							: canAcknowledge
+								? "Pick up your testing where you left off, and review the reports the development team issued for your answer."
+								: "Your turn to put it through its paces. Pick up where you left off and make every click count."}
 					</p>
 				</div>
 				<div className="px-4 pb-6 sm:px-6">
@@ -364,200 +368,132 @@ export default async function DashboardPage() {
 							)}
 						</div>
 					)}
-					{user.role !== "Admin" && (
-						<div className="flex flex-col gap-4">
-							{testerActions.length > 0 && (
-								<DismissibleNotice tone={testerActions[0].urgent ? "destructive" : "amber"}>
-									<div className="flex flex-row gap-2 items-center">
-										<BellRing className="size-5 shrink-0" />
-										<div>
-											<p className="text-sm font-heading font-semibold">You have pending actions to take</p>
-											<p className="text-xs first-letter:uppercase text-amber-600">{actionSummary}.</p>
-										</div>
-									</div>
-								</DismissibleNotice>
-							)}
-
-							<div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-								{testerStats.map(({ label, href, value, unit, Icon, tagline, tile }) => (
-									<Link key={label} href={href} className="group/card block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2">
-										<Card
-											size="sm"
-											className={cn(
-												"rounded-md! border border-gray-600/40 bg-gray-50/10! ring-0! transition-[translate,box-shadow] duration-200 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-md",
-												value === 0 && "opacity-60",
-											)}
-										>
-											<CardHeader>
-												<CardDescription className="text-xs font-medium">{label}</CardDescription>
-												<CardTitle className="font-bold font-mono tabular-nums">
-													<div className="flex flex-wrap items-baseline gap-x-2 px-1 text-3xl">
-														{value}
-														<span className="text-xs text-muted-foreground font-normal">{unit}</span>
-													</div>
-												</CardTitle>
-												<CardAction>
-													<div className={cn("rounded-lg border p-2 transition-transform duration-200 motion-safe:group-hover/card:-rotate-12 motion-safe:group-hover/card:scale-110", tile)}>
-														<Icon className="size-4" />
-													</div>
-												</CardAction>
-											</CardHeader>
-											<CardContent>
-												<p className="text-xs text-muted-foreground">{tagline}</p>
-											</CardContent>
-										</Card>
-									</Link>
-								))}
-							</div>
-							<div id="continue-testing" className="scroll-mt-4 border rounded-md bg-gray-50/10 border-gray-600/40">
-								<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-									<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-										<div className="flex flex-row gap-2 items-center">
-											<div className="bg-emerald-50 text-emerald-600 border-emerald-600/40 rounded-md p-2 border">
-												<FlaskConical className="size-5" />
-											</div>
+						{user.role !== "Admin" && (
+							<div className="flex flex-col gap-4">
+								{testerActions.length > 0 && (
+									<DismissibleNotice tone={testerActions[0].urgent ? "destructive" : "amber"}>
+										<div className="flex flex-row items-center gap-2">
+											<BellRing className="size-5 shrink-0" />
 											<div>
-												<h2 className="text-xs font-medium">Continue Testing</h2>
-												<p className="text-xs text-muted-foreground">Open iteration that needed your result and submissions</p>
+												<p className="font-heading text-sm font-semibold">You have pending actions to take</p>
+												<p className="text-xs opacity-80 first-letter:uppercase">{actionSummary}.</p>
 											</div>
 										</div>
-										{overdueCount > 0 && <Badge variant="destructive">{overdueCount} overdue</Badge>}
-									</div>
+									</DismissibleNotice>
+								)}
+
+								<div className={cn("grid grid-cols-1 gap-3", canAcknowledge ? "md:grid-cols-3" : "md:grid-cols-2")}>
+									{testerStats.map(({ label, href, value, unit, Icon, tagline, tile }) => (
+										<Link key={label} href={href} className="group/card block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2">
+											<Card
+												size="sm"
+												className={cn(
+													"rounded-md! border border-gray-600/40 bg-gray-50/10! ring-0! transition-[translate,box-shadow] duration-200 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-md",
+													value === 0 && "opacity-60",
+												)}
+											>
+												<CardHeader>
+													<CardDescription className="text-xs font-medium">{label}</CardDescription>
+													<CardTitle className="font-bold font-mono tabular-nums">
+														<div className="flex flex-wrap items-baseline gap-x-2 px-1 text-3xl">
+															{value}
+															<span className="text-xs font-normal text-muted-foreground">{unit}</span>
+														</div>
+													</CardTitle>
+													<CardAction>
+														<div className={cn("rounded-lg border p-2 transition-transform duration-200 motion-safe:group-hover/card:-rotate-12 motion-safe:group-hover/card:scale-110", tile)}>
+															<Icon className="size-4" />
+														</div>
+													</CardAction>
+												</CardHeader>
+												<CardContent>
+													<p className="text-xs text-muted-foreground">{tagline}</p>
+												</CardContent>
+											</Card>
+										</Link>
+									))}
 								</div>
-								{yourTestingRows.length === 0 ? (
-									<div className="flex flex-1 p-10">
-										<EmptyState size="sm" title="Nothing to test right now" description="You're all caught up. New rounds will show up here once your org is invited." icon={FlaskConical} />
-									</div>
-								) : (
+
+								{/* The client's own to-do comes first: a report waiting for its answer is what blocks the vendor. */}
+								{canAcknowledge && (
+									<DashboardPanel
+										id="acknowledgement"
+										Icon={Stamp}
+										tone="orange"
+										title="Needs Your Acknowledgement"
+										description="Read each report, then acknowledge or reject it."
+										action={awaitingMySignOff.length > 0 ? <Badge variant="secondary">{awaitingMySignOff.length} waiting</Badge> : undefined}
+										empty={awaitingMySignOff.length === 0 ? { title: "Nothing to acknowledge", description: "Reports issued for your review will be listed here." } : undefined}
+									>
+										{awaitingMySignOff.map((suite) => (
+											<DashboardRow
+												key={suite.id}
+												href={`/testsuite/${suite.slug}/sign-off`}
+												Icon={FileSignature}
+												iconClassName="text-orange-600"
+												title={<>{suite.code && <span className="mr-1 font-mono text-muted-foreground">{suite.code}</span>}{suite.title}</>}
+												detail="Report ready for review"
+												trailing={<Badge variant="outline" className="border-orange-600/40 bg-orange-50 text-orange-700">Review</Badge>}
+											/>
+										))}
+									</DashboardPanel>
+								)}
+
+								<DashboardPanel
+									id="continue-testing"
+									Icon={FlaskConical}
+									tone="emerald"
+									title="Continue Testing"
+									description="Open iterations that still need your results and submission"
+									action={overdueCount > 0 ? <Badge variant="destructive">{overdueCount} overdue</Badge> : undefined}
+									empty={yourTestingRows.length === 0 ? { title: "Nothing to test right now", description: "You're all caught up. New rounds will show up here once your org is invited." } : undefined}
+									scroll={false}
+								>
 									<YourTestingTable rows={yourTestingRows} />
-								)}
-							</div>
-							<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-								<div className="border rounded-md bg-gray-50/10 border-gray-600/40 h-fit">
-									<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-										<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-											<div className="flex flex-row gap-2 items-center">
-												<div className="bg-blue-50 text-blue-600 border-blue-600/40 rounded-md p-2 border">
-													<Send className="size-5" />
-												</div>
-												<div>
-													<h2 className="text-xs font-medium">Submitted</h2>
-													<p className="text-xs text-muted-foreground">Iteration still open: withdraw from the suite to change something</p>
-												</div>
-											</div>
+								</DashboardPanel>
 
-										</div>
-									</div>
-									{submitted.length === 0 ? (
-										<div className="flex flex-1 p-10">
-											<EmptyState size="sm" title="No submissions yet" description="Finish a round and hand it in. It will wait here." icon={Send} />
-										</div>
-									) : (
-										<ScrollArea className="h-64">
-											<div className="flex flex-col gap-2 p-2">
-												{submitted.map((suite) => (
-													<Link key={suite.id} href={`/testsuite/${suite.slug}/test-cases/all`} className="text-xs hover:bg-muted/50">
-														<div className="px-4 py-2 border rounded-md bg-gray-50/10 border-gray-600/40 flex flex-row gap-3 items-center w-full">
-															<CircleCheck className="size-4 shrink-0 text-emerald-600" />
-															<div className="flex flex-col">
-																<span className="font-medium">{suite.title}</span>
-																<span className="text-muted-foreground">Round {suite.openRound!.number}: {suite.openRound!.name}</span>
-															</div>
-															<span className="ml-auto text-muted-foreground">{formatDate(suite.mine.submittedAt!)}</span>
-														</div>
-													</Link>
-												))}
-											</div>
-										</ScrollArea>
-									)}
+								<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+									<DashboardPanel
+										Icon={Send}
+										tone="blue"
+										title="Submitted"
+										description="Iteration still open: withdraw from the suite to change something"
+										empty={submitted.length === 0 ? { title: "No submissions yet", description: "Finish a round and hand it in. It will wait here." } : undefined}
+									>
+										{submitted.map((suite) => (
+											<DashboardRow
+												key={suite.id}
+												href={`/testsuite/${suite.slug}/test-cases/all`}
+												Icon={CircleCheck}
+												iconClassName="text-emerald-600"
+												title={suite.title}
+												detail={`Round ${suite.openRound!.number}: ${suite.openRound!.name}`}
+												trailing={formatDate(suite.mine.submittedAt!)}
+											/>
+										))}
+									</DashboardPanel>
+									<DashboardPanel
+										Icon={CalendarClock}
+										tone="violet"
+										title="Coming Up"
+										description="Planned iterations your org is invited to"
+										empty={upcoming.length === 0 ? { title: "Nothing scheduled", description: "Planned rounds you're invited to will be listed here." } : undefined}
+									>
+										{upcoming.map((suite) => (
+											<DashboardRow
+												key={suite.id}
+												href={`/testsuite/${suite.slug}/overview`}
+												Icon={CalendarClock}
+												iconClassName="text-violet-600"
+												title={suite.title}
+												detail={`Round ${suite.openRound!.number}: ${suite.openRound!.name}`}
+												trailing={suite.openRound!.plannedEnd ? `ends ${formatDate(suite.openRound!.plannedEnd)}` : "no end date"}
+											/>
+										))}
+									</DashboardPanel>
 								</div>
-								<div className="border rounded-md bg-gray-50/10 border-gray-600/40 h-fit">
-									<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-										<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-											<div className="flex flex-row gap-2 items-center">
-												<div className="bg-violet-50 text-violet-600 border-violet-600/40 rounded-md p-2 border">
-													<CalendarClock className="size-5" />
-												</div>
-												<div>
-													<h2 className="text-xs font-medium">Coming Up</h2>
-													<p className="text-xs text-muted-foreground">Planned Iterations that you may partake in.</p>
-												</div>
-											</div>
-
-										</div>
-									</div>
-									{upcoming.length === 0 ? (
-										<div className="flex flex-1 p-10">
-											<EmptyState size="sm" title="Nothing scheduled" description="Planned rounds you're invited to will be listed here." icon={CalendarClock} />
-										</div>
-									) : (
-										<ScrollArea className="h-64">
-											<div className="flex flex-col gap-2 p-2">
-												{upcoming.map((suite) => (
-													<Link key={suite.id} href={`/testsuite/${suite.slug}/overview`} className="text-xs hover:bg-muted/50">
-														<div className="px-4 py-2 border rounded-md bg-gray-50/10 border-gray-600/40 flex flex-row gap-3 items-center w-full">
-															<CalendarClock className="size-4 shrink-0 text-violet-600" />
-															<div className="flex flex-col">
-																<span className="font-medium">{suite.title}</span>
-																<span className="text-muted-foreground">Round {suite.openRound!.number}: {suite.openRound!.name}</span>
-															</div>
-															<span className="ml-auto text-muted-foreground">{suite.openRound!.plannedEnd ? `ends ${formatDate(suite.openRound!.plannedEnd)}` : "no end date"}</span>
-														</div>
-													</Link>
-												))}
-											</div>
-										</ScrollArea>
-									)}
-								</div>
-								{(
-									<div id="acknowledgement" className="scroll-mt-4 border rounded-md bg-gray-50/10 border-gray-600/40">
-										<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-											<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-												<div className="flex flex-row gap-2 items-center">
-													<div className="bg-orange-50 text-orange-600 border-orange-600/40 rounded-md p-2 border">
-														<Stamp className="size-5" />
-													</div>
-													<div>
-														<h2 className="text-xs font-medium">Needs Your Acknowledgement</h2>
-														<p className="text-xs text-muted-foreground">Needed your acknowledgment for the following items:</p>
-														{/* <p className="text-xs text-muted-foreground">
-															The Development Team issued {awaitingMySignOff.length === 1 ? "a report" : `${awaitingMySignOff.length} reports`}. Read the report, then acknowledge or reject it.
-														</p> */}
-													</div>
-												</div>
-												{awaitingMySignOff.length > 0 && <Badge variant="secondary">{awaitingMySignOff.length} waiting</Badge>}
-											</div>
-										</div>
-										{awaitingMySignOff.length === 0 ? (
-											<div className="flex flex-1 p-10">
-												<EmptyState size="sm" title="Nothing to acknowledge" description="Reports issued for your review will be listed here." icon={Stamp} />
-											</div>
-										) : (
-										<ScrollArea className="h-64">
-											<div className="flex flex-col gap-2 p-2">
-												{awaitingMySignOff.map((suite) => (
-													<Link key={suite.id} href={`/testsuite/${suite.slug}/sign-off`} className="text-xs hover:bg-muted/50">
-														<div className="px-4 py-2 border rounded-md bg-gray-50/10 border-gray-600/40 flex flex-row gap-3 items-center w-full">
-															<FileSignature className="size-4 shrink-0 text-orange-600" />
-															<div className="flex flex-col">
-																<span className="font-medium">
-																	{suite.code && <span className="mr-1 font-mono text-muted-foreground">{suite.code}</span>}
-																	{suite.title}
-																</span>
-																<span className="text-muted-foreground">Report ready for review</span>
-															</div>
-															<Badge variant="outline" className="ml-auto border-orange-600/40 bg-orange-50 text-orange-700">Review</Badge>
-														</div>
-													</Link>
-												))}
-											</div>
-										</ScrollArea>
-										)}
-									</div>
-								)}
 							</div>
-						</div>
-					)}
+						)}
 				</div>
 			</div>
 		</ScrollArea>
