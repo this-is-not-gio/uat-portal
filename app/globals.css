@@ -188,16 +188,3 @@
 	}
 }
 
-/* Sign-off comments: highlighted text (CSS Custom Highlight API, set from sign-off-comments-layer). */
-::highlight(sign-off-comment) {
-	background-color: rgb(253 224 71 / 0.35);
-}
-::highlight(sign-off-comment-active) {
-	background-color: rgb(251 191 36 / 0.6);
-}
-@media print {
-	::highlight(sign-off-comment),
-	::highlight(sign-off-comment-active) {
-		background-color: transparent;
-	}
-}
