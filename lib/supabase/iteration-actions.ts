@@ -10,6 +10,7 @@ import type { profile, testCaseStatus, testStepStatus } from "./test-cases";
 import type { Database, Json } from "./database.types";
 import type { roundCoverage } from "./test-iterations";
 import type { roundCaseFlag } from "./case-states";
+import { failedWithoutEvidence } from "./failed-evidence";
 import { buildSignOffReport, type SignOffReport } from "./sign-off-report";
 import { validateThemes, type ThemeInput } from "@/lib/report/sign-off-remarks";
 import { draftThemes, type ThemeDraft } from "@/lib/report/remark-themes";
@@ -361,6 +362,13 @@ export async function submitParticipation({ iterationId }: { iterationId: string
     const user = await requireUser();
     if (!can(user, "submit")) return denied("submit");
     const supabase = await createClient();
+    const missing = await failedWithoutEvidence(supabase, iterationId, user.id);
+    if (!missing) return { ok: false, error: "Couldn't check your failed steps for evidence. Try again." };
+    if (missing.length > 0) {
+        const shown = missing.slice(0, 8).join(", ");
+        const more = missing.length > 8 ? ` and ${missing.length - 8} more` : "";
+        return { ok: false, error: `Every failed step needs a remark with at least one evidence (a file or a link) before you can submit. Missing on: ${shown}${more}.` };
+    }
     const { data, error } = await supabase.rpc("submit_participation", { p_iteration_id: iterationId });
     if (error) return fail(error);
     refresh();

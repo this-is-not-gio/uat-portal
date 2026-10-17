@@ -13,6 +13,8 @@ import { can } from "@/lib/auth/permissions";
 import type { suiteStatus } from "@/lib/supabase/Init";
 import ResultOrgPicker from "./result-org-picker";
 import TesterTestCasesComponents from "./tester-test-cases-components";
+import { createClient } from "@/lib/supabase/server";
+import { failedWithoutEvidence } from "@/lib/supabase/failed-evidence";
 import { isRemovedFromRound, oneRowPerCase, ROUND_STATUS_LABELS } from "@/lib/supabase/case-states";
 
 // Internal/External "Test Cases": the viewer's own round rows (test_case_results), never the
@@ -114,6 +116,9 @@ export default async function TesterTestCasesTab({
 		if (lensOrg && !isOwnLens) params.set("org", lensOrg.id);
 		return `${testCasesHref(testSuiteSlug, section)}?${params.toString()}`;
 	};
+	// Failed steps still missing the tester's own remark with evidence: the banner and the submit dialog list them.
+	const showsSubmit = showSubmission && !!ownParticipation && !!ownTester && !ownTester.submittedAt;
+	const missingEvidence = showsSubmit ? (await failedWithoutEvidence(await createClient(), selectedIteration.id, currentUser.id)) ?? [] : [];
 	const isTested = (status: string) => status !== "Untested" && status !== "In Progress";
 	// Sidebar progress: the viewer's own copies when they have any, otherwise each case once.
 	const ownCopies = isOwnLens ? results.filter((row) => row.testerId === currentUser.id) : [];
@@ -206,7 +211,8 @@ export default async function TesterTestCasesTab({
 				// the whole round, not just the visible section.
 				submit={showSubmission && ownParticipation && ownTester && !ownTester.submittedAt ? {
 					organizationName: ownParticipation.organization.name,
-					// Teammates still to submit; 0 means this submit completes the org.
+					missingEvidence,
+						// Teammates still to submit; 0 means this submit completes the org.
 					teammatesPending: ownParticipation.testers.filter((t) => t.status === "active" && t.userId !== currentUser.id && !t.submittedAt).length,
 					// Only the viewer's own copies: that's what they're submitting.
 					untestedCases: results

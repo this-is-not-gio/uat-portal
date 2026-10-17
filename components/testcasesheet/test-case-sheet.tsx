@@ -55,6 +55,7 @@ import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/te
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
 import type { caseCopy, resultArchive } from "@/lib/supabase/test-iterations";
 import { RESULT_CHANGE_FLAG_STYLES } from "@/components/table/test-result-columns";
+import { useDetailLock } from "@/components/table/data-table";
 import { humanizeTimestamp } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -111,6 +112,9 @@ const status_count_classnames: Record<testStepStatus, string> = {
 	Skipped: "border bg-muted text-foreground border-border",
 	Blocked: "border bg-muted text-foreground border-border",
 };
+
+// Remarks posted with evidence links carry this heading (see RemarkMarkdownField).
+const EVIDENCE_MARKER = /\*\*Evidence:\*\*/;
 
 type testcase_status_option = "Passed" | "Failed" | "Blocked"
 
@@ -223,6 +227,21 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	const [isSavingResult, startSavingResult] = useTransition();
 	const totalSteps = testCase.stepsToExecute?.length ?? 0;
 	const testedSteps = Object.keys(stepStatuses).filter((stepId) => stepStatuses[stepId]?.status !== "Untested").length;
+	// A failed step, or a case marked Failed by hand, needs a remark from this tester with at least one
+	// piece of evidence (an uploaded file or an evidence link) before the sheet can be closed.
+	const hasOwnEvidence = (stepId: string) => !!author && (stepRemarks[stepId] ?? []).some((remark) =>
+		remark.author?.id === author.id && ((remarkFiles[remark.id] ?? remark.attachments ?? []).length > 0 || EVIDENCE_MARKER.test(remark.remark)));
+	const stepsMissingRemark = (testCase.stepsToExecute ?? []).filter((step) => stepStatuses[step.id]?.status === "Failed" && !hasOwnEvidence(step.id));
+	const anyStepFailed = Object.values(stepStatuses).some((step) => step.status === "Failed");
+	const caseMissingRemark = caseState.status === "Failed" && !anyStepFailed && !(testCase.stepsToExecute ?? []).some((step) => hasOwnEvidence(step.id));
+	const locked = mode === "execute" && (stepsMissingRemark.length > 0 || caseMissingRemark);
+	const setDetailLock = useDetailLock();
+	useEffect(() => {
+		setDetailLock?.(locked);
+		return () => setDetailLock?.(false);
+	}, [setDetailLock, locked]);
+	// Failed steps open their remark box so the missing remark is right there.
+	const [openSteps, setOpenSteps] = useState<string[]>([]);
 	const statusCounts = step_status_options.map((option) => ({
 		...option,
 		count: Object.values(stepStatuses).filter((step) => step.status === option.value).length,
@@ -245,7 +264,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	}
 
 	return (
-		<SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-none data-[side=right]:md:w-[75vw] data-[side=right]:lg:w-[50vw]">
+		<SheetContent showCloseButton={!locked} className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-none data-[side=right]:md:w-[75vw] data-[side=right]:lg:w-[50vw]">
 			<SheetHeader className="px-4 pt-6 md:px-8 md:pt-10">
 				<SheetDescription className="text-xs text-muted-foreground">
 					{testCase.code}
@@ -361,8 +380,12 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 													</ol>
 												</div>
 											</div>
-											{showResults && <Accordion className="w-full">
-												<AccordionItem className="border-none">
+											{showResults && <Accordion
+												className="w-full"
+												value={openSteps.includes(step.id) ? [step.id] : []}
+												onValueChange={(value) => setOpenSteps((current) => value.length > 0 ? [...current, step.id] : current.filter((id) => id !== step.id))}
+											>
+												<AccordionItem value={step.id} className="border-none">
 													<div className="flex flex-row flex-wrap items-center justify-between gap-2">
 														<div className="flex items-center gap-1.5">
 															{mode === "execute" ? (
@@ -376,6 +399,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		setStepStatuses(nextStatuses);
 																		setCaseState(nextCaseState);
 																		emitChange(nextStatuses, stepRemarks, nextCaseState);
+																			if (newStatus === "Failed") setOpenSteps((current) => current.includes(step.id) ? current : [...current, step.id]);
 																	}}
 																	options={step_status_options}
 																	isPending={isSavingResult}
@@ -440,7 +464,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																						<div className="p-3 sm:p-4 overflow-x-auto">
 																							{remark.remark.trim() && (
 																								<div className="typeset text-sm break-words">
-																									<ReactMarkdown remarkPlugins={[remarkGfm]}>{remark.remark}</ReactMarkdown>
+																									<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> }}>{remark.remark}</ReactMarkdown>
 																								</div>
 																							)}
 																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} />
@@ -468,6 +492,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																			<RemarkMarkdownField
 																				step={step}
 																				placeholder="Leave a remark for this step"
+														requireEvidence={mode === "execute" && stepStatuses[step.id]?.status === "Failed"}
 																				onSubmitted={(insertedRemark) => {
 																					if (insertedRemark.attachments?.length) {
 																						invalidateRemarkAttachments();
@@ -639,7 +664,14 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 				</div>
 			</div>} */}
 			{mode === "execute" ? (
-				<SheetFooter className="flex flex-row justify-between sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
+				<SheetFooter className="flex flex-col sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
+					{locked && (
+						<p role="alert" className="w-full text-xs font-medium text-red-700 dark:text-red-400 bg-red-100/60 dark:bg-red-950/40 border border-red-700/40 rounded-md px-3 py-2">
+							{stepsMissingRemark.length > 0
+								? `Leave a remark on failed step ${stepsMissingRemark.map((step) => (testCase.stepsToExecute ?? []).findIndex((s) => s.id === step.id) + 1).join(", ")} with at least one evidence (a file or a link) to continue. The sheet is locked until you do.`
+								: "This case is marked Failed. Leave a remark with at least one evidence (a file or a link) on any step to continue. The sheet is locked until you do."}
+						</p>
+					)}
 					<div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
 						<div className="flex flex-row items-center gap-2">
 							{/* <div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">

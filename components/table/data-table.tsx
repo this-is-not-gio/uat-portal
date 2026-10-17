@@ -29,7 +29,7 @@ import { features, type DataTableFeatures } from "./data-table-features"
 import { ClipboardCheck, ClipboardIcon, ClipboardXIcon, ChevronLeft, ChevronRight, FileIcon } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
-import { createContext, useContext, useId, useState } from "react"
+import { createContext, useCallback, useContext, useId, useRef, useState } from "react"
 import { EmptyState } from "../ui/empty-state"
 import { cn } from "@/lib/utils"
 
@@ -197,6 +197,12 @@ export function DataTable<TData extends RowData & { id: string }>({
 
 // Always calls useSortable (disabled when not `sortable`) so hook order stays
 // stable regardless of whether drag-and-drop is enabled for this table.
+// A row's detail sheet sets this to true to refuse closing (e.g. a failed step still needs a remark).
+export const DetailLockContext = createContext<((locked: boolean) => void) | null>(null)
+export function useDetailLock() {
+	return useContext(DetailLockContext)
+}
+
 function DataRow({
 	rowId,
 	cells,
@@ -221,6 +227,8 @@ function DataRow({
 	const { setNodeRef, transform, transition, attributes, listeners, isDragging } = useSortable({ id: rowId, disabled: !sortable })
 	const style = sortable ? { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : undefined } : undefined
 	const dragHandle: DragHandleProps = sortable ? { attributes, listeners } : null
+	const detailLock = useRef(false)
+	const setDetailLock = useCallback((locked: boolean) => { detailLock.current = locked }, [])
 
 	const providedCells = (
 		<DragHandleContext.Provider value={dragHandle}>
@@ -246,6 +254,7 @@ function DataRow({
 
 	return (
 		<Sheet open={openRowId === rowId} onOpenChange={(open) => {
+			if (!open && detailLock.current) return
 			setOpenRowId(open ? rowId : null)
 			if (!open) onDetailClose?.()
 		}}>
@@ -257,7 +266,7 @@ function DataRow({
 					</TableRow>
 				}
 			/>
-			{openRowId === rowId ? renderRowDetail() : null}
+			{openRowId === rowId ? <DetailLockContext.Provider value={setDetailLock}>{renderRowDetail()}</DetailLockContext.Provider> : null}
 		</Sheet>
 	)
 }

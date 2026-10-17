@@ -3,9 +3,10 @@
 import { useRef, useState, useTransition } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Bold, Code, Paperclip, FileText, Loader2, X, Heading1, Heading2, Heading3, Italic, Link, Link2, List, ListCheck, ListOrdered, Quote, Send, Strikethrough, type LucideIcon } from "lucide-react";
+import { Bold, Code, Paperclip, FileText, Loader2, X, Heading1, Heading2, Heading3, Italic, Link, Link2, Plus, List, ListCheck, ListOrdered, Quote, Send, Strikethrough, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
 	ButtonGroup,
@@ -51,6 +52,23 @@ function putWithProgress(url: string, file: File, signal: AbortSignal, onProgres
 		xhr.onerror = () => reject(new Error("Upload failed (network error)."));
 		xhr.send(file);
 	});
+}
+
+const MAX_LINKS = 5;
+
+// Evidence links are stored inside the remark text as a markdown list, so no schema change is needed.
+function parseEvidenceLink(raw: string): { url: string; label: string } | null {
+	const value = raw.trim();
+	if (!value) return null;
+	try {
+		const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+		if (!url.hostname.includes(".")) return null;
+		const host = url.hostname.replace(/^www\./, "");
+		const label = host === "drive.google.com" || host === "docs.google.com" ? "Google Drive" : host;
+		return { url: url.toString(), label };
+	} catch {
+		return null;
+	}
 }
 
 // A file picked for this remark: uploading straight to the bucket, ready to post, or failed.
@@ -101,10 +119,13 @@ const TOOLBAR_ACTIONS: {
 export function RemarkMarkdownField({
 	step,
 	placeholder = "Leave a remark the tested step",
+	requireEvidence = false,
 	onSubmitted
 }: {
 	step: testStep
 	placeholder?: string;
+	// Failed steps: the remark can't be posted without a file or an evidence link.
+	requireEvidence?: boolean;
 	onSubmitted: (remark: testRemark) => void;
 }): import("react").JSX.Element {
 	const [draftText, setDraftText] = useState<string>("");
@@ -114,10 +135,14 @@ export function RemarkMarkdownField({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	// In-flight upload per chip, so removing a chip can cancel it and find its draft id before state has it.
 	const uploads = useRef(new Map<string, uploadJob>());
-	const isEmpty = !draftText.trim();
+	const [links, setLinks] = useState<{ url: string; label: string }[]>([]);
+	const [linkDraft, setLinkDraft] = useState("");
+	const [linkError, setLinkError] = useState<string | null>(null);
+	const isEmpty = !draftText.trim() && links.length === 0;
 	const uploading = files.some((f) => f.state === "uploading");
 	const readyIds = files.flatMap((f) => (f.state === "ready" && f.attachmentId ? [f.attachmentId] : []));
-	const canPost = (!isEmpty || readyIds.length > 0) && !uploading && !files.some((f) => f.state === "error");
+	const hasEvidence = readyIds.length > 0 || links.length > 0;
+	const canPost = (!isEmpty || readyIds.length > 0) && (!requireEvidence || hasEvidence) && !uploading && !files.some((f) => f.state === "error");
 
 	function wrapSelection(before: string, after: string) {
 		const textarea = textareaRef.current;
@@ -139,8 +164,9 @@ export function RemarkMarkdownField({
 	const [tab, setTab] = useState<"write" | "preview">("write");
 	const [isPending, startTransition] = useTransition();
 	const onSubmit = () => {
-		const text = draftText.trim();
 		if (!canPost) return;
+		const evidence = links.length > 0 ? `**Evidence:**\n${links.map((link, i) => `- [Evidence ${i + 1} (${link.label})](${link.url})`).join("\n")}` : "";
+		const text = [draftText.trim(), evidence].filter(Boolean).join("\n\n");
 
 		startTransition(async () => {
 			const result = await addResultRemark({ stepResultId: step.id, remark: text, attachmentIds: readyIds });
@@ -154,8 +180,20 @@ export function RemarkMarkdownField({
 			uploads.current.clear();
 			setFileError(null);
 			setDraftText("");
+			setLinks([]);
+			setLinkDraft("");
 		})
 
+	}
+
+	function addLink() {
+		if (links.length >= MAX_LINKS) return setLinkError(`A remark can have at most ${MAX_LINKS} links.`);
+		const parsed = parseEvidenceLink(linkDraft);
+		if (!parsed) return setLinkError("Enter a valid link, e.g. a Google Drive share link.");
+		if (links.some((link) => link.url === parsed.url)) return setLinkError("That link is already added.");
+		setLinks((current) => [...current, parsed]);
+		setLinkDraft("");
+		setLinkError(null);
 	}
 
 	function patchFile(localId: string, patch: Partial<draftFile>) {
@@ -412,6 +450,38 @@ export function RemarkMarkdownField({
 						{fileError && <p className="text-xs text-destructive">{fileError}</p>}
 					</div>
 				)}
+
+				<div className="flex flex-col gap-2 border-t p-2 sm:p-3">
+					<p className="text-xs font-medium">Evidence links {requireEvidence && !hasEvidence ? <span className="font-normal text-destructive">(required for a failed step: add a link here or attach a file)</span> : <span className="font-normal text-muted-foreground">(e.g. a Google Drive link to a screen recording)</span>}</p>
+					<div className="flex flex-row gap-2">
+						<Input
+							value={linkDraft}
+							onChange={(e) => { setLinkDraft(e.target.value); setLinkError(null); }}
+							onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }}
+							placeholder="https://drive.google.com/…"
+							className="text-xs md:text-xs"
+							disabled={isPending}
+						/>
+						<Button type="button" variant="outline" size="sm" onClick={addLink} disabled={isPending || !linkDraft.trim()}>
+							<Plus className="size-3.5" />
+							Add link
+						</Button>
+					</div>
+					{linkError && <p className="text-xs text-destructive">{linkError}</p>}
+					{links.length > 0 && (
+						<ul className="flex flex-wrap gap-2">
+							{links.map((link) => (
+								<li key={link.url} className="relative flex items-center gap-1.5 rounded-md border bg-background py-1 pl-2 pr-7 text-xs max-w-full" title={link.url}>
+									<Link2 className="size-3.5 shrink-0 text-muted-foreground" />
+									<span className="truncate">{link.label}: {link.url}</span>
+									<button type="button" aria-label={`Remove ${link.url}`} onClick={() => setLinks((current) => current.filter((l) => l.url !== link.url))} disabled={isPending} className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 hover:bg-accent">
+										<X className="size-3" />
+									</button>
+								</li>
+							))}
+						</ul>
+					)}
+				</div>
 
 				<div className="flex items-center justify-between gap-2 border-t p-2 sm:p-4">
 					<TabsList>
