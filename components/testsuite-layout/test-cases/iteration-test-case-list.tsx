@@ -9,8 +9,6 @@ import type { iterationParticipant, roundCoverage, testIteration, testResultRow 
 import { DataTable } from "@/components/table/data-table";
 import { createIterationTestCaseColumns, type iterationCaseRow } from "@/components/table/iteration-test-cases-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
-import AddSectionDialog from "./add-section-dialog";
-import AddParticipantsDialog from "./add-participants-dialog";
 import IterationSectionsTable from "@/components/testsuite-layout/test-cases/iteration-sections-table";
 import IterationParticipantsTable from "./iteration-participants-table";
 import { setCaseResultInclusion } from "@/lib/supabase/iteration-actions";
@@ -76,6 +74,7 @@ export function IterationTestCaseList({
 	participants = [],
 	testerResults,
 	coverage,
+	manage,
 	caseFlags = EMPTY_FLAGS,
 }: {
 	testCases: testResultRow[];
@@ -92,17 +91,15 @@ export function IterationTestCaseList({
 	participants?: iterationParticipant[];
 	// Every tester's own copies (testCases is rolled up to one row per case), for the participants table's progress.
 	testerResults?: testResultRow[];
+	// Set while the round is planned: what the participant and section Manage buttons need.
+	manage?: { testSuiteSlug: string };
 	// A planned round's coverage: replaces the participants list with the tester picker.
 	coverage?: roundCoverage;
 	// Per-case flags for this round (getRoundCaseFlags), keyed by testCaseId ?? result id.
 	caseFlags?: Record<string, roundCaseFlag[]>;
 }) {
-	const [addSectionOpen, setAddSectionOpen] = useState(false);
-	const [addParticipantsOpen, setAddParticipantsOpen] = useState(false);
 	// Read once at mount: Base UI warns if an uncontrolled Collapsible's defaultOpen changes later.
 	const [participantsDefaultOpen] = useState(participants.length > 0);
-	// A started round's case set is locked (apply_iteration_sync, 0023).
-	const canAddSection = !!roundActions && iteration?.status === "not_started";
 
 	// Filter UI is parked (see commented combobox below); matching still applies.
 	const [filters] = useState<filterToken[]>([]);
@@ -179,64 +176,11 @@ export function IterationTestCaseList({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[selectable, locked, selectedIds, allSelected, someSelected, sectionSlug]
 	);
-	// Live cases the round already holds, so the add dialog can mark them.
-	const includedCaseIds = useMemo(() => new Set(testCases.map((tc) => tc.testCaseId).filter((id): id is string => !!id)), [testCases]);
-	const [tab, setTab] = useState<"cases" | "participants">("cases");
 
 	return (
 		<div className="flex-1 flex flex-col gap-3">
-			<div className="w-full flex flex-row justify-between">
-				<Tabs value={tab} onValueChange={(value) => setTab(value as "cases" | "participants")} className="flex flex-col gap-2">
-					<TabsList>
-						<TabsTrigger value="cases" className="text-xs">
-							<ClipboardList data-icon="inline-start" />Test Cases
-						</TabsTrigger>
-						<TabsTrigger value="participants" className="text-xs">
-							<UserGroup data-icon="inline-start" />Iteration Participants
-						</TabsTrigger>
-					</TabsList>
-				</Tabs>
-				{
-					tab === "cases" ?
-					canAddSection && (
-						<Button className="text-xs" onClick={() => setAddSectionOpen(true)}>
-							<ClipboardPlus className="size-4" />
-							Add Test Cases
-						</Button>
-					)
-					: canAddSection && coverage && (
-						<Button className="text-xs" onClick={() => setAddParticipantsOpen(true)}>
-							<UserPlus className="size-4" />
-							Add Participants
-						</Button>
-					)
-				}
-			</div>
-
-			{roundActions && iteration && canAddSection && (
-				<AddSectionDialog
-					suiteId={roundActions.suiteId}
-					iterationId={iteration.id}
-					includedCaseIds={includedCaseIds}
-					open={addSectionOpen}
-					onOpenChange={setAddSectionOpen}
-				/>
-			)}
-
-			{iteration && canAddSection && coverage && (
-				<AddParticipantsDialog
-					iterationId={iteration.id}
-					coverage={coverage}
-					open={addParticipantsOpen}
-					onOpenChange={setAddParticipantsOpen}
-				/>
-			)}
-
-			{tab === "cases" ? (
-				<IterationSectionsTable testCases={testCases} />
-			) : (
-				<IterationParticipantsTable participants={participants} testCases={testerResults ?? testCases} coverage={coverage} iterationNumber={iteration?.iterationNumber} />
-			)}
+			<IterationSectionsTable caseRows={caseRows} participants={participants} coverage={coverage} testerResults={testerResults ?? testCases} iteration={iteration} manage={manage} columns={selectable ? columns : undefined} />
+			
 
 			{/* <SearchFilterCombobox filters={filters} onFiltersChange={setFilters} roleAssigneeValues={roleAssigneeValues} disabled /> */}
 			{/* <div className="flex flex-row items-center justify-between gap-2">

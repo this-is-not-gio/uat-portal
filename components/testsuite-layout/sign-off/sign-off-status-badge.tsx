@@ -7,11 +7,11 @@ export type signOffStatus = "drafting" | "issued" | "awaiting_acknowledgement" |
 // → issued to the client (blue) → rejected (red) or acknowledged (green). Only the open states pulse.
 export const SIGN_OFF_PILL: Record<signOffStatus, { label: string; className: string; dot: string; ping?: string }> = {
 	drafting: { label: "Creating Draft", className: "bg-yellow-500/10 text-amber-700", dot: "bg-amber-600", ping: "bg-amber-400" },
-	issued: { label: "Sign-off Issued", className: "bg-blue-500/10 text-blue-700", dot: "bg-blue-600", ping: "bg-blue-400" },
-	awaiting_acknowledgement: { label: "Awaiting Your Sign-off", className: "bg-blue-500/10 text-blue-700", dot: "bg-blue-600", ping: "bg-blue-400" },
-	rejected: { label: "Sign-off Rejected", className: "bg-red-500/10 text-red-700", dot: "bg-red-600" },
-	acknowledged: { label: "Sign-off Acknowledged", className: "bg-green-500/10 text-green-800", dot: "bg-green-700" },
-	withdrawn: { label: "Sign-off Withdrawn", className: "bg-gray-500/10 text-gray-700", dot: "bg-gray-600" },
+	issued: { label: "Report Issued", className: "bg-blue-500/10 text-blue-700", dot: "bg-blue-600", ping: "bg-blue-400" },
+	awaiting_acknowledgement: { label: "Awaiting Your Acknowledgement", className: "bg-blue-500/10 text-blue-700", dot: "bg-blue-600", ping: "bg-blue-400" },
+	rejected: { label: "Report Rejected", className: "bg-red-500/10 text-red-700", dot: "bg-red-600" },
+	acknowledged: { label: "Report Acknowledged", className: "bg-green-500/10 text-green-800", dot: "bg-green-700" },
+	withdrawn: { label: "Report Withdrawn", className: "bg-gray-500/10 text-gray-700", dot: "bg-gray-600" },
 };
 
 // An issued sign-off reads as "issued" to the vendor who sent it and "awaiting your sign-off" to

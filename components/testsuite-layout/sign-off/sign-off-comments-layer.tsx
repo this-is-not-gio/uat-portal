@@ -258,6 +258,15 @@ export function SignOffCommentsLayer({ comments, commenting, sheetRefs, sheetsRe
 
 	return (
 		<div ref={containerRef} className="absolute top-0 left-full ml-6 w-72 print:hidden">
+			{/* ::highlight() lives here, not in globals.css: the CSS build step warns that it can't parse it. */}
+			<style>{`
+				::highlight(sign-off-comment) { background-color: rgb(253 224 71 / 0.35); }
+				::highlight(sign-off-comment-active) { background-color: rgb(251 191 36 / 0.6); }
+				@media print {
+					::highlight(sign-off-comment) { background-color: transparent; }
+					::highlight(sign-off-comment-active) { background-color: transparent; }
+				}
+			`}</style>
 			{selection && !draft && (
 				<Button
 					size="icon-sm"

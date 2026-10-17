@@ -9,7 +9,6 @@ import { CircleCheck, CircleX, ClipboardIcon, Eye, Info, Search, TriangleAlert, 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { DataTable } from "@/components/table/data-table";
 import { type DataTableFeatures } from "@/components/table/data-table-features";
@@ -144,7 +143,7 @@ export default function TesterTestCasesComponents({
 	// Own org submitted and the round is still in progress: the notice carries Withdraw.
 	canWithdraw: boolean;
 	// Set while the own org can still submit this round: the header shows Submit Result.
-	submit: { organizationName: string; teammatesPending: number; untestedCases: untestedCase[] } | null;
+	submit: { organizationName: string; teammatesPending: number; untestedCases: untestedCase[]; missingEvidence: string[] } | null;
 }) {
 	const router = useRouter();
 	const [rows, setRows] = useState<testResultRow[]>(results);
@@ -156,19 +155,10 @@ export default function TesterTestCasesComponents({
 	const testRole = currentUser?.testRole;
 	const isOwnCopy = (row: testResultRow) => !!currentUser && row.testerId === currentUser.id;
 	const hasOwnCopies = isOwnLens && rows.some(isOwnCopy);
-	const [view, setView] = useState<string>(() => (hasOwnCopies ? MY_CASES : ALL_ROLES));
+	// Testers only see their own copies; the other participants' cases aren't browsable.
+	const view = hasOwnCopies ? MY_CASES : ALL_ROLES;
 	const [search, setSearch] = useState("");
 
-	const roles = useMemo(
-		() => [...new Map(rows.filter((row) => row.testRoleId).map((row) => [row.testRoleId!, row.roleAssignee ?? ""])).entries()]
-			.map(([id, name]) => ({ id, name }))
-			.sort((a, b) => a.name.localeCompare(b.name)),
-		[rows]
-	);
-	const roleLabel = (r: testRole) => (r.id === testRole?.id ? `${r.name} (my role)` : r.name);
-	const viewLabel = view === MY_CASES ? `My cases${testRole ? ` (${testRole.name})` : ""}`
-		: view === ALL_ROLES ? "All roles"
-			: roleLabel(roles.find((r) => r.id === view) ?? { id: view, name: "" });
 	const viewRows = view === MY_CASES
 		? rows.filter(isOwnCopy)
 		: oneRowPerCase(rows, currentUser?.id).filter((row) => view === ALL_ROLES || row.testRoleId === view);
@@ -240,6 +230,7 @@ export default function TesterTestCasesComponents({
 								organizationName={submit.organizationName}
 								teammatesPending={submit.teammatesPending}
 								untestedCases={submit.untestedCases}
+									missingEvidence={submit.missingEvidence}
 								trigger={
 									<Button className="w-fit">
 										<ClipboardCheck size={16} />
@@ -250,7 +241,16 @@ export default function TesterTestCasesComponents({
 						)}
 					</div>
 				</div>
-				{notice && (
+				{submit && submit.missingEvidence.length > 0 && (
+						<div className="flex flex-row flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-2 text-xs text-destructive">
+							<TriangleAlert className="size-4 shrink-0" />
+							<p className="flex-1">
+								{submit.missingEvidence.length} failed {submit.missingEvidence.length === 1 ? "step is" : "steps are"} missing a remark with evidence, so you can&apos;t submit yet:{" "}
+								<span className="font-mono">{submit.missingEvidence.slice(0, 4).join(", ")}{submit.missingEvidence.length > 4 ? ` and ${submit.missingEvidence.length - 4} more` : ""}</span>
+							</p>
+						</div>
+					)}
+					{notice && (
 					<div className={cn("flex flex-row flex-wrap items-center gap-2 rounded-md border px-4 py-2 text-xs text-muted-foreground", isSubmittedNotice && "border-green-800/30 bg-green-50/50")}>
 						{isSubmittedNotice ? <CircleCheck className="size-4 shrink-0 text-green-800" /> : <Eye className="size-4 shrink-0" />}
 						<p className={`flex-1 ${isSubmittedNotice ? "text-green-800" : "text-muted-foreground"}`}>
@@ -278,16 +278,6 @@ export default function TesterTestCasesComponents({
 							)
 						})}
 					</div>
-					<Select value={view} onValueChange={(value) => setView(value ?? ALL_ROLES)}>
-						<SelectTrigger size="sm" className="w-full text-xs md:w-48 md:text-sm">
-							<SelectValue>{viewLabel}</SelectValue>
-						</SelectTrigger>
-						<SelectContent alignItemWithTrigger={false}>
-							{hasOwnCopies && <SelectItem value={MY_CASES} className="text-xs md:text-sm">My cases</SelectItem>}
-							<SelectItem value={ALL_ROLES} className="text-xs md:text-sm">All roles</SelectItem>
-							{roles.map((r) => <SelectItem key={r.id} value={r.id} className="text-xs md:text-sm">{roleLabel(r)}</SelectItem>)}
-						</SelectContent>
-					</Select>
 					<div className="relative w-full md:ml-auto md:w-64">
 						<Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 						<Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search code or title…" className="pl-8 text-xs md:text-xs" />

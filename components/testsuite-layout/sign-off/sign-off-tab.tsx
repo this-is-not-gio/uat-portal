@@ -21,7 +21,7 @@ import { CircleCheck, CircleX } from "lucide-react";
 // Sign-off tab (Admin and Internal): the frozen report inline, with a picker for earlier or
 // withdrawn sign-offs. Download PDF prints this page; @media print in globals.css drops the app and suite chrome.
 // The suite layout's ScrollArea scrolls it, so there's no scroll container here.
-// selectedId is null when the vendor's draft (For Sign-off) is open; it has no frozen report yet.
+// selectedId is null when the vendor's draft (For Acknowledgement) is open; it has no frozen report yet.
 export default async function SignOffTab({ suiteId, suiteSlug, signOffs, selectedId, draft }: { suiteId: string; suiteSlug: string; signOffs: signOff[]; selectedId: string | null; draft: signOffDraft | null }) {
 	const frozen = selectedId ? await getSignOffReport({ suiteSlug, signOffId: selectedId }) : draft ? await draftPreview(suiteSlug, draft) : null;
 	const isDraft = !selectedId && !!draft;
@@ -35,7 +35,7 @@ export default async function SignOffTab({ suiteId, suiteSlug, signOffs, selecte
 	const answerActions = !isDraft && selected?.status === "issued" && can(currentUser, "sign_off") ? (
 		<>
 			<RejectSignOffDialog suiteId={suiteId} signOff={selected} trigger={<Button variant="outline" className="w-fit"><CircleX/> <span className="text-xs">Reject</span></Button>} />
-			<AcknowledgeSignOffDialog suiteId={suiteId} signOff={selected} reportHref={null} trigger={<Button className="w-fit"><CircleCheck/> <span className="text-xs">Acknowledge Sign-off</span></Button>} />
+			<AcknowledgeSignOffDialog suiteId={suiteId} signOff={selected} reportHref={null} trigger={<Button className="w-fit"><CircleCheck/> <span className="text-xs">Acknowledge Report</span></Button>} />
 		</>
 	) : undefined;
 

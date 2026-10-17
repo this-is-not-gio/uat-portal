@@ -43,10 +43,10 @@ export const BADGE_VARIANTS = {
 
 const data = {
 	navMain: [
-		{ title: "Master Plan", url: "/masterPlan", icon: BookMarked },
 		{ title: "Participants", url: "/admin/users", icon: Users },
 	],
 	navAll: [
+		{ title: "Master Plan", url: "/masterPlan", icon: BookMarked },
 		{ title: "Testing Manual", url: "/manual", icon: BookCopy },
 	],
 	// navTester: [

@@ -22,7 +22,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { ChevronRight, File, Folder, FolderOpenIcon, Pencil, Plus } from "lucide-react"
 import type { manualModule } from "@/lib/supabase/manual"
-import { manualHref, manualNav } from "./manual-nav"
 import { ManualEditToggle, NewModuleDialog, NewSectionDialog, useManualEditing } from "./manual-edit"
 import { ManualSortableList, ManualSortableRow } from "./manual-sortable"
 import { reorderManualModules, reorderManualSections } from "@/lib/supabase/manual-reorder-actions"
@@ -132,26 +131,6 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 								</SidebarMenu>
 							</SidebarGroupContent>
 						</SidebarGroup>
-						{manualNav.map((group) => (
-							<SidebarGroup key={group.label}>
-								<SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-								<SidebarGroupContent>
-									<SidebarMenu>
-										{group.items.map((item) => (
-											<SidebarMenuItem key={item.slug}>
-												<SidebarMenuButton
-													isActive={pathname === manualHref(item.slug)}
-													render={<Link href={manualHref(item.slug)} />}
-												>
-													<File />
-													<span className="text-xs font-medium">{item.title}</span>
-												</SidebarMenuButton>
-											</SidebarMenuItem>
-										))}
-									</SidebarMenu>
-								</SidebarGroupContent>
-							</SidebarGroup>
-						))}
 					</SidebarContent>
 				</ScrollArea>
 			) : (

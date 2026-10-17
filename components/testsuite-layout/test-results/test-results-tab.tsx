@@ -202,7 +202,7 @@ export default async function TestResultsTab({
 	const issueSignOffButton = (
 		<Button className="text-xs flex-1 md:flex-none" disabled={signOffBlockers.length > 0}>
 			<Stamp size={15} />
-			{draftSignOff ? "Continue Sign-off" : "Create Sign-off"}
+			{draftSignOff ? "Continue Report" : "Create Report"}
 		</Button>
 	);
 	const headerActions = showCreateIteration || canIssueSignOff ? (
@@ -227,7 +227,7 @@ export default async function TestResultsTab({
 						{issueSignOffButton}
 					</TooltipTrigger>
 					<TooltipContent className="flex flex-col items-start gap-1">
-						<p className="text-xs font-semibold">Meet the sign-off criteria first:</p>
+						<p className="text-xs font-semibold">Meet the report criteria first:</p>
 						<ul className="list-disc pl-4">
 							{signOffBlockers.map((blocker) => <li key={blocker} className="text-xs">{blocker}</li>)}
 						</ul>

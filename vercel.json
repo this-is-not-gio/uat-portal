@@ -1,10 +1,3 @@
 {
-  "regions": ["sin1"],
-  "git": {
-    "deploymentEnabled": {
-      "main": false,
-      "dev": false,
-      "*": false
-    }
-  }
+  "regions": ["sin1"]
 }

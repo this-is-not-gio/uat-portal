@@ -52,7 +52,7 @@ function VersionLabel({ version, signOff }: { version: number; signOff: signOff 
 		<span className="flex min-w-0 items-center gap-1.5">
 			<span className={cn("size-1.5 shrink-0 rounded-full", pill.dot)} />
 			<span className="font-medium">Version {version}</span>
-			<span className="truncate text-muted-foreground text-xs">{pill.label.replace(/^Sign-off /, "")}</span>
+			<span className="truncate text-muted-foreground text-xs">{pill.label.replace(/^Report /, "")}</span>
 		</span>
 	);
 }

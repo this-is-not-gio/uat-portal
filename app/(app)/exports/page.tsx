@@ -17,7 +17,7 @@ export default async function ExportsPage() {
 			<EmptyState
 				icon={Download}
 				title="Exports are coming soon"
-				description="Download suite results and sign-off reports from here."
+				description="Download suite results and reports from here."
 			/>
 		</div>
 	);

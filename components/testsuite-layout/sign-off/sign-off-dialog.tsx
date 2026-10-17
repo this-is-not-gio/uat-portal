@@ -68,7 +68,7 @@ export default function SignOffDialog({
 	const blocker = hasActiveIteration
 		? "Every test iteration must be finished first. Complete, stop or cancel the open one."
 		: !latestCompleted
-			? "At least one completed iteration is needed to issue the sign-off."
+			? "At least one completed iteration is needed to issue the report."
 			: null;
 	const hasExceptions = !!report && (report.verdict === "not_met" || report.totals.passed < report.totals.total);
 	const remarkIds = new Set((report?.remarks ?? []).map((r) => r.id));
@@ -155,8 +155,7 @@ export default function SignOffDialog({
 				<DialogHeader>
 					<DialogTitle className="flex flex-row items-center gap-2">
 						<StampIcon className="size-5" />
-						Sign-off report
-					</DialogTitle>
+						Report					</DialogTitle>
 					<DialogDescription className="text-xs flex flex-col gap-1">
 						{latestCompleted ? (
 							// Spans, not <p>: DialogDescription already renders a <p>.
@@ -177,7 +176,7 @@ export default function SignOffDialog({
 					<div className="flex flex-col gap-4 overflow-y-auto -mx-1 px-1">
 						{openUntestedCases > 0 && (
 							<p className="text-sm rounded-md border border-amber-600/40 bg-amber-50 text-amber-800 p-3">
-								{openUntestedCases} test case{openUntestedCases === 1 ? " has" : "s have"} no finished result yet (never tested in a completed round, or left untested). You can still issue the sign-off.
+								{openUntestedCases} test case{openUntestedCases === 1 ? " has" : "s have"} no finished result yet (never tested in a completed round, or left untested). You can still issue the report.
 							</p>
 						)}
 						<UnsubmittedOrgsWarning organizations={latestCompleted?.unsubmittedOrgs ?? []} context="sign-off" />
@@ -220,7 +219,7 @@ export default function SignOffDialog({
 								id="sign-off-note"
 								value={note}
 								onChange={(e) => setNote(e.target.value)}
-								placeholder={hasExceptions ? "e.g. Accepted with 2 known issues tracked for the next release" : "Anything worth recording with the sign-off"}
+								placeholder={hasExceptions ? "e.g. Accepted with 2 known issues tracked for the next release" : "Anything worth recording with the report"}
 								disabled={isPending}
 								className="text-xs"
 							/>
@@ -352,9 +351,9 @@ export function AcknowledgeSignOffDialog({ suiteId, signOff, reportHref, trigger
 			<DialogTrigger render={trigger} />
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Acknowledge sign-off</DialogTitle>
+					<DialogTitle>Acknowledge report</DialogTitle>
 					<DialogDescription>
-						{signOff.signedOffBy ?? "The Development Team"} issued the sign-off based on {signOff.iterationName}. Acknowledging it closes the suite.
+						{signOff.signedOffBy ?? "The Development Team"} issued the report based on {signOff.iterationName}. Acknowledging it closes the suite.
 					</DialogDescription>
 				</DialogHeader>
 				{error && <p className="text-xs text-destructive">{error}</p>}
@@ -394,9 +393,9 @@ export function RejectSignOffDialog({ suiteId, signOff, trigger }: { suiteId: st
 			<DialogTrigger render={trigger} />
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
-					<DialogTitle>Reject sign-off</DialogTitle>
+					<DialogTitle>Reject report</DialogTitle>
 					<DialogDescription>
-						{signOff.signedOffBy ?? "The Development Team"} issued the sign-off based on {signOff.iterationName}. Tell them why it can&apos;t be accepted; they can reopen testing or prepare a new report.
+						{signOff.signedOffBy ?? "The Development Team"} issued the report based on {signOff.iterationName}. Tell them why it can&apos;t be accepted; they can reopen testing or prepare a new report.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-2">
@@ -414,7 +413,7 @@ export function RejectSignOffDialog({ suiteId, signOff, trigger }: { suiteId: st
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Cancel</DialogClose>
 					<Button variant="destructive" onClick={onReject} disabled={isPending || !reason.trim()}>
-						{isPending ? "Rejecting…" : "Reject sign-off"}
+						{isPending ? "Rejecting…" : "Reject report"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

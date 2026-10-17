@@ -52,7 +52,7 @@ function writePageless(on: boolean) {
 // notice: the open version's status strip, shown above the first sheet (screen only).
 // comments: the report's text comments, shown in a margin beside the sheets. The client (canComment) can
 // switch on comment mode, select text and comment; everyone else reads them. Absent on the vendor's draft.
-// info: sign-off details for the collapsible bottom-right panel.
+// info: Report details for the collapsible bottom-right panel.
 // pageHeader: the running header, shown at the top of every sheet (the first section only when pageless)
 // and repeated on every printed page.
 export function SignOffDocument({ comments, leading, versions, sections = [], rightPanel, issueAction, notice, info, pageHeader, pages = [], pageCount = 3 }: { leading?: React.ReactNode; versions?: React.ReactNode; sections?: string[]; rightPanel?: React.ReactNode; issueAction?: React.ReactNode; notice?: React.ReactNode; info?: React.ReactNode; pageHeader?: React.ReactNode; pages?: (React.ReactNode | null)[]; pageCount?: number; comments?: signOffComments }) {
@@ -147,7 +147,7 @@ export function SignOffDocument({ comments, leading, versions, sections = [], ri
 		<div className={cn("relative h-full overflow-hidden print:static print:block print:h-auto print:overflow-visible print:bg-transparent", pageless ? "bg-white" : "bg-gray-200/10")}>
 			{/* Toolbar: sticks to the top of the suite's ScrollArea while the pages scroll under it. */}
 			{/* <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b bg-background/90 px-4 py-2 backdrop-blur sm:px-6 print:hidden">
-				<div className="min-w-0 flex-1">{leading ?? <p className="truncate text-sm font-medium">Sign-off report</p>}</div>
+				<div className="min-w-0 flex-1">{leading ?? <p className="truncate text-sm font-medium">Report</p>}</div>
 
 				<ButtonGroup>
 					<Button variant="outline" size="icon-sm" aria-label={`Previous ${unit.toLowerCase()}`} disabled={page <= 1} onClick={() => goTo(page - 1)}>
@@ -367,21 +367,21 @@ export function SignOffDocument({ comments, leading, versions, sections = [], ri
 				)}
 			</aside>
 
-			{/* Sign-off details: floats over the canvas's bottom-right corner like the settings panel (no track
+			{/* Report details: floats over the canvas's bottom-right corner like the settings panel (no track
 			    padding, so collapsing it never moves the sheets); collapses to a button. */}
 			{info && (infoOpen ? (
 				<aside className="absolute right-5 bottom-5 z-20 flex max-h-[calc(100%-7rem)] w-72 flex-col overflow-y-auto no-scrollbar rounded-lg border bg-background shadow-sm print:hidden">
 					<div className="flex items-center gap-2 px-4 pt-4 text-sm font-medium">
 						<Info className="size-4 text-muted-foreground" />
-						<span className="flex-1">Sign-off details</span>
-						<Button variant="ghost" size="icon-sm" aria-label="Hide sign-off details" title="Hide" onClick={() => setInfoOpen(false)}>
+						<span className="flex-1">Report details</span>
+						<Button variant="ghost" size="icon-sm" aria-label="Hide report details" title="Hide" onClick={() => setInfoOpen(false)}>
 							<ChevronDown />
 						</Button>
 					</div>
 					<div className="px-4 pt-2 pb-4">{info}</div>
 				</aside>
 			) : (
-				<Button variant="outline" size="icon" aria-label="Show sign-off details" title="Sign-off details" className="absolute right-5 bottom-5 z-20 bg-background shadow-sm print:hidden" onClick={() => setInfoOpen(true)}>
+				<Button variant="outline" size="icon" aria-label="Show report details" title="Report details" className="absolute right-5 bottom-5 z-20 bg-background shadow-sm print:hidden" onClick={() => setInfoOpen(true)}>
 					<Info />
 				</Button>
 			))}

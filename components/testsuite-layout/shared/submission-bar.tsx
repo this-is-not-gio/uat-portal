@@ -81,7 +81,7 @@ export default function SubmissionBar({
 // trigger: a custom button to open it (the tester header's "Submit Result"); defaults to the bar's own.
 // Submission is per tester (0069): this submits only the signed-in person's own results. The org
 // counts as submitted once every active tester has. teammatesPending: others still to submit.
-export function SubmitDialog({ iteration, organizationName, teammatesPending = 0, untestedCases, trigger }: { iteration: testIteration; organizationName: string; teammatesPending?: number; untestedCases: untestedCase[]; trigger?: React.ReactElement }) {
+export function SubmitDialog({ iteration, organizationName, teammatesPending = 0, untestedCases, missingEvidence = [], trigger }: { iteration: testIteration; organizationName: string; teammatesPending?: number; untestedCases: untestedCase[]; missingEvidence?: string[]; trigger?: React.ReactElement }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -139,15 +139,16 @@ export function SubmitDialog({ iteration, organizationName, teammatesPending = 0
 						</div>
 					</div>
 				)}
-				<p className="text-xs text-muted-foreground">
-					{teammatesPending === 0
-						? `You're the last one: submitting completes ${organizationName}'s submission for this round.`
-						: `${organizationName} is submitted once everyone on its team has. ${teammatesPending} teammate${teammatesPending === 1 ? " is" : "s are"} still to submit.`}
-				</p>
+				{missingEvidence.length > 0 && (
+					<div className="text-sm rounded-md border border-destructive/40 bg-destructive/5 text-destructive p-3 flex flex-col gap-1">
+						<p>You can&apos;t submit yet. Every failed step needs a remark with at least one evidence (a file or a link).</p>
+						<p className="text-xs">Missing on: <span className="font-mono">{missingEvidence.join(", ")}</span></p>
+					</div>
+				)}
 				{error && <p className="text-xs text-destructive">{error}</p>}
 				<DialogFooter>
 					<DialogClose render={<Button variant="outline" disabled={isPending} />}>Go back</DialogClose>
-					<Button onClick={onSubmit} disabled={isPending}>
+					<Button onClick={onSubmit} disabled={isPending || missingEvidence.length > 0}>
 						{isPending ? "Submitting…" : untestedCases.length > 0 ? "Submit anyway" : "Submit"}
 					</Button>
 				</DialogFooter>

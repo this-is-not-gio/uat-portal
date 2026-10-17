@@ -173,7 +173,7 @@ function SignOffEntry({ signOff, suiteSlug }: { signOff: suiteOverview["signOffs
 			{signOff.note && <p className="text-sm">{signOff.note}</p>}
 			{signOff.hasReport && (
 				<NextLink href={`/testsuite/${suiteSlug}/sign-off?signOff=${signOff.id}`} className="text-xs underline underline-offset-4 w-fit">
-					View sign-off report
+					View report
 				</NextLink>
 			)}
 		</div>

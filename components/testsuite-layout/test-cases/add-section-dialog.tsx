@@ -23,21 +23,26 @@ import { applyIterationSync } from "@/lib/supabase/sync-actions";
 
 type scopeSection = { id: string; name: string; testCases: scopeOption[] };
 
-// Adds test cases to a planned round: pick a section, then tick the cases of it to test.
-// Complete cases start ticked; incomplete ones (apply_iteration_sync rejects them) and cases
-// already in the round are shown but can't be picked. Ticks are kept while switching sections,
-// and one Add sends everything ticked across all of them.
+// Manages a planned round's test cases: pick a section, then tick the cases of it to test.
+// Cases already in the round start ticked; unticking one takes it out. Other complete cases start
+// ticked unless already tested and unchanged since; incomplete ones (apply_iteration_sync rejects
+// them) and cases left out from the section page are shown but can't be picked. Ticks are kept
+// while switching sections, and one Save sends every add and removal across all of them.
 export default function AddSectionDialog({
 	suiteId,
 	iterationId,
-	includedCaseIds,
+	heldCases,
+	sectionName,
 	open,
 	onOpenChange,
 }: {
 	suiteId: string;
 	iterationId: string;
-	// Live test case ids the round already holds.
-	includedCaseIds: Set<string>;
+	// Live test cases the round already holds, with their result row ids (what a removal needs)
+	// and whether they're ticked to run.
+	heldCases: Record<string, { resultIds: string[]; included: boolean }>;
+	// Set to manage just this one section: it opens straight to its cases, no section picker.
+	sectionName?: string;
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
@@ -54,15 +59,29 @@ export default function AddSectionDialog({
 		let cancelled = false;
 		getIterationScopeOptions({ suiteId, iterationId }).then((result) => {
 			if (cancelled) return;
-			if (result.ok) setSections(result.data.sections);
+			if (result.ok) {
+				setSections(result.data.sections);
+				setSelected(new Set(Object.entries(heldCases).filter(([, held]) => held.included).map(([id]) => id)));
+				const only = sectionName ? result.data.sections.find((section) => section.name === sectionName) : undefined;
+				if (only) {
+					setActiveId(only.id);
+					setVisited(new Set([only.id]));
+				}
+			}
 			else setError(result.error);
 		}).catch(() => {
 			if (!cancelled) setError("Couldn't load the suite's sections. Close and try again.");
 		});
 		return () => { cancelled = true; };
-	}, [open, sections, suiteId, iterationId]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [open, sections, suiteId, iterationId, sectionName]);
 
-	const pickable = (section: scopeSection) => section.testCases.filter((tc) => tc.issues.length === 0 && !includedCaseIds.has(tc.id));
+	const inRound = (id: string) => !!heldCases[id]?.included;
+	const leftOut = (id: string) => !!heldCases[id] && !heldCases[id].included;
+	// An incomplete case can be taken out but not put in.
+	const pickable = (section: scopeSection) => section.testCases.filter((tc) => !leftOut(tc.id) && (inRound(tc.id) || tc.issues.length === 0));
+	// Already tested last round and unchanged since: nothing to retest, so it isn't ticked by default.
+	const needsTesting = (tc: scopeOption) => !(tc.flags.some((f) => f.flag === "tested") && !tc.flags.some((f) => f.flag === "changed_since"));
 	const active = sections?.find((section) => section.id === activeId) ?? null;
 
 	function openSection(section: scopeSection) {
@@ -71,7 +90,7 @@ export default function AddSectionDialog({
 		setVisited((current) => new Set(current).add(section.id));
 		setSelected((current) => {
 			const next = new Set(current);
-			for (const tc of pickable(section)) next.add(tc.id);
+			for (const tc of pickable(section).filter((tc) => !inRound(tc.id) && needsTesting(tc))) next.add(tc.id);
 			return next;
 		});
 	}
@@ -95,10 +114,14 @@ export default function AddSectionDialog({
 		setError(null);
 	}
 
-	function onAdd() {
+	const toAdd = [...selected].filter((id) => !heldCases[id]);
+	const removed = Object.entries(heldCases).filter(([id, held]) => held.included && !selected.has(id));
+	const changeCount = toAdd.length + removed.length;
+
+	function onSave() {
 		setError(null);
 		startTransition(async () => {
-			const result = await applyIterationSync({ iterationId, add: [...selected], refreshIds: [], remove: [] });
+			const result = await applyIterationSync({ iterationId, add: toAdd, refreshIds: [], remove: removed.flatMap(([, held]) => held.resultIds) });
 			if (!result.ok) {
 				setError(result.error);
 				return;
@@ -117,14 +140,14 @@ export default function AddSectionDialog({
 				<DialogHeader className="flex flex-col px-2 py-3">
 					<DialogTitle className="font-heading font-semibold flex flex-row items-center gap-1">
 						<FolderPlus className="size-4" />
-						Add a section
+						{sectionName ? `Manage ${sectionName}` : "Manage test cases"}
 					</DialogTitle>
 					<DialogDescription className="text-xs text-muted-foreground">
-						Pick a section, then choose which of its test cases this iteration will test.
+						{sectionName ? "Tick the test cases this iteration will test. Unticking one takes it out of the round." : "Pick a section, then tick the test cases this iteration will test. Unticking one takes it out of the round."}
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-3 px-2">
-					<div className="flex flex-col gap-1">
+					{!sectionName && <div className="flex flex-col gap-1">
 						<p className="text-xs text-muted-foreground">Section</p>
 						<ScrollArea className="border rounded-md max-h-40">
 							<div className="flex flex-col gap-1 p-2">
@@ -148,14 +171,14 @@ export default function AddSectionDialog({
 										>
 											<span className="text-xs font-medium">{section.name}</span>
 											<span className="text-xs text-muted-foreground font-mono">
-												{addable.length === 0 ? "nothing to add" : `${count}/${addable.length} selected`}
+												{addable.length === 0 ? "nothing to pick" : `${count}/${addable.length} selected`}
 											</span>
 										</button>
 									);
 								})}
 							</div>
 						</ScrollArea>
-					</div>
+					</div>}
 
 					{active && (
 						<div className="flex flex-col gap-1">
@@ -175,14 +198,15 @@ export default function AddSectionDialog({
 								<div className="flex flex-col gap-1 p-2">
 									{active.testCases.length === 0 && <p className="text-xs text-muted-foreground text-center py-2">This section has no test cases.</p>}
 									{active.testCases.map((tc) => {
-										const inRound = includedCaseIds.has(tc.id);
-										const incomplete = tc.issues.length > 0;
+										const held = !!heldCases[tc.id];
+										const out = leftOut(tc.id);
+										const incomplete = tc.issues.length > 0 && !held;
 										return (
 											<label key={tc.id} className="flex flex-row items-center gap-2 rounded-md border px-2 py-1.5">
 												<Checkbox
-													checked={inRound || selected.has(tc.id)}
+													checked={selected.has(tc.id)}
 													onCheckedChange={(checked) => toggleCases([tc.id], !!checked)}
-													disabled={inRound || incomplete || isPending}
+													disabled={out || incomplete || isPending}
 												/>
 												<span className="text-xs flex-1">{[tc.code, tc.title].filter(Boolean).join(" ")}</span>
 												{tc.flags.map((flag) => {
@@ -194,8 +218,8 @@ export default function AddSectionDialog({
 														</Badge>
 													);
 												})}
-												{inRound && <Badge variant="secondary" className="text-xs">In this round</Badge>}
-												{incomplete && !inRound && <span className="text-xs text-amber-800">Incomplete: {tc.issues.join(", ")}</span>}
+												{out && <Badge variant="secondary" className="text-xs">Left out of this round</Badge>}
+												{incomplete && <span className="text-xs text-amber-800">Incomplete: {tc.issues.join(", ")}</span>}
 											</label>
 										);
 									})}
@@ -210,9 +234,9 @@ export default function AddSectionDialog({
 						<X className="size-4" />
 						Cancel
 					</DialogClose>
-					<Button onClick={onAdd} disabled={isPending || selected.size === 0}>
+					<Button onClick={onSave} disabled={isPending || changeCount === 0}>
 						<Check className="size-4" />
-						{isPending ? "Adding…" : `Add ${selected.size} ${selected.size === 1 ? "test case" : "test cases"}`}
+						{isPending ? "Saving…" : changeCount === 0 ? "Save changes" : `Save changes (+${toAdd.length} / −${removed.length})`}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

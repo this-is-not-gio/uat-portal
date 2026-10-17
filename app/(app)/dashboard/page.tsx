@@ -1,18 +1,21 @@
 import { requireUser } from "@/lib/supabase/auth";
-import { getSidebarSuites, type SidebarSuite, type suiteStatus } from "@/lib/supabase/Init";
+import { getSidebarSuites, type suiteStatus } from "@/lib/supabase/Init";
 import { statusMapping } from "@/components/testsuite-layout/suite-status-badge";
 import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActiveRounds, getRecentResults, getRoundsAwaitingSignOff, getRunningRoundStarts, getSignOffsAwaitingAck } from "@/lib/supabase/test-iterations";
-import { BellRing, BookAlert, CalendarClock, CircleAlert, CircleCheck, ClipboardList, Clock, FileSignature, FlaskConical, History, Hourglass, Send, SquarePen, Stamp } from "lucide-react";
+import { BellRing, BookAlert, CalendarClock, CalendarRange, CircleAlert, CircleCheck, ClipboardList, Clock, FileSignature, FlaskConical, History, Hourglass, Send, SquarePen, Stamp } from "lucide-react";
 import Link from "next/link";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
 import { Badge } from "@/components/ui/badge";
 import ActiveIterationTable from "@/components/dashboard/active-iteration-table";
-import YourTestingTable from "@/components/dashboard/your-testing-table";
+import ActionItemsTable, { type ActionItemRow } from "@/components/dashboard/action-items-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DismissibleNotice from "@/components/dashboard/dismissible-notice";
+import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
+import { DashboardCard } from "@/components/dashboard/dashboard-card";
+import { TestingSchedule } from "@/components/dashboard/testing-schedule";
 
 
 // Local copy of the TestStatusMapping colours: that map lives in a "use client" file, which a Server Component can't read values from.
@@ -34,7 +37,7 @@ const TAGLINES: Partial<Record<suiteStatus, string>> = {
 	draft: "Still on the drawing board",
 	ready: "Locked, loaded, waiting for testers",
 	in_testing: "Bug hunt in progress",
-	for_sign_off: "Sign-off report in the works",
+	for_sign_off: "Report in the works",
 	// sign_off_issued: "Ball's in the client's court",
 	// sign_off_rejected: "Sent back by the client",
 	// signed_off: "Shipped it!",
@@ -51,71 +54,23 @@ function UrgentPulse({ tone }: { tone: string }) {
 	);
 }
 
-// TEMP mock rows for designing the tester Continue Testing table. Set to false (or delete) when done.
-const MOCK_TESTER = true;
-const dayOffset = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
-const MOCK_YOUR_TESTING = [
-	{ suiteCode: "ONB", suiteName: "Customer Onboarding", roundName: "Regression Pass", start: -9, end: 5, remaining: 18 },
-	{ suiteCode: "LOAN", suiteName: "Loan Application", roundName: "Round 2 Retest", start: -14, end: -2, remaining: 7 },
-	{ suiteCode: "PAY", suiteName: "Payments Gateway", roundName: "Smoke Test", start: -3, end: 11, remaining: 42 },
-	{ suiteCode: null, suiteName: "Mobile Banking App", roundName: "Release Candidate", start: -20, end: -6, remaining: 3 },
-	{ suiteCode: "KYC", suiteName: "KYC Verification", roundName: "Final Sweep", start: -1, end: null, remaining: 25 },
-	{ suiteCode: "CARD", suiteName: "Card Management", roundName: "Regression Pass", start: -6, end: 8, remaining: 31 },
-	{ suiteCode: "FUND", suiteName: "Fund Transfer", roundName: "Round 4 Retest", start: -18, end: -9, remaining: 12 },
-	{ suiteCode: "BILL", suiteName: "Bills Payment", roundName: "UAT Cycle 2", start: -2, end: 14, remaining: 56 },
-	{ suiteCode: "ACCT", suiteName: "Account Opening", roundName: "Sanity Check", start: -5, end: 2, remaining: 9 },
-	{ suiteCode: "NOTIF", suiteName: "Notifications Service", roundName: "Edge Cases", start: -11, end: -1, remaining: 15 },
-	{ suiteCode: null, suiteName: "Reporting Module", roundName: "Data Accuracy Pass", start: -4, end: 20, remaining: 38 },
-	{ suiteCode: "ADM", suiteName: "Admin Console", roundName: "Permissions Sweep", start: -8, end: 6, remaining: 21 },
-	{ suiteCode: "SEC", suiteName: "Security Hardening", roundName: "Login Flows", start: -13, end: -4, remaining: 5 },
-].map((row, i) => ({
-	id: `mock-testing-${i}`,
-	suiteSlug: "#",
-	suiteCode: row.suiteCode,
-	suiteName: row.suiteName,
-	roundNumber: i + 1,
-	roundName: row.roundName,
-	timeline: { start: dayOffset(row.start), end: row.end == null ? null : dayOffset(row.end) },
-	overdue: row.end != null && row.end < 0,
-	remaining: row.remaining,
-}));
-
-const mockSuite = (i: number, title: string, code: string | null, status: "in_progress" | "not_started", round: { name: string; end: number | null }, submittedDaysAgo: number | null): SidebarSuite => ({
-	id: `mock-suite-${title}`,
-	title,
-	slug: "#",
-	code,
-	status: "in_testing",
-	openRound: { number: i, name: round.name, status, plannedEnd: round.end == null ? null : dayOffset(round.end) },
-	mine: { inOpenRound: true, submittedAt: submittedDaysAgo == null ? null : dayOffset(-submittedDaysAgo), remaining: 0, everParticipated: true },
-});
-const MOCK_SUBMITTED = [
-	mockSuite(1, "Card Management", "CARD", "in_progress", { name: "Regression Pass", end: 4 }, 2),
-	mockSuite(2, "Fund Transfer", "FUND", "in_progress", { name: "Round 3 Retest", end: 9 }, 0),
-	mockSuite(1, "Bills Payment", null, "in_progress", { name: "UAT Cycle", end: null }, 6),
-	mockSuite(4, "Loan Application", "LOAN", "in_progress", { name: "Round 4 Verification", end: 7 }, 3),
-	mockSuite(2, "KYC Verification", "KYC", "in_progress", { name: "Document Upload", end: 12 }, 1),
-	mockSuite(1, "Payments Gateway", "PAY", "in_progress", { name: "Smoke Test", end: 3 }, 4),
-	mockSuite(3, "Customer Onboarding", "ONB", "in_progress", { name: "Final Regression", end: 10 }, 5),
-	mockSuite(1, "Mobile Banking App", null, "in_progress", { name: "Release Candidate", end: null }, 8),
-];
-const MOCK_UPCOMING = [
-	mockSuite(1, "Account Opening", "ACCT", "not_started", { name: "Kickoff Round", end: 21 }, null),
-	mockSuite(3, "Notifications Service", "NOTIF", "not_started", { name: "Round 3 Verification", end: 35 }, null),
-	mockSuite(1, "Reporting Module", null, "not_started", { name: "Initial Pass", end: null }, null),
-	mockSuite(2, "Card Management", "CARD", "not_started", { name: "Chargeback Flows", end: 42 }, null),
-	mockSuite(1, "Security Hardening", "SEC", "not_started", { name: "Pen-Test Retest", end: 28 }, null),
-	mockSuite(5, "Loan Application", "LOAN", "not_started", { name: "Round 5 Sign-off Prep", end: 49 }, null),
-	mockSuite(1, "Admin Console", "ADM", "not_started", { name: "Audit Log Review", end: null }, null),
-	mockSuite(2, "Fund Transfer", "FUND", "not_started", { name: "Cut-off Times", end: 56 }, null),
+// Dev-only sample rows (open /dashboard?mock=1) to preview every action type without touching the database. Remove once the design is settled.
+const daysFromNow = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+const MOCK_ACTION_ROWS: ActionItemRow[] = [
+	{ id: "mock-ack-1", action: "review", href: "#", suiteCode: "UAT-101", suiteName: "Licensing Renewal Portal", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-ack-2", action: "review", href: "#", suiteCode: "UAT-087", suiteName: "Permit Applications", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-returned", action: "review_returned", href: "#", suiteCode: "UAT-059", suiteName: "Billing Statements", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-followup", action: "follow_up", href: "#", suiteCode: "UAT-081", suiteName: "Document Uploads", roundName: "Round 2: Regression", timeline: { start: daysFromNow(-15), end: daysFromNow(-2) }, overdue: false, remaining: 0 },
+	{ id: "mock-followup-review", action: "follow_up_review", href: "#", suiteCode: "UAT-045", suiteName: "Audit Trail", roundName: null, timeline: { start: null, end: null }, overdue: false, remaining: 0 },
+	{ id: "mock-submit-1", action: "submit", href: "#", suiteCode: "UAT-094", suiteName: "Payments Gateway", roundName: "Round 2: Regression", timeline: { start: daysFromNow(-9), end: daysFromNow(3) }, overdue: false, remaining: 0 },
+	{ id: "mock-test-overdue", action: "test", href: "#", suiteCode: "UAT-072", suiteName: "Citizen Registry", roundName: "Round 1: Initial pass", timeline: { start: daysFromNow(-21), end: daysFromNow(-4) }, overdue: true, remaining: 14 },
+	{ id: "mock-submit-overdue", action: "submit", href: "#", suiteCode: "UAT-066", suiteName: "Reports Dashboard", roundName: "Round 3: Fixes", timeline: { start: daysFromNow(-12), end: daysFromNow(-1) }, overdue: true, remaining: 0 },
+	{ id: "mock-test-1", action: "test", href: "#", suiteCode: "UAT-110", suiteName: "Notifications", roundName: "Round 1: Initial pass", timeline: { start: daysFromNow(-3), end: daysFromNow(11) }, overdue: false, remaining: 27 },
+	{ id: "mock-test-2", action: "test", href: "#", suiteCode: null, suiteName: "Profile Settings", roundName: "Round 2: Regression", timeline: { start: daysFromNow(-1), end: null }, overdue: false, remaining: 1 },
 ];
 
-const MOCK_ACK: SidebarSuite[] = [
-	["Customer Onboarding", "ONB"], ["Loan Application", "LOAN"], ["Payments Gateway", "PAY"], ["Mobile Banking App", null],
-	["KYC Verification", "KYC"], ["Card Management", "CARD"], ["Fund Transfer", "FUND"],
-].map(([title, code], i) => ({ ...mockSuite(i + 1, title!, code, "in_progress", { name: `Round ${i + 1}`, end: null }, null), status: "sign_off_issued" as const }));
-
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ mock?: string }> }) {
+	const useMock = process.env.NODE_ENV !== "production" && (await searchParams).mock === "1";
 	const user = await requireUser();
 	// Same cached call as the sidebar in the layout, so no extra round trip.
 	const suites = await getSidebarSuites(user);
@@ -147,54 +102,85 @@ export default async function DashboardPage() {
 			.map((round) => ({ key: `complete-${round.iteration.id}`, Icon: CircleCheck, tone: "text-emerald-600", suite: round.suiteName, href: testResultsHref(round.suiteSlug, "all", { iteration: round.iteration.iterationNumber }), text: `Every org submitted ${round.iteration.name}, ready to complete` })),
 		...awaitingSignOff
 			.filter((round) => !runningSlugs.has(round.suiteSlug))
-			.map((round) => ({ key: `signoff-${round.iteration.id}`, Icon: FileSignature, tone: "text-amber-600", suite: round.suiteName, href: testResultsHref(round.suiteSlug, "all", { iteration: round.iteration.iterationNumber }), text: `${round.iteration.name} completed, sign-off not issued yet` })),
+			.map((round) => ({ key: `signoff-${round.iteration.id}`, Icon: FileSignature, tone: "text-amber-600", suite: round.suiteName, href: testResultsHref(round.suiteSlug, "all", { iteration: round.iteration.iterationNumber }), text: `${round.iteration.name} completed, report not issued yet` })),
 		...suites
 			.filter((suite) => suite.status === "sign_off_rejected")
-			.map((suite) => ({ key: `rejected-${suite.id}`, Icon: CircleAlert, tone: "text-destructive", suite: suite.title, href: `/testsuite/${suite.slug}/sign-off`, text: "Client rejected the sign-off: reopen testing or create a new report" })),
+			.map((suite) => ({ key: `rejected-${suite.id}`, Icon: CircleAlert, tone: "text-destructive", suite: suite.title, href: `/testsuite/${suite.slug}/sign-off`, text: "Client rejected the report: reopen testing or create a new report" })),
 		...awaitingAck.map((signOff) => {
 			const days = daysSince(signOff.signedOffAt);
-			return { key: `ack-${signOff.id}`, Icon: Hourglass, tone: "text-muted-foreground", suite: signOff.suiteName, href: `/testsuite/${signOff.suiteSlug}/sign-off`, text: `Sign-off${signOff.iterationName ? ` for ${signOff.iterationName}` : ""} awaiting client acknowledgement, ${days === 0 ? "issued today" : `${days} ${days === 1 ? "day" : "days"} waiting`}` };
+			return { key: `ack-${signOff.id}`, Icon: Hourglass, tone: "text-muted-foreground", suite: signOff.suiteName, href: `/testsuite/${signOff.suiteSlug}/sign-off`, text: `Report${signOff.iterationName ? ` for ${signOff.iterationName}` : ""} awaiting client acknowledgement, ${days === 0 ? "issued today" : `${days} ${days === 1 ? "day" : "days"} waiting`}` };
 		}),
 	];
 	// Sign-off tracker: the attention items that belong to the sign-off flow.
 	const signOffTracker = attention.filter((item) => /^(signoff|rejected|ack)-/.test(item.key));
 
 	// The client's in-app notice: issued sign-offs waiting for its answer.
-	const awaitingMySignOff = [...(user.role === "Internal" ? suites.filter((suite) => suite.status === "sign_off_issued") : []), ...(MOCK_TESTER && user.role !== "Admin" ? MOCK_ACK : [])];
+	const canAcknowledge = user.role === "Internal";
+	const awaitingMySignOff = canAcknowledge ? suites.filter((suite) => suite.status === "sign_off_issued") : [];
 
 	// Tester view: rounds their org is in, split by whether the org has submitted yet.
 	// Planned (not_started) rounds already list their participants, but can't be tested yet.
 	const myRunning = suites.filter((suite) => suite.openRound?.status === "in_progress" && suite.mine.inOpenRound);
 	const toTest = myRunning.filter((suite) => !suite.mine.submittedAt);
-	const submitted = [...myRunning.filter((suite) => suite.mine.submittedAt), ...(MOCK_TESTER ? MOCK_SUBMITTED : [])];
-	const upcoming = [...suites.filter((suite) => suite.openRound?.status === "not_started" && suite.mine.inOpenRound), ...(MOCK_TESTER ? MOCK_UPCOMING : [])];
+	const submitted = myRunning.filter((suite) => suite.mine.submittedAt);
+	const upcoming = suites.filter((suite) => suite.openRound?.status === "not_started" && suite.mine.inOpenRound);
 	const roundStarts = user.role === "Admin" || toTest.length === 0 ? new Map<string, string>() : await getRunningRoundStarts();
-	const realTestingRows = toTest.map(({ id, slug, code, title, openRound, mine }) => ({
+	const liveTestingRows: ActionItemRow[] = toTest.map(({ id, slug, code, title, openRound, mine }) => ({
 		id,
-		suiteSlug: slug,
+		// Nothing left to test but not handed in yet: the action becomes submitting.
+		action: mine.remaining === 0 ? "submit" : "test",
+		href: `/testsuite/${slug}/test-cases/all`,
 		suiteCode: code,
 		suiteName: title,
-		roundNumber: openRound!.number,
 		roundName: openRound!.name,
 		timeline: { start: roundStarts.get(slug) ?? null, end: openRound!.plannedEnd },
 		overdue: openRound!.plannedEnd != null && openRound!.plannedEnd < today,
 		remaining: mine.remaining,
 	}));
-	const yourTestingRows = [...realTestingRows, ...(MOCK_TESTER ? MOCK_YOUR_TESTING : [])];
+	// Issued reports aren't tied to a running round, so they carry no timeline.
+	const liveAcknowledgeRows: ActionItemRow[] = awaitingMySignOff.map(({ id, slug, code, title }) => ({
+		id: `ack-${id}`,
+		action: "review",
+		href: `/testsuite/${slug}/sign-off`,
+		suiteCode: code,
+		suiteName: title,
+		roundName: null,
+		timeline: { start: null, end: null },
+		overdue: false,
+		remaining: 0,
+	}));
+	// A rejected report is back with the vendor; the client only sees it so the outcome isn't lost.
+	const liveReturnedRows: ActionItemRow[] = canAcknowledge
+		? suites.filter((suite) => suite.status === "sign_off_rejected").map(({ id, slug, code, title }) => ({
+			id: `returned-${id}`,
+			action: "review_returned",
+			href: `/testsuite/${slug}/sign-off`,
+			suiteCode: code,
+			suiteName: title,
+			roundName: null,
+			timeline: { start: null, end: null },
+			overdue: false,
+			remaining: 0,
+		}))
+		: [];
+	const yourTestingRows = useMock ? MOCK_ACTION_ROWS.filter((row) => row.action === "test" || row.action === "submit") : liveTestingRows;
+	const acknowledgeRows = useMock ? MOCK_ACTION_ROWS.filter((row) => row.action !== "test" && row.action !== "submit") : [...liveAcknowledgeRows, ...liveReturnedRows];
+	// Reports first: they block the vendor's sign-off.
+	const actionItemRows = [...acknowledgeRows, ...yourTestingRows];
 	const overdueCount = yourTestingRows.filter((row) => row.overdue).length;
 	const casesLeft = yourTestingRows.reduce((sum, row) => sum + row.remaining, 0);
 	// Notice card: what the tester has to do, most urgent first. Each item jumps to its section.
 	const testerActions = [
 		...(overdueCount > 0 ? [{ key: "overdue", href: "#continue-testing", Icon: Clock, tone: "text-destructive", urgent: true, text: `${overdueCount} ${overdueCount === 1 ? "round is" : "rounds are"} past the planned end date` }] : []),
-		...(awaitingMySignOff.length > 0 ? [{ key: "ack", href: "#acknowledgement", Icon: FileSignature, tone: "text-orange-600", urgent: false, text: `${awaitingMySignOff.length} ${awaitingMySignOff.length === 1 ? "sign-off needs" : "sign-offs need"} your acknowledgement` }] : []),
+		...(awaitingMySignOff.length > 0 ? [{ key: "ack", href: "#acknowledgement", Icon: FileSignature, tone: "text-orange-600", urgent: false, text: `${awaitingMySignOff.length} ${awaitingMySignOff.length === 1 ? "report needs" : "reports need"} your acknowledgement` }] : []),
 		...(yourTestingRows.length > 0 ? [{ key: "test", href: "#continue-testing", Icon: ClipboardList, tone: "text-emerald-600", urgent: false, text: `${casesLeft} ${casesLeft === 1 ? "case" : "cases"} left to test across ${yourTestingRows.length} ${yourTestingRows.length === 1 ? "round" : "rounds"}` }] : []),
 	];
 	// One sentence for the notice: "5 rounds are past the planned end date, 7 sign-offs need your acknowledgement, and 42 cases left to test across 13 rounds."
 	const actionSummary = new Intl.ListFormat("en", { style: "long", type: "conjunction" }).format(testerActions.map((action) => action.text));
 	const testerStats = [
-		{ label: "Rounds to test", href: "#continue-testing", value: yourTestingRows.length, unit: yourTestingRows.length === 1 ? "round" : "rounds", Icon: ClipboardList, tagline: yourTestingRows.length === 0 ? "Inbox zero, enjoy it" : "Waiting on your org", tile: "bg-emerald-50 text-emerald-600 border-emerald-600/40" },
+		{ label: "Iteration to test", href: "#continue-testing", value: yourTestingRows.length, unit: yourTestingRows.length === 1 ? "round" : "rounds", Icon: ClipboardList, tagline: yourTestingRows.length === 0 ? "Inbox zero, enjoy it" : "Waiting on your submission", tile: "bg-emerald-50 text-emerald-600 border-emerald-600/40" },
 		{ label: "Cases left", href: "#continue-testing", value: casesLeft, unit: casesLeft === 1 ? "case" : "cases", Icon: Clock, tagline: casesLeft === 0 ? "Nothing left to break" : "Bugs won't find themselves", tile: "bg-amber-50 text-amber-600 border-amber-600/40" },
-		{ label: "Needs acknowledgement", href: "#acknowledgement", value: awaitingMySignOff.length, unit: awaitingMySignOff.length === 1 ? "sign-off" : "sign-offs", Icon: Stamp, tagline: awaitingMySignOff.length === 0 ? "Nothing waiting on you" : "Read it, then answer", tile: "bg-orange-50 text-orange-600 border-orange-600/40" },
+		...(canAcknowledge ? [{ label: "Needs acknowledgement", href: "#acknowledgement", value: awaitingMySignOff.length, unit: awaitingMySignOff.length === 1 ? "acknowledgement" : "acknowledgements", Icon: Stamp, tagline: awaitingMySignOff.length === 0 ? "Nothing waiting on you" : "Read it, then answer", tile: "bg-orange-50 text-orange-600 border-orange-600/40" }] : []),
 	];
 
 	return (
@@ -204,8 +190,10 @@ export default async function DashboardPage() {
 					<p className="text-xl font-bold sm:text-2xl font-heading">Hello, {user.fullName}</p>
 					<p className="text-xs text-muted-foreground">
 						{user.role === "Admin"
-							? "Your testing command center — see which rounds are moving, who's submitted, and what's ready for sign-off."
-							: "Your turn to put it through its paces. Pick up where you left off and make every click count."}
+							? "Your testing command center — see which rounds are moving, who's submitted, and what's ready for acknowledgement."
+							: canAcknowledge
+								? "Pick up your testing where you left off, and review the reports the development team issued for your answer."
+								: "Your turn to put it through its paces. Pick up where you left off and make every click count."}
 					</p>
 				</div>
 				<div className="px-4 pb-6 sm:px-6">
@@ -303,7 +291,7 @@ export default async function DashboardPage() {
 									<div className="flex flex-col p-2 gap-2">
 										{attention.length === 0 ? (
 											<div className="flex flex-1 p-10">
-												<EmptyState size="sm" title="Nothing needs you right now" description="All clear. No rounds are overdue, no sign-offs are waiting, and no test cases are failing." icon={BookAlert} />
+												<EmptyState size="sm" title="Nothing needs you right now" description="All clear. No rounds are overdue, no acknowledgements are waiting, and no test cases are failing." icon={BookAlert} />
 											</div>
 										) : attention.map(({ key, Icon, tone, suite, href, text }) => (
 											<Link key={key} href={href} className="flex items-center gap-3 text-xs hover:bg-muted/50">
@@ -359,8 +347,8 @@ export default async function DashboardPage() {
 											<Stamp className="size-5" />
 										</div>
 										<div className="">
-											<h2 className="text-xs font-medium">Sign-Off Tracker</h2>
-											<p className="text-xs text-muted-foreground">{signOffTracker.length} {signOffTracker.length === 1 ? "sign-off" : "sign-offs"} in progress</p>
+											<h2 className="text-xs font-medium">Acknowledgement Tracker</h2>
+											<p className="text-xs text-muted-foreground">{signOffTracker.length} {signOffTracker.length === 1 ? "acknowledgement" : "acknowledgements"} in progress</p>
 										</div>
 									</div>
 								</div>
@@ -368,7 +356,7 @@ export default async function DashboardPage() {
 									<div className="flex flex-col justify-between gap-2 p-2">
 										{signOffTracker.length === 0 ? (
 											<div className="flex flex-1 p-10">
-												<EmptyState size="sm" title="Nothing to Track" description="Nothing to track sign-offs at the moment." icon={Stamp} />
+												<EmptyState size="sm" title="Nothing to Track" description="Nothing to track acknowledgements at the moment." icon={Stamp} />
 											</div>
 										) : signOffTracker.map(({ key, Icon, tone, suite, href, text }) => (
 											<Link key={key} href={href} className="flex items-center text-xs hover:bg-muted/50">
@@ -433,17 +421,20 @@ export default async function DashboardPage() {
 						<div className="flex flex-col gap-4">
 							{testerActions.length > 0 && (
 								<DismissibleNotice tone={testerActions[0].urgent ? "destructive" : "amber"}>
-									<div className="flex flex-row gap-2 items-center">
+									<div className="flex flex-row items-center gap-2">
 										<BellRing className="size-5 shrink-0" />
 										<div>
-											<p className="text-sm font-heading font-semibold">You have pending actions to take</p>
-											<p className="text-xs first-letter:uppercase text-amber-600">{actionSummary}.</p>
+											<p className="font-heading text-sm font-semibold">You have pending actions to take</p>
+											<p className="text-xs opacity-80 first-letter:uppercase">{actionSummary}.</p>
 										</div>
 									</div>
 								</DismissibleNotice>
 							)}
+							<DashboardCard Icon={CalendarRange} tone="blue" title="Testing Timeline" description="Key dates for the rounds your org is part of, from kickoff to the planned end of testing">
+								<TestingSchedule />
+							</DashboardCard>
 
-							<div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+							<div className={"grid grid-cols-1 gap-3 md:grid-cols-3"}>
 								{testerStats.map(({ label, href, value, unit, Icon, tagline, tile }) => (
 									<Link key={label} href={href} className="group/card block rounded-md focus-visible:outline-2 focus-visible:outline-offset-2">
 										<Card
@@ -458,7 +449,7 @@ export default async function DashboardPage() {
 												<CardTitle className="font-bold font-mono tabular-nums">
 													<div className="flex flex-wrap items-baseline gap-x-2 px-1 text-3xl">
 														{value}
-														<span className="text-xs text-muted-foreground font-normal">{unit}</span>
+														<span className="text-xs font-normal text-muted-foreground">{unit}</span>
 													</div>
 												</CardTitle>
 												<CardAction>
@@ -474,147 +465,19 @@ export default async function DashboardPage() {
 									</Link>
 								))}
 							</div>
-							<div id="continue-testing" className="scroll-mt-4 border rounded-md bg-gray-50/10 border-gray-600/40">
-								<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-									<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-										<div className="flex flex-row gap-2 items-center">
-											<div className="bg-emerald-50 text-emerald-600 border-emerald-600/40 rounded-md p-2 border">
-												<FlaskConical className="size-5" />
-											</div>
-											<div>
-												<h2 className="text-xs font-medium">Continue Testing</h2>
-												<p className="text-xs text-muted-foreground">Open iteration that needed your result and submissions</p>
-											</div>
-										</div>
-										{overdueCount > 0 && <Badge variant="destructive">{overdueCount} overdue</Badge>}
-									</div>
-								</div>
-								{yourTestingRows.length === 0 ? (
-									<div className="flex flex-1 p-10">
-										<EmptyState size="sm" title="Nothing to test right now" description="You're all caught up. New rounds will show up here once your org is invited." icon={FlaskConical} />
-									</div>
-								) : (
-									<YourTestingTable rows={yourTestingRows} />
-								)}
-							</div>
-							<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-								<div className="border rounded-md bg-gray-50/10 border-gray-600/40 h-fit">
-									<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-										<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-											<div className="flex flex-row gap-2 items-center">
-												<div className="bg-blue-50 text-blue-600 border-blue-600/40 rounded-md p-2 border">
-													<Send className="size-5" />
-												</div>
-												<div>
-													<h2 className="text-xs font-medium">Submitted</h2>
-													<p className="text-xs text-muted-foreground">Iteration still open: withdraw from the suite to change something</p>
-												</div>
-											</div>
 
-										</div>
-									</div>
-									{submitted.length === 0 ? (
-										<div className="flex flex-1 p-10">
-											<EmptyState size="sm" title="No submissions yet" description="Finish a round and hand it in. It will wait here." icon={Send} />
-										</div>
-									) : (
-										<ScrollArea className="h-64">
-											<div className="flex flex-col gap-2 p-2">
-												{submitted.map((suite) => (
-													<Link key={suite.id} href={`/testsuite/${suite.slug}/test-cases/all`} className="text-xs hover:bg-muted/50">
-														<div className="px-4 py-2 border rounded-md bg-gray-50/10 border-gray-600/40 flex flex-row gap-3 items-center w-full">
-															<CircleCheck className="size-4 shrink-0 text-emerald-600" />
-															<div className="flex flex-col">
-																<span className="font-medium">{suite.title}</span>
-																<span className="text-muted-foreground">Round {suite.openRound!.number}: {suite.openRound!.name}</span>
-															</div>
-															<span className="ml-auto text-muted-foreground">{formatDate(suite.mine.submittedAt!)}</span>
-														</div>
-													</Link>
-												))}
-											</div>
-										</ScrollArea>
-									)}
-								</div>
-								<div className="border rounded-md bg-gray-50/10 border-gray-600/40 h-fit">
-									<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-										<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-											<div className="flex flex-row gap-2 items-center">
-												<div className="bg-violet-50 text-violet-600 border-violet-600/40 rounded-md p-2 border">
-													<CalendarClock className="size-5" />
-												</div>
-												<div>
-													<h2 className="text-xs font-medium">Coming Up</h2>
-													<p className="text-xs text-muted-foreground">Planned Iterations that you may partake in.</p>
-												</div>
-											</div>
-
-										</div>
-									</div>
-									{upcoming.length === 0 ? (
-										<div className="flex flex-1 p-10">
-											<EmptyState size="sm" title="Nothing scheduled" description="Planned rounds you're invited to will be listed here." icon={CalendarClock} />
-										</div>
-									) : (
-										<ScrollArea className="h-64">
-											<div className="flex flex-col gap-2 p-2">
-												{upcoming.map((suite) => (
-													<Link key={suite.id} href={`/testsuite/${suite.slug}/overview`} className="text-xs hover:bg-muted/50">
-														<div className="px-4 py-2 border rounded-md bg-gray-50/10 border-gray-600/40 flex flex-row gap-3 items-center w-full">
-															<CalendarClock className="size-4 shrink-0 text-violet-600" />
-															<div className="flex flex-col">
-																<span className="font-medium">{suite.title}</span>
-																<span className="text-muted-foreground">Round {suite.openRound!.number}: {suite.openRound!.name}</span>
-															</div>
-															<span className="ml-auto text-muted-foreground">{suite.openRound!.plannedEnd ? `ends ${formatDate(suite.openRound!.plannedEnd)}` : "no end date"}</span>
-														</div>
-													</Link>
-												))}
-											</div>
-										</ScrollArea>
-									)}
-								</div>
-								{awaitingMySignOff.length > 0 && (
-									<div id="acknowledgement" className="scroll-mt-4 border rounded-md bg-gray-50/10 border-gray-600/40">
-										<div className="flex flex-col gap-2 p-4 border-b border-gray-600/40">
-											<div className="flex flex-row flex-wrap gap-2 items-center justify-between">
-												<div className="flex flex-row gap-2 items-center">
-													<div className="bg-orange-50 text-orange-600 border-orange-600/40 rounded-md p-2 border">
-														<Stamp className="size-5" />
-													</div>
-													<div>
-														<h2 className="text-xs font-medium">Needs Your Acknowledgement</h2>
-														<p className="text-xs text-muted-foreground">Needed your acknowledgment for the following items:</p>
-														{/* <p className="text-xs text-muted-foreground">
-															The Development Team issued {awaitingMySignOff.length === 1 ? "a sign-off" : `${awaitingMySignOff.length} sign-offs`}. Read the report, then acknowledge or reject it.
-														</p> */}
-													</div>
-												</div>
-												<Badge variant="secondary">{awaitingMySignOff.length} waiting</Badge>
-											</div>
-										</div>
-										<ScrollArea className="h-64">
-											<div className="flex flex-col gap-2 p-2">
-												{awaitingMySignOff.map((suite) => (
-													<Link key={suite.id} href={`/testsuite/${suite.slug}/sign-off`} className="text-xs hover:bg-muted/50">
-														<div className="px-4 py-2 border rounded-md bg-gray-50/10 border-gray-600/40 flex flex-row gap-3 items-center w-full">
-															<FileSignature className="size-4 shrink-0 text-orange-600" />
-															<div className="flex flex-col">
-																<span className="font-medium">
-																	{suite.code && <span className="mr-1 font-mono text-muted-foreground">{suite.code}</span>}
-																	{suite.title}
-																</span>
-																<span className="text-muted-foreground">Sign-off report ready for review</span>
-															</div>
-															<Badge variant="outline" className="ml-auto border-orange-600/40 bg-orange-50 text-orange-700">Review</Badge>
-														</div>
-													</Link>
-												))}
-											</div>
-										</ScrollArea>
-									</div>
-								)}
-							</div>
+							<DashboardPanel
+								id="continue-testing"
+								Icon={FlaskConical}
+								tone="emerald"
+								title="Your Action Items"
+								description="Everything waiting on you: record results, submit your round, or acknowledge a report"
+								action={overdueCount > 0 ? <Badge variant="destructive">{overdueCount} overdue</Badge> : undefined}
+								empty={actionItemRows.length === 0 ? { title: "No action items", description: "You're all caught up. Rounds that need your results will show up here once your org is invited." } : undefined}
+								scroll={false}
+							>
+								<ActionItemsTable rows={actionItemRows} />
+							</DashboardPanel>
 						</div>
 					)}
 				</div>

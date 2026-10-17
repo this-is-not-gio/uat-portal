@@ -64,7 +64,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 	const iterationPill = currentIteration ? ITERATION_PILL[currentIteration.status] : null;
 	// The vendor's issued sign-off the client (Internal) acknowledges or rejects.
 	const pendingSignOff = testSuite.status === "sign_off_issued" && can(currentUser, "sign_off") ? await getPendingSignOff(testSuite.id) : null;
-	// Sign-off flow: Create draft (suite For Sign-off, yellow) → Issue (blue) → Acknowledge | Reject (red). Drafts are vendor-only.
+	// Sign-off flow: Create draft (suite For Acknowledgement, yellow) → Issue (blue) → Acknowledge | Reject (red). Drafts are vendor-only.
 	const canIssueSignOff = can(currentUser, "issue_sign_off");
 	const draftSignOff = testSuite.status === "for_sign_off" && canIssueSignOff ? await getDraftSignOff(testSuite.id) : null;
 	// The tab opens once a report is frozen, or as soon as the vendor creates a draft.
@@ -211,8 +211,8 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 										: testSuite.status === "for_sign_off" || testSuite.status === "sign_off_issued" || testSuite.status === "signed_off" ?
 											<div className="flex flex-row items-center justify-between gap-2 w-full">
 												<div className="flex flex-col gap-1">
-													<p className="text-xs font-medium text-muted-foreground">Sign-off Status</p>
-													{/* For Sign-off: the vendor is drafting. Issued: the client still has to acknowledge it. */}
+													<p className="text-xs font-medium text-muted-foreground">Acknowledgement Status</p>
+													{/* For Acknowledgement: the vendor is drafting. Issued: the client still has to acknowledge it. */}
 													<SignOffStatusBadge
 														status={testSuite.status === "for_sign_off" ? "drafting" : testSuite.status === "signed_off" ? "acknowledged" : currentUser?.role === "Admin" ? "issued" : "awaiting_acknowledgement"}
 													/>
@@ -223,14 +223,14 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 													{draftSignOff && (
 														<Button nativeButton={false} render={<Link href={`/testsuite/${testSuite.slug}/sign-off`} />} className="flex flex-row items-center gap-2">
 															<Stamp className="h-4 w-4" />
-															<p className="text-xs">Draft Sign-off Report</p>
+															<p className="text-xs">Draft Report</p>
 														</Button>
 													)}
 													{pendingSignOff ? (
 														// Acknowledge and Reject live on the report itself (Sign-off tab).
 														<Button nativeButton={false} render={<Link href={`/testsuite/${testSuite.slug}/sign-off?signOff=${pendingSignOff.id}`} />} className="flex flex-row items-center gap-2">
 															<Stamp className="h-4 w-4" />
-															<p className="text-xs">Review Sign-off</p>
+															<p className="text-xs">Review Report</p>
 														</Button>
 													) : testSuite.status === "signed_off" && can(currentUser, "archive") ? (
 														<SuiteStatusButton suiteId={testSuite.id} targetStatus="archived">
@@ -243,7 +243,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 											: testSuite.status === "sign_off_rejected" ?
 												<div className="flex flex-row items-center justify-between gap-4 w-full">
 													<div className="flex min-w-0 flex-col gap-1">
-														<p className="text-xs font-medium text-muted-foreground">Sign-off Status</p>
+														<p className="text-xs font-medium text-muted-foreground">Acknowledgement Status</p>
 														<SignOffStatusBadge status="rejected" />
 													</div>
 													{/* The vendor decides what happens next: reopen testing, or draft a new report. */}

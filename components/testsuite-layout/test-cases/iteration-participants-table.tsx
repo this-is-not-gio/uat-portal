@@ -86,7 +86,7 @@ export default function IterationParticipantsTable({
 			</div>
 			<div className="flex flex-col items-center text-center">
 				<p className="font-heading text-lg font-semibold">No Participants Yet</p>
-				<p className="text-xs text-muted-foreground">Add section to the iteration to planning participants.</p>
+				<p className="text-xs text-muted-foreground">Use Manage Participants to pick who tests this iteration.</p>
 			</div>
 		</div>;
 	}
