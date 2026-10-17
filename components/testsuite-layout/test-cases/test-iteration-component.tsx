@@ -12,6 +12,7 @@ import { IterationTestCaseList } from "./iteration-test-case-list";
 import type { notIncludedSection } from "./section-dialog";
 import AddTestCasesControl, { type addableSection } from "./add-test-cases-control";
 import IterationHeaderMenu from "./iteration-header-menu";
+import AddTestCasesButton from "./add-test-cases-button";
 import { coverageBlockers } from "./coverage-blockers";
 import { CompleteIterationButton, ResetIterationButton, StartIterationButton, StopIterationButton } from "@/components/testsuite-layout/shared/iteration-actions";
 import { unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
@@ -36,6 +37,16 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 	const allTestCases = allRows.filter((tc) => tc.includedInRun);
 	// Rows are one per case per tester, so count distinct cases. No sections means none.
 	const plannedCaseCount = new Set(allTestCases.map((tc) => tc.testCaseId ?? tc.id)).size;
+
+	// Cases the round holds, with the result rows a removal needs (Manage Sections).
+	const heldCases: Record<string, { resultIds: string[]; included: boolean }> = {};
+	for (const row of allRows) {
+		if (!row.testCaseId) continue;
+		const held = heldCases[row.testCaseId] ?? { resultIds: [], included: false };
+		held.resultIds.push(row.id);
+		held.included ||= row.includedInRun;
+		heldCases[row.testCaseId] = held;
+	}
 
 	// Note: a running round can no longer take more test cases (0023 locks its case set), so
 	// AddTestCasesControl stays unused; this list currently only feeds the header buttons' disabled state.
@@ -85,6 +96,7 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 						{/* sectionsNotIncluded is only set for an editable planned/running round. */}
 						{iteration?.status === "not_started" ?
 							<div className="flex flex-row items-center gap-1">
+								{sectionsNotIncluded && <AddTestCasesButton suiteId={testSuiteId} iterationId={iteration.id} heldCases={heldCases} />}
 								<StartIterationButton
 									iteration={iteration}
 									testerCount={tickedTesterCount}
@@ -132,6 +144,7 @@ export async function TestIterationComponent({ testSuiteId, testSuiteSlug, suite
 					participants={participants}
 					testerResults={testerResults}
 					coverage={coverage}
+					manage={sectionsNotIncluded ? { testSuiteSlug } : undefined}
 				/>
 			</div>
 		</ScrollArea>

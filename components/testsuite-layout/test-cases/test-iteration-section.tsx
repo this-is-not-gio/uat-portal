@@ -2,7 +2,7 @@ import { TestCasesSidebarTrigger } from "./test-cases-sidebar";
 import { ClipboardList, FolderClock, Lock } from "lucide-react";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { getIterationTestSections, getIterationParticipants, getIterationResults } from "@/lib/supabase/test-iterations";
+import { getIterationTestSections, getIterationParticipants, getIterationResults, getIterationCoverage } from "@/lib/supabase/test-iterations";
 import type { testIteration } from "@/lib/supabase/test-iterations";
 import { IterationTestCaseList } from "./iteration-test-case-list";
 import IterationSectionHeaderMenu from "./iteration-section-header-menu";
@@ -27,6 +27,8 @@ export async function TestIterationSection({
 	const [sections, participants, testerResults] = iteration
 		? await Promise.all([getIterationTestSections(iteration.id), getIterationParticipants(iteration.id), getIterationResults(iteration.id)])
 		: [[], [], []];
+	// A planned round has no roster until Start, so its participants come from coverage.
+	const coverage = iteration?.status === "not_started" ? await getIterationCoverage(iteration.id) : undefined;
 	const section = sections.find((s) => s.slug === sectionSlug);
 	const testCases = section?.testCases ?? [];
 	// Rows are one per case per tester, so count distinct cases (as the list and sidebar do).
@@ -99,7 +101,7 @@ export async function TestIterationSection({
 						</div>
 					</div>
 				) : (
-					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} testerResults={testerResults} caseFlags={caseFlags} />
+					<IterationTestCaseList testCases={testCases} iteration={iteration} selectable={!!iteration} locked={iteration?.status !== "not_started"} sectionSlug={sectionSlug} participants={participants} testerResults={testerResults} coverage={coverage} caseFlags={caseFlags} />
 				)}
 			</div>
 		</ScrollArea>

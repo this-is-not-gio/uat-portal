@@ -59,11 +59,6 @@ export default function IterationActions({
 	);
 }
 
-// not_started -> in_progress. begin_iteration rejects a round with no included cases (0027), a
-// case with no role or a role with no ticked tester (0058); the dialog surfaces that message.
-// Starting fixes the roster and gives every ticked tester a copy of each case of their role.
-// Sections with nothing ticked are dropped from the round as it starts (0032).
-// `disabledReason` greys the button out and explains why in a tooltip.
 export function StartIterationButton({ iteration, testerCount, testCaseCount, disabledReason }: { iteration: testIteration; testerCount?: number; testCaseCount?: number; disabledReason?: string }) {
 	const [open, setOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -101,7 +96,7 @@ export function StartIterationButton({ iteration, testerCount, testCaseCount, di
 	return (
 		<Dialog open={open} onOpenChange={(next) => { setOpen(next); setError(null); }}>
 			<DialogTrigger render={
-				<Button size="sm">
+				<Button>
 					<Play className="h-4 w-4" />
 					<p className="text-xs">Start Iteration</p>
 				</Button>
