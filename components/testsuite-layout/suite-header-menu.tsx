@@ -5,14 +5,20 @@ import { BookOpen, MoreVertical, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import SuiteDialog from "@/components/suite-dialog";
+import LinkManualDialog from "@/components/testsuite-layout/link-manual-dialog";
+import type { suiteManualLinks } from "@/lib/supabase/manual";
 
 // The "more" menu on the suite header (TestSuiteLayout). The dialog sits outside
 // the menu so it stays open after the menu closes.
-export default function SuiteHeaderMenu({ suite, canEdit }: {
+export default function SuiteHeaderMenu({ suite, canEdit, manual }: {
 	suite: { id: string; name: string; code: string | null; slug: string; description: string; status: string };
 	canEdit: boolean;
+	// Only passed for users who can author; links are locked once the suite is Signed off or Archived.
+	manual?: suiteManualLinks;
 }) {
 	const [editOpen, setEditOpen] = useState(false);
+	const [linkOpen, setLinkOpen] = useState(false);
+	const linkLocked = suite.status === "signed_off" || suite.status === "archived";
 
 	return (
 		<>
@@ -27,13 +33,16 @@ export default function SuiteHeaderMenu({ suite, canEdit }: {
 						<span>Edit Test Suite</span>
 					</DropdownMenuItem>
 				)}
-				<DropdownMenuItem className="text-xs">
-					<BookOpen size={14} />
-					<span>Link Manual</span>
-				</DropdownMenuItem>
+				{manual && (
+					<DropdownMenuItem className="text-xs" disabled={linkLocked} onClick={() => setLinkOpen(true)}>
+						<BookOpen size={14} />
+						<span>Link Manual</span>
+					</DropdownMenuItem>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 		{canEdit && <SuiteDialog suite={suite} open={editOpen} onOpenChange={setEditOpen} />}
+		{manual && <LinkManualDialog key={String(linkOpen)} suiteId={suite.id} modules={manual.modules} linkedIds={manual.linkedIds} open={linkOpen} onOpenChange={setLinkOpen} />}
 		</>
 	);
 }

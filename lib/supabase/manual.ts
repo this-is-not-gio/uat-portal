@@ -67,3 +67,44 @@ export async function getManualBlocks({ moduleId, sectionId }: manualBlockContai
         data: (row.data ?? {}) as blockData,
     }));
 }
+
+export type linkableModule = { id: string; title: string; description: string; sectionCount: number; isPublished: boolean };
+export type suiteManualLinks = { modules: linkableModule[]; linkedIds: string[] };
+
+// Link Manual dialog data (Admin): published modules plus any linked one since unpublished.
+export async function getSuiteManualLinks(suiteId: string): Promise<suiteManualLinks> {
+    const [tree, linkedIds] = await Promise.all([getManualTree(), getSuiteManualModuleIds(suiteId)]);
+    return {
+        linkedIds,
+        modules: tree
+            .filter((m) => m.isPublished || linkedIds.includes(m.id))
+            .map((m) => ({ id: m.id, title: m.title, description: m.description, sectionCount: m.sections.length, isPublished: m.isPublished })),
+    };
+}
+
+// Module ids linked to a suite, in link order (the order the Manual tab shows them).
+// cache()'d: the suite layout, manual layout and page all ask within one request.
+export const getSuiteManualModuleIds = cache(async (suiteId: string): Promise<string[]> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("suite_manual_modules")
+        .select("module_id")
+        .eq("suite_id", suiteId)
+        .order("created_at")
+        .order("module_id");
+    if (error) throw error;
+    return data.map((row) => row.module_id);
+});
+
+// A suite's linked modules in link order, as tree entries. Visibility rides on the manual RLS
+// (non-Admins only get published modules), so a linked-but-unpublished module drops out for them.
+export const getSuiteManualModules = cache(async (suiteId: string): Promise<manualModule[]> => {
+    const [tree, linkedIds] = await Promise.all([getManualTree(), getSuiteManualModuleIds(suiteId)]);
+    const byId = new Map(tree.map((m) => [m.id, m]));
+    return linkedIds.flatMap((id) => byId.get(id) ?? []);
+});
+
+// Null when the module isn't linked to the suite or the viewer can't see it.
+export async function getSuiteManualModuleBySlug(suiteId: string, slug: string): Promise<manualModule | null> {
+    return (await getSuiteManualModules(suiteId)).find((m) => m.slug === slug) ?? null;
+}

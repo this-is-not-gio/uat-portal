@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { can } from "@/lib/auth/permissions";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { getSuiteManualLinks, getSuiteManualModules } from "@/lib/supabase/manual";
 import { getDraftSignOff, getPendingSignOff, getSignOffContext, getSuiteSignOffs } from "@/lib/supabase/overview";
 import { getSuiteReadinessIssues, getSuiteScope, getTestSuiteBySlug, readinessIssue, suiteScope } from "@/lib/supabase/test-suite";
 import { cn } from "cn";
@@ -41,11 +42,14 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 	}
 	// cache()'d, so this reuses the (app) layout's lookup instead of refetching.
 	const currentUser = await getCurrentUser();
-	const [draftIssues, scope, allSignOffs] = await Promise.all([
+	const canLinkManual = can(currentUser, "author");
+	const [draftIssues, scope, allSignOffs, manualLinks, linkedModules] = await Promise.all([
 		testSuite.status === "draft" ? getSuiteReadinessIssues(testSuite.id) : Promise.resolve([]),
 		getSuiteScope(testSuite.id),
 		can(currentUser, "view_all_results") && testSuite.status !== "draft" && testSuite.status !== "ready"
 			? getSuiteSignOffs(testSuite.id) : Promise.resolve([]),
+		canLinkManual ? getSuiteManualLinks(testSuite.id) : Promise.resolve(undefined),
+		getSuiteManualModules(testSuite.id),
 	]);
 	const canMarkReady = draftIssues.length === 0;
 	const isTester = currentUser?.role === "Internal" || currentUser?.role === "External";
@@ -267,11 +271,11 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 						}
 					</div>
 				</div>
-				<SuiteHeaderMenu suite={testSuite} canEdit={can(currentUser, "author")} />
+				<SuiteHeaderMenu suite={testSuite} canEdit={canLinkManual} manual={manualLinks} />
 			</div>
 			{/* Tabs */}
 			<div className="contents print:hidden">
-				<SuiteTabs suiteSlug={testSuite.slug} showTestResults={!isTester && testSuite.status !== "draft" && testSuite.status !== "ready"} showSignOff={showSignOffTab} />
+				<SuiteTabs suiteSlug={testSuite.slug} showManual={canLinkManual || linkedModules.length > 0} showTestResults={!isTester && testSuite.status !== "draft" && testSuite.status !== "ready"} showSignOff={showSignOffTab} />
 			</div>
 			<ScrollArea className="min-h-0 flex-1">
 				{/* Content. The staged import lives here so it survives switching tabs. */}
