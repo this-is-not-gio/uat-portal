@@ -41,7 +41,7 @@ export default function SuiteHeaderMenu({ suite, canEdit, manual }: {
 			</DropdownMenuContent>
 		</DropdownMenu>
 		{canEdit && <SuiteDialog suite={suite} open={editOpen} onOpenChange={setEditOpen} />}
-		{manual && <LinkManualDialog suiteId={suite.id} modules={manual.modules} linkedIds={manual.linkedIds} open={linkOpen} onOpenChange={setLinkOpen} />}
+		{manual && <LinkManualDialog key={String(linkOpen)} suiteId={suite.id} modules={manual.modules} linkedIds={manual.linkedIds} open={linkOpen} onOpenChange={setLinkOpen} />}
 		</>
 	);
 }

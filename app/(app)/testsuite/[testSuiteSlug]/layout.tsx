@@ -42,17 +42,19 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 	}
 	// cache()'d, so this reuses the (app) layout's lookup instead of refetching.
 	const currentUser = await getCurrentUser();
-	const [draftIssues, scope, allSignOffs] = await Promise.all([
+	const canLinkManual = can(currentUser, "author");
+	const [draftIssues, scope, allSignOffs, manualData] = await Promise.all([
 		testSuite.status === "draft" ? getSuiteReadinessIssues(testSuite.id) : Promise.resolve([]),
 		getSuiteScope(testSuite.id),
 		can(currentUser, "view_all_results") && testSuite.status !== "draft" && testSuite.status !== "ready"
 			? getSuiteSignOffs(testSuite.id) : Promise.resolve([]),
+		canLinkManual ? Promise.all([getManualTree(), getSuiteManualModuleIds(testSuite.id)]) : Promise.resolve(null),
 	]);
 	const canMarkReady = draftIssues.length === 0;
 	// Link Manual dialog data (Admin only): published modules plus any linked one since unpublished.
 	let manualLinks: { modules: { id: string; title: string; description: string; sectionCount: number; isPublished: boolean }[]; linkedIds: string[] } | undefined;
-	if (can(currentUser, "author")) {
-		const [tree, linkedIds] = await Promise.all([getManualTree(), getSuiteManualModuleIds(testSuite.id)]);
+	if (manualData) {
+		const [tree, linkedIds] = manualData;
 		manualLinks = {
 			linkedIds,
 			modules: tree

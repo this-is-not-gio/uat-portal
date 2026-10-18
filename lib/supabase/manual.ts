@@ -75,7 +75,8 @@ export async function getSuiteManualModuleIds(suiteId: string): Promise<string[]
         .from("suite_manual_modules")
         .select("module_id")
         .eq("suite_id", suiteId)
-        .order("created_at");
+        .order("created_at")
+        .order("module_id");
     if (error) throw error;
     return data.map((row) => row.module_id);
 }

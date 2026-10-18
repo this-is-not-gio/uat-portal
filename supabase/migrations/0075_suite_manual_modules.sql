@@ -6,7 +6,7 @@
 create table if not exists public.suite_manual_modules (
   suite_id uuid not null references public.testing_suites(id) on delete cascade,
   module_id uuid not null references public.manual_modules(id) on delete cascade,
-  created_at timestamptz not null default now(),
+  created_at timestamptz not null default clock_timestamp(),
   primary key (suite_id, module_id)
 );
 
@@ -56,6 +56,7 @@ begin
   if v_status in ('signed_off', 'archived') then
     raise exception 'Manual links are locked once a suite is signed off or archived.' using errcode = '42501';
   end if;
+  p_module_ids := array_remove(p_module_ids, null);
   if exists (
     select 1 from unnest(p_module_ids) as u(id)
     where not exists (select 1 from public.manual_modules m where m.id = u.id)
@@ -68,10 +69,11 @@ begin
   end if;
 
   delete from public.suite_manual_modules
-  where suite_id = p_suite_id and module_id <> all (p_module_ids);
+  where suite_id = p_suite_id and not (module_id = any (p_module_ids));
 
   insert into public.suite_manual_modules (suite_id, module_id)
   select p_suite_id, u.id from (select distinct unnest(p_module_ids) as id) u
+  order by u.id
   on conflict do nothing;
 end;
 $$;

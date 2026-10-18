@@ -23,14 +23,6 @@ export default function LinkManualDialog({ suiteId, modules, linkedIds, open, on
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
 
-	function handleOpenChange(next: boolean) {
-		if (next) {
-			setSelected(new Set(linkedIds));
-			setError(null);
-		}
-		onOpenChange(next);
-	}
-
 	function toggle(id: string, checked: boolean) {
 		setSelected((prev) => {
 			const next = new Set(prev);
@@ -53,7 +45,7 @@ export default function LinkManualDialog({ suiteId, modules, linkedIds, open, on
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={handleOpenChange}>
+		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
 				<DialogHeader>
 					<DialogTitle>Link Manual</DialogTitle>
