@@ -1,0 +1,50 @@
+name: CI
+
+# Validates every push to dev and every PR into main, then migrates the Preview database
+# (dev pushes only). The Vercel Git integration builds and deploys the Preview in parallel;
+# release-pr.yml opens the dev -> main PR once both are green.
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The job name `check` is the required status check on main.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-migrations.mjs
+      - run: npm run lint
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+
+  migrate-preview:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: Preview
+    concurrency: migrate-preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node scripts/migrate.mjs
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
