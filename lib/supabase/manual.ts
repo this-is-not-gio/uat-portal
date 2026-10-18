@@ -67,3 +67,15 @@ export async function getManualBlocks({ moduleId, sectionId }: manualBlockContai
         data: (row.data ?? {}) as blockData,
     }));
 }
+
+// Module ids linked to a suite, in link order (the order the Manual tab shows them).
+export async function getSuiteManualModuleIds(suiteId: string): Promise<string[]> {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("suite_manual_modules")
+        .select("module_id")
+        .eq("suite_id", suiteId)
+        .order("created_at");
+    if (error) throw error;
+    return data.map((row) => row.module_id);
+}

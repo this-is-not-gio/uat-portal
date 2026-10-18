@@ -216,3 +216,17 @@ export async function deleteManualSection(input: { id: string }): Promise<action
     revalidatePath("/manual", "layout");
     redirect(moduleSlug ? `/manual/${moduleSlug}` : "/manual");
 }
+
+// Save a suite's whole set of linked modules at once (the Link Manual dialog). Admin only; the RPC
+// refuses locked suites (Signed off / Archived) and newly linking an unpublished module.
+export async function setSuiteManualModules(input: { suiteId: string; moduleIds: string[] }): Promise<actionResult<null>> {
+    const user = await requireUser();
+    if (!can(user, "author")) return denied("author");
+
+    const supabase = await createClient();
+    const { error } = await supabase.rpc("set_suite_manual_modules", { p_suite_id: input.suiteId, p_module_ids: input.moduleIds });
+    if (error) return { ok: false, error: error.message };
+
+    refresh();
+    return { ok: true, data: null };
+}

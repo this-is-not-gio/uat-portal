@@ -724,6 +724,39 @@ export type Database = {
           },
         ]
       }
+      suite_manual_modules: {
+        Row: {
+          created_at: string
+          module_id: string
+          suite_id: string
+        }
+        Insert: {
+          created_at?: string
+          module_id: string
+          suite_id: string
+        }
+        Update: {
+          created_at?: string
+          module_id?: string
+          suite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suite_manual_modules_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "manual_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_manual_modules_suite_id_fkey"
+            columns: ["suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suite_test_accounts: {
         Row: {
           created_at: string
@@ -1906,6 +1939,10 @@ export type Database = {
           p_iteration_id: string
           p_user_ids: string[]
         }
+        Returns: undefined
+      }
+      set_suite_manual_modules: {
+        Args: { p_module_ids: string[]; p_suite_id: string }
         Returns: undefined
       }
       set_suite_status: {

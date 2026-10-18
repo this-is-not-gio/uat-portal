@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { can } from "@/lib/auth/permissions";
 import { getCurrentUser } from "@/lib/supabase/auth";
+import { getManualTree, getSuiteManualModuleIds } from "@/lib/supabase/manual";
 import { getDraftSignOff, getPendingSignOff, getSignOffContext, getSuiteSignOffs } from "@/lib/supabase/overview";
 import { getSuiteReadinessIssues, getSuiteScope, getTestSuiteBySlug, readinessIssue, suiteScope } from "@/lib/supabase/test-suite";
 import { cn } from "cn";
@@ -48,6 +49,17 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 			? getSuiteSignOffs(testSuite.id) : Promise.resolve([]),
 	]);
 	const canMarkReady = draftIssues.length === 0;
+	// Link Manual dialog data (Admin only): published modules plus any linked one since unpublished.
+	let manualLinks: { modules: { id: string; title: string; description: string; sectionCount: number; isPublished: boolean }[]; linkedIds: string[] } | undefined;
+	if (can(currentUser, "author")) {
+		const [tree, linkedIds] = await Promise.all([getManualTree(), getSuiteManualModuleIds(testSuite.id)]);
+		manualLinks = {
+			linkedIds,
+			modules: tree
+				.filter((m) => m.isPublished || linkedIds.includes(m.id))
+				.map((m) => ({ id: m.id, title: m.title, description: m.description, sectionCount: m.sections.length, isPublished: m.isPublished })),
+		};
+	}
 	const isTester = currentUser?.role === "Internal" || currentUser?.role === "External";
 	const reportSignOffs = allSignOffs.filter((s) => s.hasReport);
 	const plannedRound = testSuite.status === "ready"
@@ -267,7 +279,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 						}
 					</div>
 				</div>
-				<SuiteHeaderMenu suite={testSuite} canEdit={can(currentUser, "author")} />
+				<SuiteHeaderMenu suite={testSuite} canEdit={can(currentUser, "author")} manual={manualLinks} />
 			</div>
 			{/* Tabs */}
 			<div className="contents print:hidden">
