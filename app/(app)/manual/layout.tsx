@@ -20,7 +20,7 @@ export default async function ManualPageLayout({ children }: { children: React.R
 					
 				</div>
 				<div className="flex min-h-0 flex-1 flex-row">
-					<ManualSidebar modules={modules} />
+					<ManualSidebar modules={modules} baseHref="/manual" />
 					{children}
 				</div>
 			</div>

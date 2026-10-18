@@ -8,11 +8,12 @@ import { getCurrentUser } from "@/lib/supabase/auth";
 import { getDraftSignOff, getPendingSignOff, getSignOffContext, getSuiteSignOffs } from "@/lib/supabase/overview";
 import { getSuiteReadinessIssues, getSuiteScope, getTestSuiteBySlug, readinessIssue, suiteScope } from "@/lib/supabase/test-suite";
 import { cn } from "cn";
-import { ChartColumn, Circle, CircleCheck, ClipboardEdit, FolderClock, MoreVertical, Stamp } from "lucide-react";
+import { ChartColumn, Circle, CircleCheck, ClipboardEdit, FolderClock, Stamp } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import SuiteStatusButton from "@/components/testsuite-layout/shared/suite-status-button";
 import { testCasesHref } from "@/components/testsuite-layout/test-cases/href";
+import SuiteHeaderMenu from "@/components/testsuite-layout/suite-header-menu";
 import SuiteTabs from "../../../../components/testsuite-layout/suite-tabs";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
 import StartIterationDialog from "@/components/testsuite-layout/shared/start-iteration-dialog";
@@ -266,9 +267,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 						}
 					</div>
 				</div>
-				<Button variant="outline" size="icon" >
-					<MoreVertical />
-				</Button>
+				<SuiteHeaderMenu suite={testSuite} canEdit={can(currentUser, "author")} />
 			</div>
 			{/* Tabs */}
 			<div className="contents print:hidden">

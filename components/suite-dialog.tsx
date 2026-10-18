@@ -54,20 +54,13 @@ export default function SuiteDialog({ suite, exitCriteria, trigger, open: contro
 
 	function onSave() {
 		setError(null);
-		const criteriaChanged = !criteriaLocked && !sameExitCriteria(criteria, initialCriteria);
+		const criteriaChanged = !isEdit && !criteriaLocked && !sameExitCriteria(criteria, initialCriteria);
 		const invalid = criteriaChanged ? exitCriteriaError(criteria) : null;
 		if (invalid) {
 			setError(invalid);
 			return;
 		}
 		startTransition(async () => {
-			if (suite && criteriaChanged) {
-				const criteriaResult = await updateExitCriteria({ suiteId: suite.id, criteria });
-				if (!criteriaResult.ok) {
-					setError(criteriaResult.error);
-					return;
-				}
-			}
 			const result = await upsertSuite({ id: suite?.id, name: name.trim(), code: code.trim(), description });
 			if (!result.ok) {
 				setError(result.error);
@@ -107,20 +100,23 @@ export default function SuiteDialog({ suite, exitCriteria, trigger, open: contro
 							 <span className="text-muted-foreground text-xs">(optional, prefixes test case codes e.g. LCI-001)</span></Label>
 						<Input id="suite-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} disabled={isPending} />
 					</div>
-					<div className="flex flex-col gap-3">
-						<div className="flex flex-col">
-							<p className="text-sm font-semibold">Exit criteria</p>
-							{criteriaLocked ? (
-								<p className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
-									<Lock className="size-3" />
-									Locked once testing starts
-								</p>
-							) : (
-								<p className="text-xs text-muted-foreground">The report&apos;s verdict is measured against these.</p>
-							)}
+					{/* Exit criteria are set when the suite is created; editing an existing suite leaves them alone. */}
+					{!isEdit && (
+						<div className="flex flex-col gap-3">
+							<div className="flex flex-col">
+								<p className="text-sm font-semibold">Exit criteria</p>
+								{criteriaLocked ? (
+									<p className="flex flex-row items-center gap-1 text-xs text-muted-foreground">
+										<Lock className="size-3" />
+										Locked once testing starts
+									</p>
+								) : (
+									<p className="text-xs text-muted-foreground">The report&apos;s verdict is measured against these.</p>
+								)}
+							</div>
+							<ExitCriteriaFields value={criteria} onChange={setCriteria} disabled={isPending || criteriaLocked} />
 						</div>
-						<ExitCriteriaFields value={criteria} onChange={setCriteria} disabled={isPending || criteriaLocked} />
-					</div>
+					)}
 					{error && <p className="text-sm text-destructive">{error}</p>}
 				</div>
 				<DialogFooter>

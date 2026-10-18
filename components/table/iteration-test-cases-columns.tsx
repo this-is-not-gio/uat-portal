@@ -9,6 +9,7 @@ import { Ban, CircleCheck, CircleX, ClipboardCheck, GitBranchPlus, GitCompare, G
 import { cn } from "@/lib/utils"
 import { roundFlagLabel, type roundCaseFlag, type roundFlag } from "@/lib/supabase/case-states"
 import { TestStatusMapping } from "./columns"
+import { TruncatedText } from "@/components/sidebar/nav-secondary"
 // Type-only import: test-iterations.ts uses the server Supabase client.
 import type { testResultRow } from "@/lib/supabase/test-iterations"
 import type { testCase, testCaseStatus } from "@/lib/supabase/test-cases"
@@ -101,7 +102,7 @@ function TestCaseTitleCell({
 						}
 						<div className={`flex flex-row items-center gap-3 ${isExcluded ? "opacity-50" : ""}`}>
 							<div className="">
-								<p className="text-xs">{row.title}</p>
+								<TruncatedText className="block max-w-72 text-xs" text={row.title} />
 								{row.lifecycleStatus === "updated" && (
 									<Badge variant="outline" className="text-xs">Updated</Badge>
 								)}
