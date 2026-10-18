@@ -113,6 +113,22 @@ const status_count_classnames: Record<testStepStatus, string> = {
 	Blocked: "border bg-muted text-foreground border-border",
 };
 
+// Imported expected results often pack a whole checklist into one string
+// ("User lands on X with: > Header > Stepper > ..."). Split on a standalone ">"
+// (not the "->" arrow) so each item reads as its own bullet.
+function ExpectedResultItem({ result }: { result: string }) {
+	const [intro, ...items] = result.split(/(?:^|\s)>\s+/).map((part) => part.trim());
+	if (items.length === 0) return <li className="text-sm text-muted-foreground py-1">{result}</li>;
+	return (
+		<li className="text-sm text-muted-foreground py-1">
+			{intro}
+			<ul className="list-[circle] list-outside pl-5 mt-1 space-y-1">
+				{items.filter(Boolean).map((item, i) => <li key={i}>{item}</li>)}
+			</ul>
+		</li>
+	);
+}
+
 // Remarks posted with evidence links carry this heading (see RemarkMarkdownField).
 const EVIDENCE_MARKER = /\*\*Evidence:\*\*/;
 
@@ -369,9 +385,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 														{
 															step.expectedResults && step.expectedResults.length > 0 ? (
 																step.expectedResults.map((expectedResult) => (
-																	<li key={expectedResult.id} className="text-sm text-muted-foreground py-1">
-																		{expectedResult.result}
-																	</li>
+																	<ExpectedResultItem key={expectedResult.id} result={expectedResult.result} />
 																))
 															) : (
 																<li className="text-sm text-muted-foreground list-none">No expected results.</li>

@@ -26,9 +26,10 @@ import { ManualEditToggle, NewModuleDialog, NewSectionDialog, useManualEditing }
 import { ManualSortableList, ManualSortableRow } from "./manual-sortable"
 import { reorderManualModules, reorderManualSections } from "@/lib/supabase/manual-reorder-actions"
 
-export function ManualSidebar({ modules }: { modules: manualModule[] }) {
+export function ManualSidebar({ modules, baseHref, readOnly = false }: { modules: manualModule[]; baseHref: string; readOnly?: boolean }) {
 	const pathname = usePathname()
-	const editing = useManualEditing()
+	// Read-only hides the edit toggle, create dialogs and drag handles, whatever the edit context says.
+	const editing = useManualEditing() && !readOnly
 	// Modules follow the current route until the user toggles one by hand.
 	const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({})
 
@@ -54,8 +55,8 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 								<SidebarMenu>
 									<ManualSortableList items={modules} onReorder={(ids) => reorderManualModules({ moduleIds: ids })}>
 										{(orderedModules) => orderedModules.map((module) => {
-											const moduleActive = pathname === `/manual/${module.slug}`
-											const inModule = moduleActive || pathname.startsWith(`/manual/${module.slug}/`)
+											const moduleActive = pathname === `${baseHref}/${module.slug}`
+											const inModule = moduleActive || pathname.startsWith(`${baseHref}/${module.slug}/`)
 											return (
 												<ManualSortableRow key={module.id} id={module.id} editing={editing}>
 													{({ setNodeRef, style, handle }) => (
@@ -71,7 +72,7 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 																<SidebarMenuButton
 																	className="flex-1"
 																	isActive={moduleActive}
-																	render={<Link href={`/manual/${module.slug}`} />}
+																	render={<Link href={`${baseHref}/${module.slug}`} />}
 																>
 																	<Folder />
 																	<span className="text-xs font-medium">{module.title}</span>
@@ -109,8 +110,8 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 																						{sectionHandle}
 																						<SidebarMenuSubButton
 																							size="sm"
-																							isActive={pathname === `/manual/${module.slug}/${section.slug}`}
-																							render={<Link href={`/manual/${module.slug}/${section.slug}`} />}
+																							isActive={pathname === `${baseHref}/${module.slug}/${section.slug}`}
+																							render={<Link href={`${baseHref}/${module.slug}/${section.slug}`} />}
 																						>
 																							<File />
 																							<span>{section.title}</span>
@@ -154,7 +155,7 @@ export function ManualSidebar({ modules }: { modules: manualModule[] }) {
 					)}
 				</div>
 			)}
-			<ManualEditToggle />
+			{!readOnly && <ManualEditToggle />}
 		</div>
 	)
 }

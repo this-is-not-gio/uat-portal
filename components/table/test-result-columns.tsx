@@ -5,6 +5,7 @@ import { type DataTableFeatures } from "./data-table-features"
 import { CircleCheck, CircleOffIcon, CircleX, GitPullRequest, History, Info, MessageSquare, RefreshCw, RotateCcw, SkipForward, SquarePlus, Trash2, UserX, type LucideIcon } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { TestStatusMapping } from "./columns"
+import { TruncatedText } from "@/components/sidebar/nav-secondary"
 // Type-only import: test-iterations.ts uses the server Supabase client.
 import type { testResultRow } from "@/lib/supabase/test-iterations"
 import { cn, initials } from "@/lib/utils"
@@ -201,7 +202,7 @@ export const testResultColumns = columnHelper.columns([
 		cell: (info) => (
 			<div>
 				<div className="flex flex-row flex-wrap items-center gap-1">
-					<p className="text-xs">{info.row.original.title}</p>
+					<TruncatedText className="block max-w-72 text-xs" text={info.row.original.title} />
 				</div>
 				<p className="text-xs text-muted-foreground font-mono">
 					{info.row.original.code}

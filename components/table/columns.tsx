@@ -10,6 +10,7 @@ import { testCase } from "@/lib/supabase/test-cases"
 import { cn } from "@/lib/utils"
 import type { suiteStatus } from "@/lib/supabase/Init"
 import { useDragHandle } from "./data-table"
+import { TruncatedText } from "@/components/sidebar/nav-secondary"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { caseResultLabel, shortRoundName, type caseFlag, type caseState } from "@/lib/supabase/case-states"
 
@@ -70,7 +71,7 @@ function TestCaseTitleCell({ row }: { row: testCase; suiteStatus: suiteStatus })
 	return (
 		<div className="flex flex-row justify-between items-center gap-1">
 			<div className="">
-				<p className="text-xs">{row.title}</p>
+				<TruncatedText className="block max-w-72 text-xs" text={row.title} />
 				<p className="font-mono text-xs text-muted-foreground">
 					{row.code}
 					{/* Below md the status column is hidden, so status and top flag ride along as text. */}

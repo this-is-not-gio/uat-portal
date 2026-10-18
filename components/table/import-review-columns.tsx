@@ -5,6 +5,7 @@ import { ClipboardCheck, Info, TriangleAlert, Waypoints } from "lucide-react"
 import { type DataTableFeatures } from "./data-table-features"
 import type { importCase, importIssue } from "@/lib/import/parse-test-cases"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "../ui/hover-card"
+import { TruncatedText } from "@/components/sidebar/nav-secondary"
 
 // One staged case in the import review. `id` is the case's first spreadsheet
 // row (DataTable needs a string id); `warnings` are the issues on its rows;
@@ -20,7 +21,7 @@ export function getImportReviewColumns() {
 		columnHelper.display({
 			header: "Test Case",
 			cell: (info) => <div className="flex flex-col gap-1">
-				<p className="font-semibold">{info.row.original.title}</p>
+				<TruncatedText className="block max-w-72 font-semibold" text={info.row.original.title} />
 				<div className="flex flex-row items-center gap-1.5">
 					<p className="text-xs text-muted-foreground font-mono">{info.row.original.sectionName}</p>
 					{info.row.original.isNewSection && (
