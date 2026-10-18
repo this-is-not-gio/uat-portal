@@ -68,6 +68,20 @@ export async function getManualBlocks({ moduleId, sectionId }: manualBlockContai
     }));
 }
 
+export type linkableModule = { id: string; title: string; description: string; sectionCount: number; isPublished: boolean };
+export type suiteManualLinks = { modules: linkableModule[]; linkedIds: string[] };
+
+// Link Manual dialog data (Admin): published modules plus any linked one since unpublished.
+export async function getSuiteManualLinks(suiteId: string): Promise<suiteManualLinks> {
+    const [tree, linkedIds] = await Promise.all([getManualTree(), getSuiteManualModuleIds(suiteId)]);
+    return {
+        linkedIds,
+        modules: tree
+            .filter((m) => m.isPublished || linkedIds.includes(m.id))
+            .map((m) => ({ id: m.id, title: m.title, description: m.description, sectionCount: m.sections.length, isPublished: m.isPublished })),
+    };
+}
+
 // Module ids linked to a suite, in link order (the order the Manual tab shows them).
 export async function getSuiteManualModuleIds(suiteId: string): Promise<string[]> {
     const supabase = await createClient();

@@ -217,13 +217,21 @@ export async function deleteManualSection(input: { id: string }): Promise<action
     redirect(moduleSlug ? `/manual/${moduleSlug}` : "/manual");
 }
 
-// Save a suite's whole set of linked modules at once (the Link Manual dialog). Admin only; the RPC
-// refuses locked suites (Signed off / Archived) and newly linking an unpublished module.
+// Save a suite's whole set of linked modules at once (the Link Manual dialog). Admin only; locked
+// suites (Signed off / Archived) are refused here and again by the RPC, which also refuses newly
+// linking an unpublished module.
 export async function setSuiteManualModules(input: { suiteId: string; moduleIds: string[] }): Promise<actionResult<null>> {
     const user = await requireUser();
     if (!can(user, "author")) return denied("author");
 
     const supabase = await createClient();
+    const { data: suite, error: readError } = await supabase.from("testing_suites").select("status").eq("id", input.suiteId).maybeSingle();
+    if (readError) return { ok: false, error: readError.message };
+    if (!suite) return { ok: false, error: "Test suite not found." };
+    if (suite.status === "signed_off" || suite.status === "archived") {
+        return { ok: false, error: "Manual links can't change once a suite is Signed off or Archived." };
+    }
+
     const { error } = await supabase.rpc("set_suite_manual_modules", { p_suite_id: input.suiteId, p_module_ids: input.moduleIds });
     if (error) return { ok: false, error: error.message };
 

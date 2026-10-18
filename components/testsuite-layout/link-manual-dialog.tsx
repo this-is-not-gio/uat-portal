@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { linkableModule } from "@/lib/supabase/manual";
 import { setSuiteManualModules } from "@/lib/supabase/manual-actions";
-
-export type linkableModule = { id: string; title: string; description: string; sectionCount: number; isPublished: boolean };
 
 // Pick which published Testing Manual modules apply to this suite. Save applies the whole
 // set at once; linked modules that were since unpublished stay listed so they can be unlinked.
@@ -18,7 +16,6 @@ export default function LinkManualDialog({ suiteId, modules, linkedIds, open, on
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const router = useRouter();
 	const [selected, setSelected] = useState(() => new Set(linkedIds));
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
@@ -39,8 +36,8 @@ export default function LinkManualDialog({ suiteId, modules, linkedIds, open, on
 				setError(result.error);
 				return;
 			}
+			// The action refresh()es, so the layout re-renders with the saved links.
 			onOpenChange(false);
-			router.refresh();
 		});
 	}
 

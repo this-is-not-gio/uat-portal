@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { can } from "@/lib/auth/permissions";
 import { getCurrentUser } from "@/lib/supabase/auth";
-import { getManualTree, getSuiteManualModuleIds } from "@/lib/supabase/manual";
+import { getSuiteManualLinks } from "@/lib/supabase/manual";
 import { getDraftSignOff, getPendingSignOff, getSignOffContext, getSuiteSignOffs } from "@/lib/supabase/overview";
 import { getSuiteReadinessIssues, getSuiteScope, getTestSuiteBySlug, readinessIssue, suiteScope } from "@/lib/supabase/test-suite";
 import { cn } from "cn";
@@ -43,25 +43,14 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 	// cache()'d, so this reuses the (app) layout's lookup instead of refetching.
 	const currentUser = await getCurrentUser();
 	const canLinkManual = can(currentUser, "author");
-	const [draftIssues, scope, allSignOffs, manualData] = await Promise.all([
+	const [draftIssues, scope, allSignOffs, manualLinks] = await Promise.all([
 		testSuite.status === "draft" ? getSuiteReadinessIssues(testSuite.id) : Promise.resolve([]),
 		getSuiteScope(testSuite.id),
 		can(currentUser, "view_all_results") && testSuite.status !== "draft" && testSuite.status !== "ready"
 			? getSuiteSignOffs(testSuite.id) : Promise.resolve([]),
-		canLinkManual ? Promise.all([getManualTree(), getSuiteManualModuleIds(testSuite.id)]) : Promise.resolve(null),
+		canLinkManual ? getSuiteManualLinks(testSuite.id) : Promise.resolve(undefined),
 	]);
 	const canMarkReady = draftIssues.length === 0;
-	// Link Manual dialog data (Admin only): published modules plus any linked one since unpublished.
-	let manualLinks: { modules: { id: string; title: string; description: string; sectionCount: number; isPublished: boolean }[]; linkedIds: string[] } | undefined;
-	if (manualData) {
-		const [tree, linkedIds] = manualData;
-		manualLinks = {
-			linkedIds,
-			modules: tree
-				.filter((m) => m.isPublished || linkedIds.includes(m.id))
-				.map((m) => ({ id: m.id, title: m.title, description: m.description, sectionCount: m.sections.length, isPublished: m.isPublished })),
-		};
-	}
 	const isTester = currentUser?.role === "Internal" || currentUser?.role === "External";
 	const reportSignOffs = allSignOffs.filter((s) => s.hasReport);
 	const plannedRound = testSuite.status === "ready"
@@ -281,7 +270,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 						}
 					</div>
 				</div>
-				<SuiteHeaderMenu suite={testSuite} canEdit={can(currentUser, "author")} manual={manualLinks} />
+				<SuiteHeaderMenu suite={testSuite} canEdit={canLinkManual} manual={manualLinks} />
 			</div>
 			{/* Tabs */}
 			<div className="contents print:hidden">

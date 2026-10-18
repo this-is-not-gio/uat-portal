@@ -5,7 +5,8 @@ import { BookOpen, MoreVertical, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import SuiteDialog from "@/components/suite-dialog";
-import LinkManualDialog, { type linkableModule } from "@/components/testsuite-layout/link-manual-dialog";
+import LinkManualDialog from "@/components/testsuite-layout/link-manual-dialog";
+import type { suiteManualLinks } from "@/lib/supabase/manual";
 
 // The "more" menu on the suite header (TestSuiteLayout). The dialog sits outside
 // the menu so it stays open after the menu closes.
@@ -13,7 +14,7 @@ export default function SuiteHeaderMenu({ suite, canEdit, manual }: {
 	suite: { id: string; name: string; code: string | null; slug: string; description: string; status: string };
 	canEdit: boolean;
 	// Only passed for users who can author; links are locked once the suite is Signed off or Archived.
-	manual?: { modules: linkableModule[]; linkedIds: string[] };
+	manual?: suiteManualLinks;
 }) {
 	const [editOpen, setEditOpen] = useState(false);
 	const [linkOpen, setLinkOpen] = useState(false);
