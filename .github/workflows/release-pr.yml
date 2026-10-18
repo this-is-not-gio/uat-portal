@@ -1,0 +1,59 @@
+name: Release PR
+
+# Opens a dev -> main PR once the latest dev commit has passed CI and its Vercel Preview deployed.
+# Whichever of the two finishes last triggers the PR; if one is already open, it just stays open
+# (new pushes to dev appear in it automatically).
+
+on:
+  deployment_status:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: read
+  deployments: read
+
+jobs:
+  open-pr:
+    if: >-
+      (github.event_name == 'deployment_status'
+        && github.event.deployment_status.state == 'success'
+        && github.event.deployment.environment == 'Preview'
+        && github.event.deployment.ref == 'dev')
+      || (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_branch == 'dev')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SHA: ${{ github.event.deployment.sha || github.event.workflow_run.head_sha }}
+    steps:
+      - name: Require a successful CI check and Preview deployment on this commit
+        id: gate
+        run: |
+          ci=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '[.check_runs[] | select(.name=="check" and .conclusion=="success")] | length')
+          deployed=0
+          for id in $(gh api "repos/$REPO/deployments?sha=$SHA&environment=Preview" --jq '.[].id'); do
+            state=$(gh api "repos/$REPO/deployments/$id/statuses" --jq '.[0].state')
+            [ "$state" = "success" ] && deployed=1
+          done
+          echo "ci=$ci deployed=$deployed"
+          if [ "$ci" -gt 0 ] && [ "$deployed" = 1 ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Open the PR if none is open
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          open=$(gh pr list --repo "$REPO" --head dev --base main --state open --json number --jq 'length')
+          if [ "$open" != 0 ]; then echo "A dev -> main PR is already open."; exit 0; fi
+          ahead=$(gh api "repos/$REPO/compare/main...dev" --jq '.ahead_by')
+          if [ "$ahead" = 0 ]; then echo "dev has nothing new for main."; exit 0; fi
+          gh pr create --repo "$REPO" --base main --head dev \
+            --title "Release: dev to main" \
+            --body "Opened automatically: CI passed and the Preview deployed for \`${SHA::7}\`.
+
+          Merging runs the production migration job (needs the \`production\` reviewer's approval); Vercel deploys Production."

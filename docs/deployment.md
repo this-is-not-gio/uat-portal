@@ -4,20 +4,22 @@
 
 | Env | Git branch | App (Vercel) | Database (Supabase) | Migrations applied by |
 |---|---|---|---|---|
-| Local | any | `npm run dev` | staging DB (`uat-portal-dev`, `xmipygezrjhogjelasct`) | you, via PR |
-| **Staging** | `dev` | Vercel Preview / branch domain for `dev` | `uat-portal-dev` | GitHub Action on push to `dev` |
+| Local | any | `npm run dev` | Preview DB (`uat-portal-dev`, `xmipygezrjhogjelasct`) | you, via PR |
+| **Preview** | `dev` | Vercel Preview for `dev` | `uat-portal-dev` | `ci.yml` on push to `dev`, after checks pass |
 | **Production** | `main` | Vercel Production | `uat-portal-prod` (`vpzwsbonhwrqdpxocufz`) | GitHub Action on push to `main`, after a reviewer approves |
 
-Staging and local share one database: don't leave data there you need.
+Preview and local share one database: don't leave data there you need.
 Keep each env's variables separate (`.env.example` lists them): never put prod keys in Preview, or dev keys in Production.
 
 ## Pipeline
 
-- **App checks and deploys: Vercel Git integration.** Every push builds (`npm run build` is the check); PRs get preview deployments, `dev` deploys to staging, `main` to production. There is no GitHub CI for lint/typecheck.
-- **Database migrations: `.github/workflows/migrate.yml`.**
-  1. **migrate-staging** (push to `dev`): `node scripts/migrate.mjs` against the staging DB.
-  2. **migrate-production** (push to `main`): same against prod, gated by the `production` GitHub Environment's required reviewer.
-  Vercel deploys and migrations run in parallel with no ordering, so migrations must be backward-compatible: old code must keep working on the new schema, and new code should tolerate the schema arriving a little later.
+1. **Push to `dev`.** `.github/workflows/ci.yml` runs `check`: `scripts/check-migrations.mjs`, `npm run lint`, `next typegen` + `tsc --noEmit`. The `check` job is the required status check on `main`.
+2. **Preview DB migrates.** `migrate-preview` (same workflow, `Preview` environment) runs `node scripts/migrate.mjs` once `check` passes.
+3. **Vercel builds and deploys the Preview** (Git integration, in parallel with 1 and 2; `npm run build` is the build check).
+4. **`release-pr.yml` opens the `dev` -> `main` PR** when the latest `dev` commit has a green `check` and a successful Preview deployment (whichever finishes last triggers it). If a PR is already open, new pushes just appear in it.
+5. **Merge the PR to `main`.** `migrate.yml` runs `migrate-production`, gated by the `production` environment's required reviewer. Vercel deploys Production.
+
+Vercel deploys and migrations run in parallel with no ordering, so migrations must be backward-compatible: old code must keep working on the new schema, and new code should tolerate the schema arriving a little later.
 
 ## Migrations
 
@@ -34,18 +36,19 @@ Keep each env's variables separate (`.env.example` lists them): never put prod k
 
 **GitHub**
 1. Settings -> Secrets and variables -> Actions: repository secret `SUPABASE_ACCESS_TOKEN` (personal access token from supabase.com/dashboard/account/tokens).
-2. Settings -> Environments: create `staging` (variable `SUPABASE_PROJECT_REF` = `xmipygezrjhogjelasct`) and `production` (variable `SUPABASE_PROJECT_REF` = `vpzwsbonhwrqdpxocufz`, **Required reviewers** = you, deployment branches = `main`).
-3. Settings -> Branches: protect `main` and `dev`: require PR.
-4. Baseline staging once (it already has all 72 files): run locally `SUPABASE_PROJECT_REF=xmipygezrjhogjelasct SUPABASE_ACCESS_TOKEN=... node scripts/migrate.mjs --baseline`.
+2. Settings -> Environments: `Preview` (variable `SUPABASE_PROJECT_REF` = `xmipygezrjhogjelasct`) and `production` (variable `SUPABASE_PROJECT_REF` = `vpzwsbonhwrqdpxocufz`, **Required reviewers** = you, deployment branches = `main`). There is no `staging` environment.
+3. Settings -> Branches: protect `main`: require a PR and the `check` status check.
+4. Settings -> Actions -> General -> Workflow permissions: allow GitHub Actions to create pull requests (`release-pr.yml` needs it).
+5. Baseline a database that already has the files applied by hand: `SUPABASE_PROJECT_REF=... SUPABASE_ACCESS_TOKEN=... node scripts/migrate.mjs --baseline`.
 
 **Vercel**
-1. Environment variables (Settings -> Environment Variables), per `.env.example`: **Production** -> prod Supabase/B2/Groq; **Preview** -> staging (dev) Supabase/B2/Groq.
-2. Settings -> Domains: add a stable staging domain and assign it to the `dev` branch.
-3. Settings -> Deployment Protection: Vercel Authentication on Preview.
-4. Production Branch = `main`.
-5. Supabase Auth on each project: Site URL + redirect URLs = that env's app URL (staging domain for dev project, production URL for prod).
+1. Environment variables (Settings -> Environment Variables), per `.env.example`: **Production** -> prod Supabase/B2/Groq; **Preview** -> dev Supabase/B2/Groq.
+2. Settings -> Deployment Protection: Vercel Authentication on Preview.
+3. Production Branch = `main`.
+4. Supabase Auth on each project: Site URL + redirect URLs = that env's app URL.
 
 ## Release flow
 
-feature branch -> PR into `dev` (Vercel preview build) -> merge: staging deploys + staging DB migrates -> smoke test on staging -> PR `dev` -> `main` -> merge: approve the `production` migration job; Vercel deploys production.
+Push to `dev` -> CI `check` + Preview DB migrates + Vercel Preview deploys -> `release-pr.yml` opens the `dev` -> `main` PR -> smoke test the Preview -> merge: approve the `production` migration job; Vercel deploys production.
 Rollback: redeploy the previous Vercel deployment; for DB, add a new forward migration (no down migrations).
+Note: `release-pr.yml` only fires from `main`'s copy of the workflow, so it starts working after the first merge that contains it.
