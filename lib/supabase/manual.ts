@@ -83,7 +83,8 @@ export async function getSuiteManualLinks(suiteId: string): Promise<suiteManualL
 }
 
 // Module ids linked to a suite, in link order (the order the Manual tab shows them).
-export async function getSuiteManualModuleIds(suiteId: string): Promise<string[]> {
+// cache()'d: the suite layout, manual layout and page all ask within one request.
+export const getSuiteManualModuleIds = cache(async (suiteId: string): Promise<string[]> => {
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("suite_manual_modules")
@@ -93,15 +94,15 @@ export async function getSuiteManualModuleIds(suiteId: string): Promise<string[]
         .order("module_id");
     if (error) throw error;
     return data.map((row) => row.module_id);
-}
+});
 
 // A suite's linked modules in link order, as tree entries. Visibility rides on the manual RLS
 // (non-Admins only get published modules), so a linked-but-unpublished module drops out for them.
-export async function getSuiteManualModules(suiteId: string): Promise<manualModule[]> {
+export const getSuiteManualModules = cache(async (suiteId: string): Promise<manualModule[]> => {
     const [tree, linkedIds] = await Promise.all([getManualTree(), getSuiteManualModuleIds(suiteId)]);
     const byId = new Map(tree.map((m) => [m.id, m]));
     return linkedIds.flatMap((id) => byId.get(id) ?? []);
-}
+});
 
 // Null when the module isn't linked to the suite or the viewer can't see it.
 export async function getSuiteManualModuleBySlug(suiteId: string, slug: string): Promise<manualModule | null> {
