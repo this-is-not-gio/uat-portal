@@ -6,6 +6,7 @@ export type suiteTestAccount = {
 	id: string;
 	testRoleId: string | null; // a catalog role (test_roles); null = any role
 	role: string | null; // that role's name, for display
+	testerName: string; // who the shared login is for; empty when not set
 	username: string;
 	password: string;
 };
@@ -14,11 +15,11 @@ export async function getSuiteTestAccounts(suiteId: string): Promise<suiteTestAc
 	const supabase = await createClient();
 	const { data, error } = await supabase
 		.from("suite_test_accounts")
-		.select("id, test_role_id, test_role:test_roles ( name ), username, password")
+		.select("id, test_role_id, test_role:test_roles ( name ), tester_name, username, password")
 		.eq("testing_suite_id", suiteId)
 		.order("sort_order");
 	if (error) throw error;
-	return data.map((a) => ({ id: a.id, testRoleId: a.test_role_id, role: a.test_role?.name ?? null, username: a.username, password: a.password }));
+	return data.map((a) => ({ id: a.id, testRoleId: a.test_role_id, role: a.test_role?.name ?? null, testerName: a.tester_name, username: a.username, password: a.password }));
 }
 
 // Overview custom sections (header, Lucide icon name, Markdown content). Same

@@ -236,14 +236,14 @@ export async function startIteration({ suiteId, name, plannedEndDate }: { suiteI
 }
 
 // Coverage of a candidate scope for the round wizard (get_round_coverage, 0058). Nothing is
-// saved: the wizard keeps the scope and the unticked users until createRound.
-export async function previewRoundCoverage({ suiteId, testCaseIds, excludedUserIds }: { suiteId: string; testCaseIds: string[]; excludedUserIds: string[] }): Promise<actionResult<roundCoverage>> {
+// saved: the wizard keeps the scope and the ticked users until createRound.
+export async function previewRoundCoverage({ suiteId, testCaseIds, tickedUserIds }: { suiteId: string; testCaseIds: string[]; tickedUserIds: string[] }): Promise<actionResult<roundCoverage>> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     // createRound needs it too; better to say so before the user fills in four steps.
     if (!can(user, "sync")) return denied("sync");
     const supabase = await createClient();
-    const { data, error } = await supabase.rpc("get_round_coverage", { p_suite_id: suiteId, p_test_case_ids: testCaseIds, p_excluded_user_ids: excludedUserIds });
+    const { data, error } = await supabase.rpc("get_round_coverage", { p_suite_id: suiteId, p_test_case_ids: testCaseIds, p_ticked_user_ids: tickedUserIds });
     if (error) return fail(error);
     // Built by round_coverage in this shape.
     return { ok: true, data: data as unknown as roundCoverage };
@@ -252,7 +252,7 @@ export async function previewRoundCoverage({ suiteId, testCaseIds, excludedUserI
 // The wizard's final step: plans the round, adds the chosen cases and records the unticked
 // users. The round isn't started (begin_iteration still gates on coverage), so it stays editable
 // on its page. If a later step fails the half-built round is cancelled rather than left behind.
-export async function createRound({ suiteId, name, plannedEndDate, testCaseIds, excludedUserIds }: { suiteId: string; name?: string; plannedEndDate?: string; testCaseIds: string[]; excludedUserIds: string[] }): Promise<actionResult<{ iterationNumber: number; slug: string }>> {
+export async function createRound({ suiteId, name, plannedEndDate, testCaseIds, tickedUserIds }: { suiteId: string; name?: string; plannedEndDate?: string; testCaseIds: string[]; tickedUserIds: string[] }): Promise<actionResult<{ iterationNumber: number; slug: string }>> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     if (!can(user, "sync")) return denied("sync");
@@ -276,21 +276,21 @@ export async function createRound({ suiteId, name, plannedEndDate, testCaseIds, 
     };
     const { error: addError } = await supabase.rpc("apply_iteration_sync", { p_iteration_id: data.id, p_by: user.id, p_add: testCaseIds, p_refresh: [], p_remove: [] });
     if (addError) return abandon(addError);
-    if (excludedUserIds.length > 0) {
-        const { error: tickError } = await supabase.rpc("set_iteration_testers_excluded", { p_iteration_id: data.id, p_user_ids: excludedUserIds, p_excluded: true });
+    if (tickedUserIds.length > 0) {
+        const { error: tickError } = await supabase.rpc("set_iteration_testers_ticked", { p_iteration_id: data.id, p_user_ids: tickedUserIds, p_ticked: true });
         if (tickError) return abandon(tickError);
     }
     refresh();
     return { ok: true, data: { iterationNumber: data.iteration_number, slug: data.slug } };
 }
 
-// Ticks / unticks users on a planned round's coverage panel (0058). Everyone holding a role
-// the scope needs is ticked unless unticked here; the roster is fixed at Start.
-export async function setTestersExcluded({ iterationId, userIds, excluded }: { iterationId: string; userIds: string[]; excluded: boolean }): Promise<actionResult> {
+// Ticks / unticks users on a planned round's coverage panel (0076). Nobody is ticked until staff
+// tick them, however a role or user got into scope; the roster is fixed at Start.
+export async function setTestersTicked({ iterationId, userIds, ticked }: { iterationId: string; userIds: string[]; ticked: boolean }): Promise<actionResult> {
     const user = await requireUser();
     if (!can(user, "run_iteration")) return denied("run_iteration");
     const supabase = await createClient();
-    const { error } = await supabase.rpc("set_iteration_testers_excluded", { p_iteration_id: iterationId, p_user_ids: userIds, p_excluded: excluded });
+    const { error } = await supabase.rpc("set_iteration_testers_ticked", { p_iteration_id: iterationId, p_user_ids: userIds, p_ticked: ticked });
     if (error) return fail(error);
     refresh();
     return { ok: true, data: undefined };

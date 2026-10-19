@@ -51,7 +51,7 @@ export function overviewTemplates({ description, testAccounts, endpoints, sectio
             label: "Test accounts",
             title: "Test accounts",
             // Passwords stay out: the report is shared and printed.
-            markdown: testAccounts.length > 0 ? ["| Role | Username / Email |", "| --- | --- |", ...testAccounts.map((a) => `| ${cell(a.role ?? "—")} | ${cell(a.username)} |`)].join("\n") : "",
+            markdown: testAccounts.length > 0 ? ["| Role | Tester | Username / Email |", "| --- | --- | --- |", ...testAccounts.map((a) => `| ${cell(a.role ?? "—")} | ${cell(a.testerName || "—")} | ${cell(a.username)} |`)].join("\n") : "",
         },
         { key: "endpoints", label: "Endpoints", title: "Endpoints", markdown: endpoints.map((e) => `- **${e.name}**: ${e.url}`).join("\n") },
         ...sections.map((s) => ({ key: `section:${s.id}`, label: s.title, title: s.title, markdown: s.content.trim() })),

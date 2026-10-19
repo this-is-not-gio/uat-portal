@@ -61,10 +61,10 @@ export async function updateSuiteDescription({ suiteId, description }: { suiteId
 }
 
 // A suite test account; testRoleId is a catalog role (test_roles) ID, or null for "any role".
-export type testAccountDraft = { testRoleId: string | null; username: string; password: string };
+export type testAccountDraft = { testRoleId: string | null; testerName: string; username: string; password: string };
 
 const toAccountPayload = (accounts: testAccountDraft[]) =>
-    accounts.map((a) => ({ test_role_id: a.testRoleId, username: a.username, password: a.password }));
+    accounts.map((a) => ({ test_role_id: a.testRoleId, tester_name: a.testerName, username: a.username, password: a.password }));
 
 // Overview "Test Accounts": replaces the suite's whole list (order = array order).
 export async function saveSuiteTestAccounts({ suiteId, accounts }: { suiteId: string; accounts: testAccountDraft[] }): Promise<actionResult> {
