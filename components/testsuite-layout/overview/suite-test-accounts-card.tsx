@@ -2,7 +2,7 @@
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { useState } from "react";
-import { ClipboardIcon, Eye, EyeOff, IdCard, Key, Plus, ShieldUser, Trash } from "lucide-react";
+import { ClipboardIcon, Eye, EyeOff, IdCard, Key, Plus, ShieldUser, Trash, User } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,8 +17,8 @@ import { DataTable } from "@/components/table/data-table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 // testRoleId: a catalog role (test_roles) ID, or null for "any role"; role: its saved name.
-export type accountRow = { key: string; testRoleId: string | null; role: string | null; username: string; password: string };
-export const emptyRow = (): accountRow => ({ key: crypto.randomUUID(), testRoleId: null, role: null, username: "", password: "" });
+export type accountRow = { key: string; testRoleId: string | null; role: string | null; testerName: string; username: string; password: string };
+export const emptyRow = (): accountRow => ({ key: crypto.randomUUID(), testRoleId: null, role: null, testerName: "", username: "", password: "" });
 
 const columnHelper = createColumnHelper<DataTableFeatures, suiteTestAccount>();
 
@@ -26,6 +26,10 @@ const columns = columnHelper.columns([
 	columnHelper.accessor("role", {
 		header: "Test Role",
 		cell: (info) => <p className="text-xs font-medium">{info.getValue() || "Any role"}</p>,
+	}),
+	columnHelper.accessor("testerName", {
+		header: "Tester Name",
+		cell: (info) => <p className="text-xs">{info.getValue() || "—"}</p>,
 	}),
 	columnHelper.accessor("username", {
 		header: "Username/Email",
@@ -132,6 +136,13 @@ export function SuiteTestAccountsEditor({ rows, onRowsChange, roleOptions, disab
 								<RoleOptionGroups options={roleOptions} current={row.testRoleId && row.role ? { id: row.testRoleId, name: row.role } : null} />
 							</SelectContent>
 						</Select>
+					</Field>
+					<Field>
+						<div className="flex flex-row gap-1 items-center">
+							<User className="text-muted-foreground size-4" />
+							<FieldLabel className="text-xs font-medium text-muted-foreground">Tester Name</FieldLabel>
+						</div>
+						<Input id={`account-tester-${row.key}`} aria-label="Tester Name" placeholder="Tester Name" autoComplete="off" disabled={disabled} value={row.testerName} onChange={(e) => updateRow(row.key, { testerName: e.target.value })} />
 					</Field>
 					<Field>
 						<div className="flex flex-row gap-1 items-center">

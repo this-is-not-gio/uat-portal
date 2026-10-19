@@ -6,18 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { setTestersExcluded } from "@/lib/supabase/iteration-actions";
+import { setTestersTicked } from "@/lib/supabase/iteration-actions";
 import type { coverageRole, coverageUser, roundCoverage } from "@/lib/supabase/test-iterations";
 import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 import { coverageBlockers } from "./coverage-blockers";
 
 // A planned round's testers: every role its scope needs, the orgs holding it and their users,
-// ticked unless staff untick them. The roster is fixed from the ticks when the round starts.
+// unticked until staff tick them. The roster is fixed from the ticks when the round starts.
 export default function CoveragePanel({ iterationId, coverage }: { iterationId: string; coverage: roundCoverage }) {
 	return (
 		<CoverageView
 			coverage={coverage}
-			onToggle={(userIds, ticked) => setTestersExcluded({ iterationId, userIds, excluded: !ticked })}
+			onToggle={(userIds, ticked) => setTestersTicked({ iterationId, userIds, ticked })}
 		/>
 	);
 }

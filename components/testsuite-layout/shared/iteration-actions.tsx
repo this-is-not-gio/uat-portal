@@ -105,7 +105,7 @@ export function StartIterationButton({ iteration, testerCount, testCaseCount, di
 				<DialogHeader className="px-2 pt-2">
 					<DialogTitle>Start {iteration.name}?</DialogTitle>
 					<DialogDescription className="text-xs">
-						Each ticked tester gets their own copy of the test cases for their role and can start recording results. The testers and test cases are locked once it starts, and sections with no included test cases are removed.
+						Each ticked tester (tick them in Add participants) gets their own copy of the test cases for their role and can start recording results. The testers and test cases are locked once it starts, and sections with no included test cases are removed.
 					</DialogDescription>
 				</DialogHeader>
 				{testerCount !== undefined && testCaseCount !== undefined && (

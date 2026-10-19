@@ -764,6 +764,7 @@ export type Database = {
           password: string
           sort_order: number
           test_role_id: string | null
+          tester_name: string
           testing_suite_id: string
           username: string
         }
@@ -773,6 +774,7 @@ export type Database = {
           password: string
           sort_order?: number
           test_role_id?: string | null
+          tester_name?: string
           testing_suite_id: string
           username: string
         }
@@ -782,6 +784,7 @@ export type Database = {
           password?: string
           sort_order?: number
           test_role_id?: string | null
+          tester_name?: string
           testing_suite_id?: string
           username?: string
         }
@@ -1636,8 +1639,8 @@ export type Database = {
       }
       get_round_coverage: {
         Args: {
-          p_excluded_user_ids?: string[]
           p_suite_id: string
+          p_ticked_user_ids?: string[]
           p_test_case_ids: string[]
         }
         Returns: Json
@@ -1833,7 +1836,7 @@ export type Database = {
         Returns: Database["public"]["Enums"]["test_case_status"]
       }
       round_coverage: {
-        Args: { p_cases: Json; p_excluded_user_ids: string[] }
+        Args: { p_cases: Json; p_ticked_user_ids: string[] }
         Returns: Json
       }
       round_roster_drift: {
@@ -1933,10 +1936,10 @@ export type Database = {
         Args: { p_case_result_ids: string[]; p_included: boolean }
         Returns: undefined
       }
-      set_iteration_testers_excluded: {
+      set_iteration_testers_ticked: {
         Args: {
-          p_excluded: boolean
           p_iteration_id: string
+          p_ticked: boolean
           p_user_ids: string[]
         }
         Returns: undefined

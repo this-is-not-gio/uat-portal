@@ -15,7 +15,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { setTestersExcluded } from "@/lib/supabase/iteration-actions";
+import { setTestersTicked } from "@/lib/supabase/iteration-actions";
 import type { coverageUser, roundCoverage } from "@/lib/supabase/test-iterations";
 import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 import { coverageBlockers } from "./coverage-blockers";
@@ -60,7 +60,7 @@ export default function AddParticipantsDialog({
 			return next;
 		});
 		startTransition(async () => {
-			const result = await setTestersExcluded({ iterationId, userIds, excluded: !ticked });
+			const result = await setTestersTicked({ iterationId, userIds, ticked });
 			if (!result.ok) {
 				setTicks(previous);
 				setError(result.error);
