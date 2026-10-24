@@ -243,14 +243,17 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	const [isSavingResult, startSavingResult] = useTransition();
 	const totalSteps = testCase.stepsToExecute?.length ?? 0;
 	const testedSteps = Object.keys(stepStatuses).filter((stepId) => stepStatuses[stepId]?.status !== "Untested").length;
-	// A failed step, or a case marked Failed by hand, needs a remark from this tester with at least one
-	// piece of evidence (an uploaded file or an evidence link) before the sheet can be closed.
+	// A failed step needs a remark from this tester with at least one piece of evidence (an uploaded
+	// file or an evidence link) before the sheet can be closed. A case set to Failed by hand doesn't.
 	const hasOwnEvidence = (stepId: string) => !!author && (stepRemarks[stepId] ?? []).some((remark) =>
 		remark.author?.id === author.id && ((remarkFiles[remark.id] ?? remark.attachments ?? []).length > 0 || EVIDENCE_MARKER.test(remark.remark)));
-	const stepsMissingRemark = (testCase.stepsToExecute ?? []).filter((step) => stepStatuses[step.id]?.status === "Failed" && !hasOwnEvidence(step.id));
-	const anyStepFailed = Object.values(stepStatuses).some((step) => step.status === "Failed");
-	const caseMissingRemark = caseState.status === "Failed" && !anyStepFailed && !(testCase.stepsToExecute ?? []).some((step) => hasOwnEvidence(step.id));
-	const locked = mode === "execute" && (stepsMissingRemark.length > 0 || caseMissingRemark);
+	const allSteps = testCase.stepsToExecute ?? [];
+	// "Failed all" (every step Failed) only needs evidence on one step; otherwise each failed step needs its own.
+	const allStepsFailed = allSteps.length > 1 && allSteps.every((step) => stepStatuses[step.id]?.status === "Failed");
+	const someStepHasEvidence = allSteps.some((step) => hasOwnEvidence(step.id));
+	const stepsMissingRemark = allStepsFailed ? [] : allSteps.filter((step) => stepStatuses[step.id]?.status === "Failed" && !hasOwnEvidence(step.id));
+	const failAllMissingRemark = allStepsFailed && !someStepHasEvidence;
+	const locked = mode === "execute" && (stepsMissingRemark.length > 0 || failAllMissingRemark);
 	const setDetailLock = useDetailLock();
 	useEffect(() => {
 		setDetailLock?.(locked);
@@ -413,7 +416,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		setStepStatuses(nextStatuses);
 																		setCaseState(nextCaseState);
 																		emitChange(nextStatuses, stepRemarks, nextCaseState);
-																			if (newStatus === "Failed") setOpenSteps((current) => current.includes(step.id) ? current : [...current, step.id]);
+																		if (newStatus === "Failed") setOpenSteps((current) => current.includes(step.id) ? current : [...current, step.id]);
 																	}}
 																	options={step_status_options}
 																	isPending={isSavingResult}
@@ -506,7 +509,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																			<RemarkMarkdownField
 																				step={step}
 																				placeholder="Leave a remark for this step"
-														requireEvidence={mode === "execute" && stepStatuses[step.id]?.status === "Failed"}
+																				requireEvidence={mode === "execute" && stepStatuses[step.id]?.status === "Failed"}
 																				onSubmitted={(insertedRemark) => {
 																					if (insertedRemark.attachments?.length) {
 																						invalidateRemarkAttachments();
@@ -681,17 +684,13 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 				<SheetFooter className="flex flex-col sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					{locked && (
 						<p role="alert" className="w-full text-xs font-medium text-red-700 dark:text-red-400 bg-red-100/60 dark:bg-red-950/40 border border-red-700/40 rounded-md px-3 py-2">
-							{stepsMissingRemark.length > 0
-								? `Leave a remark on failed step ${stepsMissingRemark.map((step) => (testCase.stepsToExecute ?? []).findIndex((s) => s.id === step.id) + 1).join(", ")} with at least one evidence (a file or a link) to continue. The sheet is locked until you do.`
-								: "This case is marked Failed. Leave a remark with at least one evidence (a file or a link) on any step to continue. The sheet is locked until you do."}
+							{failAllMissingRemark
+								? "All steps are failed. Leave a remark with at least one evidence (a file or a link) on one of the steps to continue. The sheet is locked until you do."
+								: `Leave a remark on failed step ${stepsMissingRemark.map((step) => (testCase.stepsToExecute ?? []).findIndex((s) => s.id === step.id) + 1).join(", ")} with at least one evidence (a file or a link) to continue. The sheet is locked until you do.`}
 						</p>
 					)}
 					<div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
 						<div className="flex flex-row items-center gap-2">
-							{/* <div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
-								{testedSteps} / {totalSteps} Tested Steps
-								<ListChecksIcon className="h-4 w-4" />
-							</div> */}
 							<p className="text-xs font-medium">Test Summary:</p>
 							<ResultSummaryCell statusCounts={statusCounts} />
 						</div>
@@ -702,6 +701,15 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 							onChange={(nextCaseState) => {
 								setCaseState(nextCaseState);
 								emitChange(stepStatuses, stepRemarks, nextCaseState);
+							}}
+							stepCount={allSteps.length}
+							onQuickResult={(status, nextCaseState) => {
+								const nextStatuses = Object.fromEntries(allSteps.map((step) => [step.id, { status }]));
+								setStepStatuses(nextStatuses);
+								setCaseState(nextCaseState);
+								emitChange(nextStatuses, stepRemarks, nextCaseState);
+								// Open the first step's remark box so the required remark is right there.
+								if (status === "Failed" && allSteps[0]) setOpenSteps((current) => current.includes(allSteps[0].id) ? current : [...current, allSteps[0].id]);
 							}}
 							selected_test_case_status_classnames={selected_test_case_status_classnames}
 							isPending={isSavingResult}
@@ -744,14 +752,21 @@ export function ResultSummaryCell({ statusCounts }: { statusCounts: { value: tes
 						);
 					})}
 				</div>
-			}/>
+			} />
 			<TooltipContent>
 				<p className="text-xs">
-					{counted.map((status) => (
-						<span key={status.value}>
-							{status.value}: {status.count}
-						</span>
-					))}
+					{counted.map((status, index) => {
+						return (
+							<>
+								<span key={status.value}>
+									{status.value}: {status.count}
+								</span>
+								{
+									index < counted.length - 1 && <span className="mx-1">•</span>
+								}
+							</>
+						)
+					})}
 				</p>
 			</TooltipContent>
 		</Tooltip>

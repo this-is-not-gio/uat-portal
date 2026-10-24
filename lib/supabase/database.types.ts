@@ -1579,6 +1579,10 @@ export type Database = {
         Args: { p_test_case_id: string }
         Returns: undefined
       }
+      derived_case_status: {
+        Args: { p_case_result_id: string }
+        Returns: Database["public"]["Enums"]["test_case_status"]
+      }
       discard_sign_off_draft: {
         Args: { p_sign_off_id: string }
         Returns: undefined

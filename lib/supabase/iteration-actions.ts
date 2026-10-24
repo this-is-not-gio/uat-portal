@@ -429,7 +429,30 @@ export async function setStepResultStatus({ caseResultId, stepResultId, status }
     return readCaseResultState(caseResultId);
 }
 
-// Manual override of the derived case status.
+// Quick action: every step of the case gets the same result in one write, and the DB re-derives
+// the case status from them. Same ownership check and executor rule as setStepResultStatus.
+export async function setAllStepResultStatus({ caseResultId, status }: { caseResultId: string; status: "Passed" | "Failed" }): Promise<actionResult<caseResultState>> {
+    const user = await requireUser();
+    const supabase = await createClient();
+    const { data: updated, error } = await supabase
+        .from("test_step_results")
+        .update({ status })
+        .eq("test_case_result_id", caseResultId)
+        .select("id");
+    if (error) return fail(error);
+    if (updated.length === 0) return { ok: false, error: NOT_OWN_COPY };
+
+    const { error: executorError } = await supabase
+        .from("test_case_results")
+        .update({ executed_by: user.id })
+        .eq("id", caseResultId);
+    if (executorError) return fail(executorError);
+
+    return readCaseResultState(caseResultId);
+}
+
+// Manual override of the derived case status. The UI only offers it behind "Override result", so
+// whatever is picked sticks (even when it equals the derived verdict) until "Return to auto verdict".
 export async function setCaseResultStatus({ caseResultId, status }: { caseResultId: string; status: testCaseStatus }): Promise<actionResult<caseResultState>> {
     const user = await requireUser();
     const supabase = await createClient();
