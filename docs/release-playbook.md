@@ -51,6 +51,13 @@ For a big feature shipped in pieces, merge it to `dev` behind a flag (an env var
 3. **Merge** it. Vercel starts deploying prod.
 4. **Straight away: Actions → Migrate → Review deployments → `production` → Approve and deploy.** Without this, prod code runs against a DB that's missing its migrations.
 5. Smoke-test the live site.
+6. Sync `dev` with `main`. The Release PR's merge commit only exists on `main`, so GitHub shows `dev` as "N commits behind main" even though the code is identical. Fast-forward it away:
+
+   ```bash
+   git checkout dev && git pull && git merge --ff-only origin/main && git push origin dev
+   ```
+
+   The push runs CI again, but no new Release PR opens, because `dev` has nothing new for `main`.
 
 Release when usage is low, and tell users when behaviour changes.
 
