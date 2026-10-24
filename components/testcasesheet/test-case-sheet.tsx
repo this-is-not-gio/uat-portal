@@ -545,7 +545,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						) : null
 					}
 				</div>
-				{showResults && <div className="flex flex-col p-4">
+				{showResults && <div className="flex flex-col p-4 gap-2">
 					<div className="flex flex-row items-center gap-2 pb-3">
 						<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
 							<MessageSquareShare />
@@ -560,7 +560,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)}
 						{canRemark && <div className="flex flex-row gap-2 group/remark">
 							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
-								<div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div>
+								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}
 								<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
 									<p className="text-xs font-bold">{author?.full_name?.charAt(0) || 'U'}{author?.full_name?.charAt(1).toUpperCase() || 'U'}</p>
 								</div>
