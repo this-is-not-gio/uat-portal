@@ -167,6 +167,7 @@ const RESULT_SELECT = `
   completed_at,
   executor:profiles!test_case_results_executed_by_fkey ( id, full_name, role ),
   test_case_result_archives ( id, reason, archived_at, snapshot, archiver:profiles ( full_name ) ),
+  case_remarks:test_remarks ( id, remark, created_at, profile:profiles ( id, full_name, role ) ),
   test_step_results (
     id,
     step,
@@ -442,6 +443,14 @@ export async function getIterationResults(iterationId: string, orgId?: string): 
             .sort((a, b) => b.archivedAt.localeCompare(a.archivedAt)),
         // Snapshot jsonb columns are written by start/sync_iteration in this exact shape.
         preconditions: row.preconditions as preCondition[],
+        remarks: row.case_remarks
+            .map((remark) => ({
+                id: remark.id,
+                remark: remark.remark,
+                author: remark.profile ?? undefined,
+                created_at: remark.created_at,
+            }))
+            .sort((a, b) => a.created_at.localeCompare(b.created_at)),
         stepsToExecute: row.test_step_results.map((step) => ({
             id: step.id,
             step: step.step,

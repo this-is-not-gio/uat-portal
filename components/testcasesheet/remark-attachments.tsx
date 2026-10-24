@@ -13,11 +13,11 @@ export const formatSize = formatFileSize;
 const CACHE_MS = 8 * 60 * 1000;
 const cache = new Map<string, { at: number; files: Record<string, signedAttachment[]> }>();
 
-export async function loadRemarkAttachments(stepResultIds: string[]): Promise<{ ok: true; data: Record<string, signedAttachment[]> } | { ok: false }> {
-	const key = stepResultIds.join(",");
+export async function loadRemarkAttachments(stepResultIds: string[], caseResultId?: string): Promise<{ ok: true; data: Record<string, signedAttachment[]> } | { ok: false }> {
+	const key = `${stepResultIds.join(",")}|${caseResultId ?? ""}`;
 	const hit = cache.get(key);
 	if (hit && Date.now() - hit.at < CACHE_MS) return { ok: true, data: hit.files };
-	const res = await listRemarkAttachments({ stepResultIds });
+	const res = await listRemarkAttachments({ stepResultIds, caseResultId });
 	if (!res.ok) return { ok: false };
 	cache.set(key, { at: Date.now(), files: res.data });
 	return { ok: true, data: res.data };

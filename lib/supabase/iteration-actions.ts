@@ -489,13 +489,14 @@ export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: st
     return readCaseResultState(caseResultId);
 }
 
-export async function addResultRemark({ stepResultId, remark, attachmentIds = [] }: { stepResultId: string; remark: string; attachmentIds?: string[] }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile; attachments: signedAttachment[] }>> {
+// Exactly one of stepResultId (a step's remark) or caseResultId (overall feedback on the case).
+export async function addResultRemark({ stepResultId, caseResultId, remark, attachmentIds = [] }: { stepResultId?: string; caseResultId?: string; remark: string; attachmentIds?: string[] }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile; attachments: signedAttachment[] }>> {
     const user = await requireUser();
     const supabase = await createClient();
     // One transaction: the remark and the links to the caller's ready drafts, or neither (0063).
-    const { data, error } = await supabase.rpc("post_remark_with_attachments", {
-        p_step_result_id: stepResultId, p_remark: remark, p_attachment_ids: attachmentIds,
-    });
+    const { data, error } = caseResultId
+        ? await supabase.rpc("post_case_remark_with_attachments", { p_case_result_id: caseResultId, p_remark: remark, p_attachment_ids: attachmentIds })
+        : await supabase.rpc("post_remark_with_attachments", { p_step_result_id: stepResultId!, p_remark: remark, p_attachment_ids: attachmentIds });
     if (error) return fail(error);
     const posted = data[0];
     await flushStorageDeletions(supabase);

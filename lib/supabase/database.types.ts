@@ -25,7 +25,8 @@ export type Database = {
           remark_id: string | null
           size_bytes: number
           status: Database["public"]["Enums"]["attachment_status"]
-          test_step_result_id: string
+          test_case_result_id: string | null
+          test_step_result_id: string | null
           uploaded_by: string
         }
         Insert: {
@@ -38,7 +39,8 @@ export type Database = {
           remark_id?: string | null
           size_bytes: number
           status?: Database["public"]["Enums"]["attachment_status"]
-          test_step_result_id: string
+          test_case_result_id?: string | null
+          test_step_result_id?: string | null
           uploaded_by: string
         }
         Update: {
@@ -51,10 +53,17 @@ export type Database = {
           remark_id?: string | null
           size_bytes?: number
           status?: Database["public"]["Enums"]["attachment_status"]
-          test_step_result_id?: string
+          test_step_result_id?: string | null
           uploaded_by?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "attachments_test_case_result_id_fkey"
+            columns: ["test_case_result_id"]
+            isOneToOne: false
+            referencedRelation: "test_case_results"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attachments_remark_id_fkey"
             columns: ["remark_id"]
@@ -1166,6 +1175,7 @@ export type Database = {
           created_by: string | null
           id: string
           remark: string
+          test_case_result_id: string | null
           test_step_id: string | null
           test_step_result_id: string | null
         }
@@ -1174,6 +1184,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           remark: string
+          test_case_result_id?: string | null
           test_step_id?: string | null
           test_step_result_id?: string | null
         }
@@ -1182,6 +1193,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           remark?: string
+          test_case_result_id?: string | null
           test_step_id?: string | null
           test_step_result_id?: string | null
         }
@@ -1191,6 +1203,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "test_remarks_test_case_result_id_fkey"
+            columns: ["test_case_result_id"]
+            isOneToOne: false
+            referencedRelation: "test_case_results"
             referencedColumns: ["id"]
           },
           {
@@ -1512,7 +1531,8 @@ export type Database = {
           remark_id: string | null
           size_bytes: number
           status: Database["public"]["Enums"]["attachment_status"]
-          test_step_result_id: string
+          test_case_result_id: string | null
+          test_step_result_id: string | null
           uploaded_by: string
         }
         SetofOptions: {
@@ -1718,6 +1738,15 @@ export type Database = {
         }
       }
       iteration_scope_cases: { Args: { p_iteration_id: string }; Returns: Json }
+      post_case_remark_with_attachments: {
+        Args: { p_case_result_id: string; p_remark: string; p_attachment_ids?: string[] }
+        Returns: { id: string; remark: string; created_at: string }[]
+      }
+      create_draft_case_attachment: {
+        Args: { p_case_result_id: string; p_content_type: string; p_file_name: string; p_size_bytes: number }
+        Returns: Database["public"]["Tables"]["attachments"]["Row"]
+        SetofOptions: { from: "*"; to: "attachments"; isOneToOne: true; isSetofReturn: false }
+      }
       post_remark_with_attachments: {
         Args: { p_step_result_id: string; p_remark: string; p_attachment_ids?: string[] }
         Returns: { id: string; remark: string; created_at: string }[]
@@ -1734,7 +1763,8 @@ export type Database = {
           remark_id: string | null
           size_bytes: number
           status: Database["public"]["Enums"]["attachment_status"]
-          test_step_result_id: string
+          test_case_result_id: string | null
+          test_step_result_id: string | null
           uploaded_by: string
         }
         SetofOptions: {
