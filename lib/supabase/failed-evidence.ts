@@ -4,8 +4,8 @@ import type { Database } from "./database.types";
 // Remarks posted with evidence links carry this heading (see RemarkMarkdownField).
 const EVIDENCE_MARKER = /\*\*Evidence:\*\*/;
 
-// The user's own failed steps (and cases marked Failed by hand with no failed step) that have no
-// remark of theirs carrying evidence: an uploaded file or an evidence link. Labels like "TC-1 (step 2)".
+// The user's own failed steps that have no
+// remark of theirs (on the step, or overall feedback on the case) carrying evidence: an uploaded file or an evidence link. Labels like "TC-1 (step 2)".
 // Returns null when a query fails, so callers decide whether to block or stay quiet.
 export async function failedWithoutEvidence(supabase: SupabaseClient<Database>, iterationId: string, userId: string): Promise<string[] | null> {
 	const { data: cases, error: casesError } = await supabase
@@ -26,16 +26,18 @@ export async function failedWithoutEvidence(supabase: SupabaseClient<Database>, 
 
 	const stepsByCase = new Map<string, NonNullable<typeof steps>>();
 	for (const step of steps ?? []) stepsByCase.set(step.test_case_result_id, [...(stepsByCase.get(step.test_case_result_id) ?? []), step]);
-	// Only cases that failed somewhere matter; their steps' remarks are what we need to look at.
-	const relevant = (cases ?? []).filter((c) => c.status === "Failed" || (stepsByCase.get(c.id) ?? []).some((s) => s.status === "Failed"));
+	// Only cases with a failed step matter; a case set to Failed by hand needs no evidence.
+	const relevant = (cases ?? []).filter((c) => (stepsByCase.get(c.id) ?? []).some((s) => s.status === "Failed"));
 	const stepIds = relevant.flatMap((c) => (stepsByCase.get(c.id) ?? []).map((s) => s.id));
 	if (stepIds.length === 0) return [];
 
+	// Overall feedback (a case-level remark) with evidence covers the whole case.
+	const relevantCaseIds = relevant.map((c) => c.id);
 	const { data: remarks, error: remarksError } = await supabase
 		.from("test_remarks")
-		.select("id, remark, test_step_result_id")
+		.select("id, remark, test_step_result_id, test_case_result_id")
 		.eq("created_by", userId)
-		.in("test_step_result_id", stepIds);
+		.or(`test_step_result_id.in.(${stepIds.join(",")}),test_case_result_id.in.(${relevantCaseIds.join(",")})`);
 	if (remarksError) return null;
 	const remarkIds = (remarks ?? []).map((r) => r.id);
 	const withFiles = new Set<string>();
@@ -45,16 +47,21 @@ export async function failedWithoutEvidence(supabase: SupabaseClient<Database>, 
 		for (const f of files ?? []) if (f.remark_id) withFiles.add(f.remark_id);
 	}
 	const evidenceSteps = new Set<string>();
+	const evidenceCases = new Set<string>();
 	for (const r of remarks ?? []) {
-		if (r.test_step_result_id && (withFiles.has(r.id) || EVIDENCE_MARKER.test(r.remark))) evidenceSteps.add(r.test_step_result_id);
+		if (!withFiles.has(r.id) && !EVIDENCE_MARKER.test(r.remark)) continue;
+		if (r.test_step_result_id) evidenceSteps.add(r.test_step_result_id);
+		if (r.test_case_result_id) evidenceCases.add(r.test_case_result_id);
 	}
 
 	const missing: string[] = [];
 	for (const c of relevant) {
+		if (evidenceCases.has(c.id)) continue;
 		const caseSteps = [...(stepsByCase.get(c.id) ?? [])].sort((x, y) => x.order_index - y.order_index);
 		const label = c.code ?? c.title;
 		const failedSteps = caseSteps.filter((s) => s.status === "Failed");
-		if (failedSteps.length === 0) {
+		// Every step failed ("Failed all"): one remark with evidence on any step is enough.
+		if (caseSteps.length > 1 && failedSteps.length === caseSteps.length) {
 			if (!caseSteps.some((s) => evidenceSteps.has(s.id))) missing.push(label);
 			continue;
 		}

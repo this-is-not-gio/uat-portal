@@ -204,6 +204,47 @@ export type testCaseSheetMode = "definition" | "execute" | "review";
 
 type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[]; copies?: caseCopy[] };
 
+// One posted remark (step or case level): author header, markdown body, evidence files.
+function RemarkCard({ remark, files }: { remark: testRemark; files: signedAttachment[] }) {
+	const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
+	const Icon = author_role_badge?.Icon
+	const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
+	return (<div className="flex flex-row gap-2 group/remark">
+		<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
+			<div className="w-0.5 h-2 bg-accent rounded-full self-center group-first/remark:h-0"></div>
+			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
+				<p className="text-xs font-bold">{initials}</p>
+			</div>
+			<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
+		</div>
+		<div className="border w-full min-w-0 bg-accent/10 rounded-xl mb-3 sm:mb-5 group-last/remark:mb-0">
+			{/* Mobile drops the avatar column (the avatar moves in here) and the role badge. */}
+			<div className="flex flex-row items-center justify-between gap-2 border-b p-3 sm:p-4 mb-0 bg-accent/90 rounded-t-xl">
+				<div className="flex-row flex min-w-0 gap-2 items-center">
+					<div className="sm:hidden size-6 shrink-0 rounded-full flex items-center justify-center bg-primary text-white">
+						<p className="text-[10px] font-bold">{initials}</p>
+					</div>
+					<p className="text-xs sm:text-sm font-semibold truncate">{remark.author?.full_name || 'Unknown Author'}</p>
+					<Badge variant="outline" className={cn("hidden sm:inline-flex", author_role_badge?.className || "bg-muted text-foreground border-border")}>
+						{Icon && <Icon className="h-3 w-3" />}
+						{remark.author?.role || 'Unknown Role'}
+					</Badge>
+				</div>
+				<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
+			</div>
+			<div className="p-3 sm:p-4 overflow-x-auto">
+				{remark.remark.trim() && (
+					<div className="typeset text-sm break-words">
+						<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> }}>{remark.remark}</ReactMarkdown>
+					</div>
+				)}
+				<RemarkAttachments attachments={files} />
+			</div>
+		</div>
+	</div>
+	)
+}
+
 export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", canRemark = mode === "execute", footerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; canRemark?: boolean; footerActions?: React.ReactNode }) {
 	const showResults = mode !== "definition";
 	const currentUser = useCurrentUser();
@@ -221,17 +262,19 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	// Posted evidence per remark, signed with the viewer's own session; loaded once when the sheet opens.
 	const [remarkFiles, setRemarkFiles] = useState<Record<string, signedAttachment[]>>({});
 	const [filesUnavailable, setFilesUnavailable] = useState(false);
+	const [caseRemarks, setCaseRemarks] = useState<testRemark[]>(testCase.remarks ?? []);
 	const stepIdsKey = showResults ? (testCase.stepsToExecute ?? []).map((step) => step.id).join(",") : "";
+	const caseResultId = showResults ? testCase.id : undefined;
 	useEffect(() => {
-		if (!stepIdsKey) return;
+		if (!stepIdsKey && !caseResultId) return;
 		let cancelled = false;
-		loadRemarkAttachments(stepIdsKey.split(",")).then((res) => {
+		loadRemarkAttachments(stepIdsKey ? stepIdsKey.split(",") : [], caseResultId).then((res) => {
 			if (cancelled) return;
 			if (res.ok) setRemarkFiles((current) => ({ ...res.data, ...current }));
 			else setFilesUnavailable(true);
 		});
 		return () => { cancelled = true; };
-	}, [stepIdsKey]);
+	}, [stepIdsKey, caseResultId]);
 	const [caseState, setCaseState] = useState<caseResultState>({
 		status: testCase.status,
 		statusOverridden: testCase.statusOverridden ?? false,
@@ -243,14 +286,20 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	const [isSavingResult, startSavingResult] = useTransition();
 	const totalSteps = testCase.stepsToExecute?.length ?? 0;
 	const testedSteps = Object.keys(stepStatuses).filter((stepId) => stepStatuses[stepId]?.status !== "Untested").length;
-	// A failed step, or a case marked Failed by hand, needs a remark from this tester with at least one
-	// piece of evidence (an uploaded file or an evidence link) before the sheet can be closed.
-	const hasOwnEvidence = (stepId: string) => !!author && (stepRemarks[stepId] ?? []).some((remark) =>
+	// A failed step needs a remark from this tester with at least one piece of evidence (an uploaded
+	// file or an evidence link) before the sheet can be closed. A case set to Failed by hand doesn't.
+	const hasEvidenceFrom = (remarks: testRemark[]) => !!author && remarks.some((remark) =>
 		remark.author?.id === author.id && ((remarkFiles[remark.id] ?? remark.attachments ?? []).length > 0 || EVIDENCE_MARKER.test(remark.remark)));
-	const stepsMissingRemark = (testCase.stepsToExecute ?? []).filter((step) => stepStatuses[step.id]?.status === "Failed" && !hasOwnEvidence(step.id));
-	const anyStepFailed = Object.values(stepStatuses).some((step) => step.status === "Failed");
-	const caseMissingRemark = caseState.status === "Failed" && !anyStepFailed && !(testCase.stepsToExecute ?? []).some((step) => hasOwnEvidence(step.id));
-	const locked = mode === "execute" && (stepsMissingRemark.length > 0 || caseMissingRemark);
+	const hasOwnEvidence = (stepId: string) => hasEvidenceFrom(stepRemarks[stepId] ?? []);
+	// Overall feedback with evidence covers the failure as a whole, so no step needs its own.
+	const caseHasEvidence = hasEvidenceFrom(caseRemarks);
+	const allSteps = testCase.stepsToExecute ?? [];
+	// "Failed all" (every step Failed) only needs evidence on one step; otherwise each failed step needs its own.
+	const allStepsFailed = allSteps.length > 1 && allSteps.every((step) => stepStatuses[step.id]?.status === "Failed");
+	const someStepHasEvidence = allSteps.some((step) => hasOwnEvidence(step.id));
+	const stepsMissingRemark = allStepsFailed || caseHasEvidence ? [] : allSteps.filter((step) => stepStatuses[step.id]?.status === "Failed" && !hasOwnEvidence(step.id));
+	const failAllMissingRemark = allStepsFailed && !someStepHasEvidence && !caseHasEvidence;
+	const locked = mode === "execute" && (stepsMissingRemark.length > 0 || failAllMissingRemark);
 	const setDetailLock = useDetailLock();
 	useEffect(() => {
 		setDetailLock?.(locked);
@@ -264,9 +313,10 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	}));
 
 	// Push the sheet's local state back into the table row so counts and badges follow.
-	function emitChange(nextStatuses: typeof stepStatuses, nextRemarks: typeof stepRemarks, nextCaseState: caseResultState) {
+	function emitChange(nextStatuses: typeof stepStatuses, nextRemarks: typeof stepRemarks, nextCaseState: caseResultState, nextCaseRemarks = caseRemarks) {
 		onChangeTestCase({
 			...testCase,
+			remarks: nextCaseRemarks,
 			status: nextCaseState.status,
 			statusOverridden: nextCaseState.statusOverridden,
 			completedAt: nextCaseState.completedAt,
@@ -413,7 +463,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		setStepStatuses(nextStatuses);
 																		setCaseState(nextCaseState);
 																		emitChange(nextStatuses, stepRemarks, nextCaseState);
-																			if (newStatus === "Failed") setOpenSteps((current) => current.includes(step.id) ? current : [...current, step.id]);
+																		if (newStatus === "Failed") setOpenSteps((current) => current.includes(step.id) ? current : [...current, step.id]);
 																	}}
 																	options={step_status_options}
 																	isPending={isSavingResult}
@@ -448,45 +498,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																<div className="group/with-remark">
 																	{
 																		remarks?.length > 0 ? (
-																			remarks.map((remark) => {
-																				const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
-																				const Icon = author_role_badge?.Icon
-																				const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
-																				return (<div className="flex flex-row gap-2 group/remark" key={remark.id}>
-																					<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
-																						<div className="w-0.5 h-2 bg-accent rounded-full self-center group-first/remark:h-0"></div>
-																						<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
-																							<p className="text-xs font-bold">{initials}</p>
-																						</div>
-																						<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
-																					</div>
-																					<div className="border w-full min-w-0 bg-accent/10 rounded-xl mb-3 sm:mb-5 group-last/remark:mb-0">
-																						{/* Mobile drops the avatar column (the avatar moves in here) and the role badge. */}
-																						<div className="flex flex-row items-center justify-between gap-2 border-b p-3 sm:p-4 mb-0 bg-accent/90 rounded-t-xl">
-																							<div className="flex-row flex min-w-0 gap-2 items-center">
-																								<div className="sm:hidden size-6 shrink-0 rounded-full flex items-center justify-center bg-primary text-white">
-																									<p className="text-[10px] font-bold">{initials}</p>
-																								</div>
-																								<p className="text-xs sm:text-sm font-semibold truncate">{remark.author?.full_name || 'Unknown Author'}</p>
-																								<Badge variant="outline" className={cn("hidden sm:inline-flex", author_role_badge?.className || "bg-muted text-foreground border-border")}>
-																									{Icon && <Icon className="h-3 w-3" />}
-																									{remark.author?.role || 'Unknown Role'}
-																								</Badge>
-																							</div>
-																							<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
-																						</div>
-																						<div className="p-3 sm:p-4 overflow-x-auto">
-																							{remark.remark.trim() && (
-																								<div className="typeset text-sm break-words">
-																									<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> }}>{remark.remark}</ReactMarkdown>
-																								</div>
-																							)}
-																							<RemarkAttachments attachments={remarkFiles[remark.id] ?? remark.attachments ?? []} />
-																						</div>
-																					</div>
-																				</div>
-																				)
-																			})
+																																																																					remarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)
 
 																		) : null
 																	}
@@ -506,7 +518,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																			<RemarkMarkdownField
 																				step={step}
 																				placeholder="Leave a remark for this step"
-														requireEvidence={mode === "execute" && stepStatuses[step.id]?.status === "Failed"}
+																				requireEvidence={mode === "execute" && stepStatuses[step.id]?.status === "Failed"}
 																				onSubmitted={(insertedRemark) => {
 																					if (insertedRemark.attachments?.length) {
 																						invalidateRemarkAttachments();
@@ -533,6 +545,45 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						) : null
 					}
 				</div>
+				{showResults && <div className="flex flex-col p-4 gap-2">
+					<div className="flex flex-row items-center gap-2 pb-3">
+						<div className="flex flex-col items-center justify-center gap-0 size-12 rounded-md bg-muted p-2 text-muted-foreground">
+							<MessageSquareShare />
+						</div>
+						<div className="flex flex-col gap-0">
+							<h3 className="text-lg font-semibold">Test Case Feedback</h3>
+							<p className="text-xs text-muted-foreground">Share your thoughts and observations about this test case.</p>
+						</div>
+					</div>
+					{filesUnavailable && caseRemarks.length > 0 && <AttachmentsUnavailable className="pb-3" />}
+					<div className="group/with-remark">
+						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)}
+						{canRemark && <div className="flex flex-row gap-2 group/remark">
+							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
+								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}
+								<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
+									<p className="text-xs font-bold">{author?.full_name?.charAt(0) || 'U'}{author?.full_name?.charAt(1).toUpperCase() || 'U'}</p>
+								</div>
+								<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
+							</div>
+							<div className="flex flex-col gap-2 sm:gap-4 w-full min-w-0">
+								<RemarkMarkdownField
+									caseResultId={testCase.id}
+									placeholder="Leave overall feedback for this test case"
+									onSubmitted={(insertedRemark) => {
+										if (insertedRemark.attachments?.length) {
+											invalidateRemarkAttachments();
+											setRemarkFiles((current) => ({ ...current, [insertedRemark.id]: insertedRemark.attachments! }));
+										}
+										const nextCaseRemarks = [...caseRemarks, insertedRemark];
+										setCaseRemarks(nextCaseRemarks);
+										emitChange(stepStatuses, stepRemarks, caseState, nextCaseRemarks);
+									}}
+								/>
+							</div>
+						</div>}
+					</div>
+				</div>}
 			</div>
 			{/* Results the vendor archived with a force refresh, newest first. */}
 			{showResults && (testCase.archives?.length ?? 0) > 0 && (
@@ -681,17 +732,13 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 				<SheetFooter className="flex flex-col sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					{locked && (
 						<p role="alert" className="w-full text-xs font-medium text-red-700 dark:text-red-400 bg-red-100/60 dark:bg-red-950/40 border border-red-700/40 rounded-md px-3 py-2">
-							{stepsMissingRemark.length > 0
-								? `Leave a remark on failed step ${stepsMissingRemark.map((step) => (testCase.stepsToExecute ?? []).findIndex((s) => s.id === step.id) + 1).join(", ")} with at least one evidence (a file or a link) to continue. The sheet is locked until you do.`
-								: "This case is marked Failed. Leave a remark with at least one evidence (a file or a link) on any step to continue. The sheet is locked until you do."}
+							{failAllMissingRemark
+								? "All steps are failed. Leave a remark with at least one evidence (a file or a link) on one of the steps, or in the Test Case Feedback, to continue. The sheet is locked until you do."
+								: `Leave a remark on failed step ${stepsMissingRemark.map((step) => (testCase.stepsToExecute ?? []).findIndex((s) => s.id === step.id) + 1).join(", ")} with at least one evidence (a file or a link), or leave one in the Test Case Feedback, to continue. The sheet is locked until you do.`}
 						</p>
 					)}
 					<div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between w-full">
 						<div className="flex flex-row items-center gap-2">
-							{/* <div className="flex flex-row items-center gap-1 py-1 px-2 rounded-md text-xs font-semibold border bg-muted text-foreground border-border w-fit">
-								{testedSteps} / {totalSteps} Tested Steps
-								<ListChecksIcon className="h-4 w-4" />
-							</div> */}
 							<p className="text-xs font-medium">Test Summary:</p>
 							<ResultSummaryCell statusCounts={statusCounts} />
 						</div>
@@ -702,6 +749,15 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 							onChange={(nextCaseState) => {
 								setCaseState(nextCaseState);
 								emitChange(stepStatuses, stepRemarks, nextCaseState);
+							}}
+							stepCount={allSteps.length}
+							onQuickResult={(status, nextCaseState) => {
+								const nextStatuses = Object.fromEntries(allSteps.map((step) => [step.id, { status }]));
+								setStepStatuses(nextStatuses);
+								setCaseState(nextCaseState);
+								emitChange(nextStatuses, stepRemarks, nextCaseState);
+								// Open the first step's remark box so the required remark is right there.
+								if (status === "Failed" && allSteps[0]) setOpenSteps((current) => current.includes(allSteps[0].id) ? current : [...current, allSteps[0].id]);
 							}}
 							selected_test_case_status_classnames={selected_test_case_status_classnames}
 							isPending={isSavingResult}
@@ -744,14 +800,21 @@ export function ResultSummaryCell({ statusCounts }: { statusCounts: { value: tes
 						);
 					})}
 				</div>
-			}/>
+			} />
 			<TooltipContent>
 				<p className="text-xs">
-					{counted.map((status) => (
-						<span key={status.value}>
-							{status.value}: {status.count}
-						</span>
-					))}
+					{counted.map((status, index) => {
+						return (
+							<>
+								<span key={status.value}>
+									{status.value}: {status.count}
+								</span>
+								{
+									index < counted.length - 1 && <span className="mx-1">•</span>
+								}
+							</>
+						)
+					})}
 				</p>
 			</TooltipContent>
 		</Tooltip>

@@ -32,17 +32,17 @@ function toView(r: attachmentRow): attachmentView {
 
 export type uploadTicket = { attachment: attachmentView; uploadUrl: string };
 
-export async function createAttachmentUpload({ stepResultId, fileName, contentType, sizeBytes }: {
-    stepResultId: string; fileName: string; contentType: string; sizeBytes: number;
+export async function createAttachmentUpload({ stepResultId, caseResultId, fileName, contentType, sizeBytes }: {
+    stepResultId?: string; caseResultId?: string; fileName: string; contentType: string; sizeBytes: number;
 }): Promise<actionResult<uploadTicket>> {
     await requireUser();
     const supabase = await createClient();
     // The caller's own drafts left unposted for over an hour go first; their objects are flushed from the queue.
     const { data: cleared } = await supabase.rpc("clear_stale_drafts");
     if (cleared) await flushStorageDeletions(supabase);
-    const { data, error } = await supabase.rpc("create_draft_attachment", {
-        p_step_result_id: stepResultId, p_file_name: fileName, p_content_type: contentType, p_size_bytes: sizeBytes,
-    });
+    const { data, error } = caseResultId
+        ? await supabase.rpc("create_draft_case_attachment", { p_case_result_id: caseResultId, p_file_name: fileName, p_content_type: contentType, p_size_bytes: sizeBytes })
+        : await supabase.rpc("create_draft_attachment", { p_step_result_id: stepResultId!, p_file_name: fileName, p_content_type: contentType, p_size_bytes: sizeBytes });
     if (error) return fail(error);
     try {
         const uploadUrl = await storage.presignPut({ key: data.object_key, contentType: data.content_type, contentLength: data.size_bytes });
@@ -140,14 +140,18 @@ async function signRows(rows: linkedRow[]): Promise<signedAttachment[]> {
 
 // Posted attachments of the given step results, grouped by remark. Rows come from the viewer's own
 // client, so another organization's evidence never comes back. Signing is local (no bucket call).
-export async function listRemarkAttachments({ stepResultIds }: { stepResultIds: string[] }): Promise<actionResult<Record<string, signedAttachment[]>>> {
+export async function listRemarkAttachments({ stepResultIds, caseResultId }: { stepResultIds: string[]; caseResultId?: string }): Promise<actionResult<Record<string, signedAttachment[]>>> {
     await requireUser();
-    if (stepResultIds.length === 0) return { ok: true, data: {} };
+    if (stepResultIds.length === 0 && !caseResultId) return { ok: true, data: {} };
     const supabase = await createClient();
+    const parents = [
+        ...(stepResultIds.length > 0 ? [`test_step_result_id.in.(${stepResultIds.join(",")})`] : []),
+        ...(caseResultId ? [`test_case_result_id.eq.${caseResultId}`] : []),
+    ];
     const { data, error } = await supabase
         .from("attachments")
         .select("id, object_key, file_name, content_type, size_bytes, kind, status, remark_id")
-        .in("test_step_result_id", stepResultIds)
+        .or(parents.join(","))
         .eq("status", "ready")
         .not("remark_id", "is", null)
         .order("created_at");

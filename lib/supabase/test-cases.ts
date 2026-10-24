@@ -76,6 +76,8 @@ export type testCase = {
     lifecycleStatus?: "new" | "updated";
     preconditions?: preCondition[];
     stepsToExecute?: testStep[];
+    // Overall feedback on a case result (iteration rows only); step remarks live on the steps.
+    remarks?: testRemark[];
     created_at?: string;
     // Admin authoring view Status/Result, from get_suite_case_states.
     caseState?: caseState;

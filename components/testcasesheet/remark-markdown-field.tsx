@@ -115,14 +115,17 @@ const TOOLBAR_ACTIONS: {
 	];
 
 // Remarks attach to a step of a running iteration (`step.id` is the
-// test_step_results id); the author is set server-side.
+// test_step_results id) or, with `caseResultId`, to the case result as overall feedback;
+// the author is set server-side.
 export function RemarkMarkdownField({
 	step,
+	caseResultId,
 	placeholder = "Leave a remark the tested step",
 	requireEvidence = false,
 	onSubmitted
 }: {
-	step: testStep
+	step?: testStep
+	caseResultId?: string;
 	placeholder?: string;
 	// Failed steps: the remark can't be posted without a file or an evidence link.
 	requireEvidence?: boolean;
@@ -169,7 +172,7 @@ export function RemarkMarkdownField({
 		const text = [draftText.trim(), evidence].filter(Boolean).join("\n\n");
 
 		startTransition(async () => {
-			const result = await addResultRemark({ stepResultId: step.id, remark: text, attachmentIds: readyIds });
+			const result = await addResultRemark({ stepResultId: step?.id, caseResultId, remark: text, attachmentIds: readyIds });
 			if (!result.ok) {
 				setFileError(result.error);
 				return;
@@ -214,7 +217,7 @@ export function RemarkMarkdownField({
 			if (signal.aborted) return;
 			patchFile(localId, { name: file.name, contentType: file.type });
 		}
-		const created = await createAttachmentUpload({ stepResultId: step.id, fileName: file.name, contentType: file.type, sizeBytes: file.size });
+		const created = await createAttachmentUpload({ stepResultId: step?.id, caseResultId, fileName: file.name, contentType: file.type, sizeBytes: file.size });
 		if (!created.ok) return patchFile(localId, { state: "error", error: created.error });
 		const attachmentId = created.data.attachment.id;
 		job.attachmentId = attachmentId;
