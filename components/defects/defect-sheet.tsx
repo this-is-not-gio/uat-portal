@@ -26,7 +26,7 @@ import { SEVERITY_CLASSNAMES, STATUS_CLASSNAMES } from "./defect-badges";
 const markdownLink = { a: ({ href, children }: { href?: string; children?: React.ReactNode }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> };
 
 // The full defect: saved references with their evidence, a link back to the source result, edit and delete.
-export function DefectSheet({ defect, suiteSlug, iterationNumber, onClose }: { defect: defect | null; suiteSlug: string; iterationNumber: number | null; onClose: () => void }) {
+export function DefectSheet({ defect, suiteSlug, iterationNumber, onClose }: { defect: defect | null; suiteSlug?: string; iterationNumber?: number | null; onClose: () => void }) {
 	return (
 		<Sheet open={!!defect} onOpenChange={(open) => { if (!open) onClose(); }}>
 			<SheetContent className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-none data-[side=right]:md:w-[60vw] data-[side=right]:lg:w-[45vw]">
@@ -37,7 +37,7 @@ export function DefectSheet({ defect, suiteSlug, iterationNumber, onClose }: { d
 	);
 }
 
-function DefectBody({ defect, suiteSlug, iterationNumber, onClose }: { defect: defect; suiteSlug: string; iterationNumber: number | null; onClose: () => void }) {
+function DefectBody({ defect, suiteSlug, iterationNumber, onClose }: { defect: defect; suiteSlug?: string; iterationNumber?: number | null; onClose: () => void }) {
 	const [editing, setEditing] = useState(false);
 	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const [files, setFiles] = useState<Record<string, signedAttachment>>({});
@@ -99,7 +99,9 @@ function DefectBody({ defect, suiteSlug, iterationNumber, onClose }: { defect: d
 		});
 	}
 
-	const sourceHref = defect.testCaseResultId && defect.sectionSlug && iterationNumber !== null
+	// Opened from the case itself (no suite/round given): the source is right here, so no link.
+	const fromCase = suiteSlug === undefined;
+	const sourceHref = !fromCase && defect.testCaseResultId && defect.sectionSlug && iterationNumber != null
 		? testResultsHref(suiteSlug, defect.sectionSlug, { iteration: iterationNumber, org: defect.organizationId })
 		: null;
 
@@ -178,7 +180,7 @@ function DefectBody({ defect, suiteSlug, iterationNumber, onClose }: { defect: d
 				<div className="flex flex-col gap-2">
 					<div className="flex flex-row items-center justify-between gap-2">
 						<p className="text-xs font-medium text-muted-foreground">Test case</p>
-						{sourceHref
+						{fromCase && defect.testCaseResultId ? null : sourceHref
 							? <Link href={sourceHref} className="inline-flex items-center gap-1 text-xs underline">Open source result<ExternalLink className="size-3" /></Link>
 							: <Badge variant="outline" className="text-muted-foreground">Source removed</Badge>}
 					</div>

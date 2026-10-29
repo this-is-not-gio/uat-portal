@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import {
 	Sheet,
@@ -62,6 +62,10 @@ import remarkGfm from "remark-gfm";
 import StepResultButton from "./step-result-buttons";
 import TestCaseResult from "./test-case-result";
 import { CreateDefectDialog, type defectCandidate } from "@/components/defects/create-defect-dialog";
+import { DefectSheet } from "@/components/defects/defect-sheet";
+import { STATUS_CLASSNAMES } from "@/components/defects/defect-badges";
+import { getCaseDefects } from "@/lib/supabase/defect-actions";
+import type { defect } from "@/lib/supabase/defects";
 import { can } from "@/lib/auth/permissions";
 
 const step_status_options: {
@@ -208,7 +212,8 @@ type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile
 
 // One posted remark (step or case level): author header, markdown body, evidence files.
 // action: an extra control in the card header (e.g. Create defect).
-function RemarkCard({ remark, files, action }: { remark: testRemark; files: signedAttachment[]; action?: React.ReactNode }) {
+// defects: the defects citing this remark, shown as DEF chips that open the defect.
+function RemarkCard({ remark, files, action, defects = [], onOpenDefect }: { remark: testRemark; files: signedAttachment[]; action?: React.ReactNode; defects?: defect[]; onOpenDefect?: (id: string) => void }) {
 	const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
 	const Icon = author_role_badge?.Icon
 	const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
@@ -234,6 +239,11 @@ function RemarkCard({ remark, files, action }: { remark: testRemark; files: sign
 					</Badge>
 				</div>
 				<div className="flex flex-row items-center gap-2 shrink-0">
+					{defects.map((d) => (
+						<button key={d.id} type="button" onClick={() => onOpenDefect?.(d.id)} title={d.summary} className="cursor-pointer">
+							<Badge variant="outline" className={cn("font-mono", STATUS_CLASSNAMES[d.status])}>{d.code}</Badge>
+						</button>
+					))}
 					{action}
 					<p className="text-xs text-muted-foreground">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
 				</div>
@@ -282,6 +292,15 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 		});
 		return () => { cancelled = true; };
 	}, [stepIdsKey, caseResultId]);
+	// Defects citing this case's remarks, loaded in one query (staff only; clients get none).
+	const [caseDefects, setCaseDefects] = useState<defect[]>([]);
+	const [openDefectId, setOpenDefectId] = useState<string | null>(null);
+	const loadCaseDefects = useCallback(() => {
+		if (!canLogDefects) return;
+		getCaseDefects(testCase.id).then((res) => { if (res.ok) setCaseDefects(res.data); });
+	}, [canLogDefects, testCase.id]);
+	useEffect(() => { loadCaseDefects(); }, [loadCaseDefects]);
+	const defectsFor = (remarkId: string) => caseDefects.filter((d) => d.references.some((r) => r.remarkId === remarkId));
 	const [caseState, setCaseState] = useState<caseResultState>({
 		status: testCase.status,
 		statusOverridden: testCase.statusOverridden ?? false,
@@ -516,9 +535,9 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																			const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
 																			// Staff log defects from remarks on failed steps; the DB re-checks both.
 																			const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
-																				? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} />
+																				? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} onCreated={loadCaseDefects} />
 																				: undefined;
-																			return <RemarkCard key={remark.id} remark={remark} files={files} action={action} />;
+																			return <RemarkCard key={remark.id} remark={remark} files={files} action={action} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />;
 																		})
 
 																		) : null
@@ -578,7 +597,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 					{filesUnavailable && caseRemarks.length > 0 && <AttachmentsUnavailable className="pb-3" />}
 					<div className="group/with-remark">
-						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, "Overall feedback", null)} candidates={defectCandidates} /> : undefined} />)}
+						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, "Overall feedback", null)} candidates={defectCandidates} onCreated={loadCaseDefects} /> : undefined} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />)}
 						{canRemark && <div className="flex flex-row gap-2 group/remark">
 							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}
@@ -791,6 +810,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					{footerActions}
 				</SheetFooter>
 			) : null}
+			<DefectSheet defect={caseDefects.find((d) => d.id === openDefectId) ?? null} onClose={() => { setOpenDefectId(null); loadCaseDefects(); }} />
 		</SheetContent>
 	)
 }

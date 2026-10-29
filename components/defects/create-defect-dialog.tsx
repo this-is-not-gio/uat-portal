@@ -80,8 +80,9 @@ function ReferenceBlock({ candidate, onRemove }: { candidate: defectCandidate; o
 
 // Logs a defect from a remark on a failed step or the overall feedback of a failed case. The source remark
 // is always cited; other remarks of the same case (candidates) can be added or removed.
-export function CreateDefectDialog({ caseResultId, source, candidates }: {
+export function CreateDefectDialog({ caseResultId, source, candidates, onCreated }: {
 	caseResultId: string;
+	onCreated?: () => void;
 	source: defectCandidate;
 	candidates: defectCandidate[];
 }) {
@@ -117,6 +118,7 @@ export function CreateDefectDialog({ caseResultId, source, candidates }: {
 				return;
 			}
 			toast.success(`${result.data.code} logged`);
+			onCreated?.();
 			reset();
 			setOpen(false);
 		});
