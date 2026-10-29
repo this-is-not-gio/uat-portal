@@ -61,6 +61,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import StepResultButton from "./step-result-buttons";
 import TestCaseResult from "./test-case-result";
+import { CreateDefectDialog } from "@/components/defects/create-defect-dialog";
+import { can } from "@/lib/auth/permissions";
 
 const step_status_options: {
 	value: testStepStatus;
@@ -205,7 +207,8 @@ export type testCaseSheetMode = "definition" | "execute" | "review";
 type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[]; copies?: caseCopy[] };
 
 // One posted remark (step or case level): author header, markdown body, evidence files.
-function RemarkCard({ remark, files }: { remark: testRemark; files: signedAttachment[] }) {
+// action: an extra control in the card header (e.g. Create defect).
+function RemarkCard({ remark, files, action }: { remark: testRemark; files: signedAttachment[]; action?: React.ReactNode }) {
 	const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
 	const Icon = author_role_badge?.Icon
 	const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
@@ -230,7 +233,10 @@ function RemarkCard({ remark, files }: { remark: testRemark; files: signedAttach
 						{remark.author?.role || 'Unknown Role'}
 					</Badge>
 				</div>
-				<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
+				<div className="flex flex-row items-center gap-2 shrink-0">
+					{action}
+					<p className="text-xs text-muted-foreground">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
+				</div>
 			</div>
 			<div className="p-3 sm:p-4 overflow-x-auto">
 				{remark.remark.trim() && (
@@ -248,6 +254,7 @@ function RemarkCard({ remark, files }: { remark: testRemark; files: signedAttach
 export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", canRemark = mode === "execute", footerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; canRemark?: boolean; footerActions?: React.ReactNode }) {
 	const showResults = mode !== "definition";
 	const currentUser = useCurrentUser();
+	const canLogDefects = showResults && can(currentUser, "view_all_results");
 	const author = currentUser ? { id: currentUser.id, role: currentUser.role, full_name: currentUser.fullName } : undefined;
 	const [stepStatuses, setStepStatuses] = useState<Record<string, { status: testStepStatus }>>(
 		() => {
@@ -498,7 +505,14 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																<div className="group/with-remark">
 																	{
 																		remarks?.length > 0 ? (
-																																																																					remarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)
+																																																																					remarks.map((remark) => {
+																			const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
+																			// Staff log defects from remarks on failed steps; the DB re-checks both.
+																			const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
+																				? <CreateDefectDialog caseResultId={testCase.id} stepLabel={`Step ${index + 1}`} stepText={step.step} remark={remark} files={files} />
+																				: undefined;
+																			return <RemarkCard key={remark.id} remark={remark} files={files} action={action} />;
+																		})
 
 																		) : null
 																	}
