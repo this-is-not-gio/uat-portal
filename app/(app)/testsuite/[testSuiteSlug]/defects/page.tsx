@@ -29,7 +29,7 @@ export default async function TestSuiteDefectsPage({ params, searchParams }: Pag
 				</div>
 				{round && <DefectsRoundSelect rounds={rounds.map((r) => ({ id: r.id, name: r.name }))} value={round.id} />}
 			</div>
-			<DefectsTable key={round?.id} defects={defects} />
+			<DefectsTable key={round?.id} defects={defects} suiteSlug={testSuite.slug} iterationNumber={round?.iterationNumber ?? null} />
 		</div>
 	);
 }

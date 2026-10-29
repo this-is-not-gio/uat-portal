@@ -176,3 +176,22 @@ export async function signAttachmentsForRemark(remarkId: string): Promise<signed
     if (error) throw error;
     return signRows(data);
 }
+
+// Ready attachments by id, signed (defect references keep ids of files that may since have been removed).
+export async function listAttachmentsByIds({ ids }: { ids: string[] }): Promise<actionResult<signedAttachment[]>> {
+    await requireUser();
+    if (ids.length === 0) return { ok: true, data: [] };
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from("attachments")
+        .select("id, object_key, file_name, content_type, size_bytes, kind, status, remark_id")
+        .in("id", ids)
+        .eq("status", "ready")
+        .order("created_at");
+    if (error) return fail(error);
+    try {
+        return { ok: true, data: await signRows(data) };
+    } catch (e) {
+        return fail(e as Error);
+    }
+}

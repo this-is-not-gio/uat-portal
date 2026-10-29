@@ -1770,6 +1770,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_defect: {
+        Args: {
+          p_defect_id: string
+          p_description: string
+          p_jira_url: string
+          p_severity: Database["public"]["Enums"]["defect_severity"]
+          p_status: Database["public"]["Enums"]["defect_status"]
+          p_summary: string
+        }
+        Returns: Database["public"]["Tables"]["defects"]["Row"]
+        SetofOptions: {
+          from: "*"
+          to: "defects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      delete_defect: {
+        Args: { p_defect_id: string }
+        Returns: undefined
+      }
       create_draft_attachment: {
         Args: {
           p_content_type: string

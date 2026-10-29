@@ -23,6 +23,9 @@ export type defect = {
     code: string;
     iterationId: string;
     testCaseResultId: string | null;
+    // Where the source result lives (null once it's removed), for the link back to Test Results.
+    sectionSlug: string | null;
+    organizationId: string | null;
     caseCode: string | null;
     caseTitle: string;
     summary: string;
@@ -34,7 +37,10 @@ export type defect = {
     references: defectReference[];
 };
 
-type defectRow = Database["public"]["Tables"]["defects"]["Row"] & { defect_remarks: Database["public"]["Tables"]["defect_remarks"]["Row"][] };
+type defectRow = Database["public"]["Tables"]["defects"]["Row"] & {
+    defect_remarks: Database["public"]["Tables"]["defect_remarks"]["Row"][];
+    test_case_results: { section_slug: string | null; organization_id: string | null } | null;
+};
 
 export function toDefect(row: defectRow): defect {
     return {
@@ -43,6 +49,8 @@ export function toDefect(row: defectRow): defect {
         code: defectCode(row.number),
         iterationId: row.iteration_id,
         testCaseResultId: row.test_case_result_id,
+        sectionSlug: row.test_case_results?.section_slug ?? null,
+        organizationId: row.test_case_results?.organization_id ?? null,
         caseCode: row.case_code,
         caseTitle: row.case_title,
         summary: row.summary,
@@ -69,7 +77,7 @@ export async function getDefects(suiteId: string, iterationId: string): Promise<
     const supabase = await createClient();
     const { data, error } = await supabase
         .from("defects")
-        .select("*, defect_remarks(*)")
+        .select("*, defect_remarks(*), test_case_results(section_slug, organization_id)")
         .eq("testing_suite_id", suiteId)
         .eq("iteration_id", iterationId)
         .order("number", { ascending: false });
