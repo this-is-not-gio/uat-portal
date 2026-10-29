@@ -61,7 +61,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import StepResultButton from "./step-result-buttons";
 import TestCaseResult from "./test-case-result";
-import { CreateDefectDialog } from "@/components/defects/create-defect-dialog";
+import { CreateDefectDialog, type defectCandidate } from "@/components/defects/create-defect-dialog";
 import { can } from "@/lib/auth/permissions";
 
 const step_status_options: {
@@ -300,6 +300,13 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	const hasOwnEvidence = (stepId: string) => hasEvidenceFrom(stepRemarks[stepId] ?? []);
 	// Overall feedback with evidence covers the failure as a whole, so no step needs its own.
 	const caseHasEvidence = hasEvidenceFrom(caseRemarks);
+	// Every remark a defect on this case may cite: remarks of failed steps, and overall feedback while the case is Failed.
+	const toCandidate = (remark: testRemark, label: string, stepText: string | null): defectCandidate => ({ remark, label, stepText, files: remarkFiles[remark.id] ?? remark.attachments ?? [] });
+	const defectCandidates: defectCandidate[] = !canLogDefects ? [] : [
+		...(testCase.stepsToExecute ?? []).flatMap((step, i) =>
+			stepStatuses[step.id]?.status === "Failed" ? (stepRemarks[step.id] ?? []).map((r) => toCandidate(r, `Step ${i + 1}`, step.step)) : []),
+		...(caseState.status === "Failed" ? caseRemarks.map((r) => toCandidate(r, "Overall feedback", null)) : []),
+	];
 	const allSteps = testCase.stepsToExecute ?? [];
 	// "Failed all" (every step Failed) only needs evidence on one step; otherwise each failed step needs its own.
 	const allStepsFailed = allSteps.length > 1 && allSteps.every((step) => stepStatuses[step.id]?.status === "Failed");
@@ -509,7 +516,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																			const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
 																			// Staff log defects from remarks on failed steps; the DB re-checks both.
 																			const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
-																				? <CreateDefectDialog caseResultId={testCase.id} stepLabel={`Step ${index + 1}`} stepText={step.step} remark={remark} files={files} />
+																				? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} />
 																				: undefined;
 																			return <RemarkCard key={remark.id} remark={remark} files={files} action={action} />;
 																		})
@@ -571,7 +578,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 					{filesUnavailable && caseRemarks.length > 0 && <AttachmentsUnavailable className="pb-3" />}
 					<div className="group/with-remark">
-						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)}
+						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, "Overall feedback", null)} candidates={defectCandidates} /> : undefined} />)}
 						{canRemark && <div className="flex flex-row gap-2 group/remark">
 							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}

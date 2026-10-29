@@ -51,10 +51,13 @@ export default function DefectsTable({ defects }: { defects: defect[] }) {
 		columnHelper.display({
 			header: "Step",
 			cell: ({ row }) => {
-				// The first cited remark decides the column; null step order means overall feedback.
-				const first = row.original.references[0];
-				if (!first) return <p className="text-xs text-muted-foreground">—</p>;
-				return <p className="text-xs" title={first.stepText ?? undefined}>{first.stepOrder === null ? "Overall feedback" : `Step ${first.stepOrder + 1}`}</p>;
+				// Null step order means overall feedback; several cited remarks list each step once.
+				const refs = row.original.references;
+				if (refs.length === 0) return <p className="text-xs text-muted-foreground">—</p>;
+				const steps = [...new Set(refs.filter((r) => r.stepOrder !== null).map((r) => r.stepOrder as number + 1))];
+				const parts = [...steps.map((n) => `Step ${n}`), ...(refs.some((r) => r.stepOrder === null) ? ["Overall feedback"] : [])];
+				return <p className="text-xs" title={refs.map((r) => r.stepText).filter(Boolean).join("
+") || undefined}>{parts.join(", ")}</p>;
 			},
 		}),
 		columnHelper.display({

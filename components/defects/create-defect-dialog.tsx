@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Bug, Link2, X } from "lucide-react";
+import { Bug, Link2, Plus, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -36,13 +36,54 @@ function splitEvidence(remark: string) {
 	return { text: remark.slice(0, index).trim(), links };
 }
 
-// Logs a defect from one remark on a failed step. The remark is shown read-only as the defect's reference.
-export function CreateDefectDialog({ caseResultId, stepLabel, stepText, remark, files }: {
-	caseResultId: string;
-	stepLabel: string;
-	stepText: string;
+// A remark that can be cited by a defect on this case: a step remark (label "Step 2") or overall feedback (stepText null).
+export type defectCandidate = {
 	remark: testRemark;
+	label: string;
+	stepText: string | null;
 	files: signedAttachment[];
+};
+
+function ReferenceBlock({ candidate, onRemove }: { candidate: defectCandidate; onRemove?: () => void }) {
+	const { text, links } = splitEvidence(candidate.remark.remark);
+	return (
+		<div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
+			<div className="flex flex-row items-start justify-between gap-2">
+				<p className="text-sm"><span className="font-semibold">{candidate.label}:</span> {candidate.stepText ?? "Overall feedback on this test case"}</p>
+				{onRemove && (
+					<Button variant="ghost" size="icon" className="size-6 shrink-0" onClick={onRemove} aria-label={`Remove ${candidate.label} remark`}>
+						<X className="size-3.5" />
+					</Button>
+				)}
+			</div>
+			{text && (
+				<div className="typeset text-sm break-words border-l-2 pl-3">
+					<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> }}>{text}</ReactMarkdown>
+				</div>
+			)}
+			{links.length > 0 && (
+				<ul className="flex flex-col gap-1">
+					{links.map((link) => (
+						<li key={link.url}>
+							<a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs underline">
+								<Link2 className="size-3" />
+								{link.label}
+							</a>
+						</li>
+					))}
+				</ul>
+			)}
+			<RemarkAttachments attachments={candidate.files} />
+		</div>
+	);
+}
+
+// Logs a defect from a remark on a failed step or the overall feedback of a failed case. The source remark
+// is always cited; other remarks of the same case (candidates) can be added or removed.
+export function CreateDefectDialog({ caseResultId, source, candidates }: {
+	caseResultId: string;
+	source: defectCandidate;
+	candidates: defectCandidate[];
 }) {
 	const [open, setOpen] = useState(false);
 	const [summary, setSummary] = useState("");
@@ -52,10 +93,13 @@ export function CreateDefectDialog({ caseResultId, stepLabel, stepText, remark, 
 	const [jiraTouched, setJiraTouched] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
-	const { text, links } = splitEvidence(remark.remark);
+	const [extraIds, setExtraIds] = useState<string[]>([]);
+	const cited = [source, ...candidates.filter((c) => extraIds.includes(c.remark.id) && c.remark.id !== source.remark.id)];
+	const addable = candidates.filter((c) => c.remark.id !== source.remark.id && !extraIds.includes(c.remark.id));
 	const jiraError = jiraUrlError(jiraUrl);
 
 	function reset() {
+		setExtraIds([]);
 		setSummary("");
 		setDescription("");
 		setSeverity("medium");
@@ -67,7 +111,7 @@ export function CreateDefectDialog({ caseResultId, stepLabel, stepText, remark, 
 	function onSave() {
 		setError(null);
 		startTransition(async () => {
-			const result = await createDefect({ caseResultId, remarkIds: [remark.id], summary, description, severity, jiraUrl });
+			const result = await createDefect({ caseResultId, remarkIds: cited.map((c) => c.remark.id), summary, description, severity, jiraUrl });
 			if (!result.ok) {
 				setError(result.error);
 				return;
@@ -95,28 +139,28 @@ export function CreateDefectDialog({ caseResultId, stepLabel, stepText, remark, 
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-4 px-2">
-					<div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
-						<p className="text-xs font-medium text-muted-foreground">Reference</p>
-						<p className="text-sm"><span className="font-semibold">{stepLabel}:</span> {stepText}</p>
-						{text && (
-							<div className="typeset text-sm break-words border-l-2 pl-3">
-								<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> }}>{text}</ReactMarkdown>
-							</div>
-						)}
-						{links.length > 0 && (
+					<div className="flex flex-col gap-2">
+						<p className="text-xs font-medium text-muted-foreground">Reference{cited.length > 1 ? "s" : ""}</p>
+						{cited.map((c) => (
+							<ReferenceBlock key={c.remark.id} candidate={c} onRemove={c.remark.id === source.remark.id || isPending ? undefined : () => setExtraIds((ids) => ids.filter((id) => id !== c.remark.id))} />
+						))}
+					</div>
+					{addable.length > 0 && (
+						<div className="flex flex-col gap-1">
+							<p className="text-xs font-medium text-muted-foreground">Add other remarks from this test case</p>
 							<ul className="flex flex-col gap-1">
-								{links.map((link) => (
-									<li key={link.url}>
-										<a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs underline">
-											<Link2 className="size-3" />
-											{link.label}
-										</a>
+								{addable.map((c) => (
+									<li key={c.remark.id} className="flex flex-row items-center justify-between gap-2 rounded-md border px-2 py-1">
+										<p className="min-w-0 truncate text-xs"><span className="font-semibold">{c.label}:</span> {splitEvidence(c.remark.remark).text || "(evidence only)"}</p>
+										<Button variant="outline" size="sm" className="h-6 shrink-0 gap-1 px-2 text-xs" disabled={isPending} onClick={() => setExtraIds((ids) => [...ids, c.remark.id])}>
+											<Plus className="size-3" />
+											Add
+										</Button>
 									</li>
 								))}
 							</ul>
-						)}
-						<RemarkAttachments attachments={files} />
-					</div>
+						</div>
+					)}
 					<div className="flex flex-col gap-1">
 						<Label htmlFor="defect-summary" className="text-xs text-muted-foreground flex flex-row justify-between">
 							<span>Summary</span>
