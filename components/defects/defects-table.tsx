@@ -56,8 +56,7 @@ export default function DefectsTable({ defects }: { defects: defect[] }) {
 				if (refs.length === 0) return <p className="text-xs text-muted-foreground">—</p>;
 				const steps = [...new Set(refs.filter((r) => r.stepOrder !== null).map((r) => r.stepOrder as number + 1))];
 				const parts = [...steps.map((n) => `Step ${n}`), ...(refs.some((r) => r.stepOrder === null) ? ["Overall feedback"] : [])];
-				return <p className="text-xs" title={refs.map((r) => r.stepText).filter(Boolean).join("
-") || undefined}>{parts.join(", ")}</p>;
+				return <p className="text-xs" title={refs.map((r) => r.stepText).filter(Boolean).join(" / ") || undefined}>{parts.join(", ")}</p>;
 			},
 		}),
 		columnHelper.display({
