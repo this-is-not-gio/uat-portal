@@ -277,7 +277,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 			</div>
 			{/* Tabs */}
 			<div className="contents print:hidden">
-				<SuiteTabs suiteSlug={testSuite.slug} showManual={canLinkManual || linkedModules.length > 0} showTestResults={!isTester && pastPlanning} showSignOff={showSignOffTab} showDefects={can(currentUser, "view_all_results") && pastPlanning} />
+				<SuiteTabs suiteSlug={testSuite.slug} showManual={linkedModules.length > 0} showTestResults={!isTester && pastPlanning} showSignOff={showSignOffTab} showDefects={can(currentUser, "view_all_results") && pastPlanning} />
 			</div>
 			<ScrollArea className="min-h-0 flex-1">
 				{/* Content. The staged import lives here so it survives switching tabs. */}

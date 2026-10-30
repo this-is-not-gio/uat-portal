@@ -187,9 +187,8 @@ export default function TesterTestCasesComponents({
 					"Results are view only.",
 				].join(" ")
 					: submittedNote ? `${submittedNote} Results are view only${canWithdraw ? "; withdraw the submission to make changes until the round is completed" : ""}.`
-						: canExecute && !hasOwnCopies ? "You have no test cases of your own in this round, so these are view only."
-							: canExecute && view !== MY_CASES ? "Other testers' cases are view only. Switch to My cases to record results."
-								: null;
+						: isOwnLens && !hasOwnCopies ? "No test cases are assigned to you in this round."
+							: null;
 	// Submitted while the round runs gets the green "done" look.
 	const isSubmittedNotice = isOwnLens && !hasEnded && !!submittedNote;
 

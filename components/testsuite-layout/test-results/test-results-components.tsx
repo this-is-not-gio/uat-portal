@@ -20,24 +20,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { ORG_TYPE_LABELS } from "@/components/testsuite-layout/shared/participant-picker";
 import { TestCasesSidebarTrigger } from "../test-cases/test-cases-sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SummaryCard } from "@/components/testsuite-layout/shared/summary-card";
 
-
-function SummaryCard({ label, count, icon, iconClassName }: { label: string; count: number; icon: React.ReactNode; iconClassName?: string }) {
-	return (
-		<div className="flex flex-row items-center gap-2 border p-3 md:p-4 rounded-md w-full bg-gray-50/10">
-			<div className={`size-10 md:size-12 shrink-0 border rounded-md flex flex-row items-center justify-center ${iconClassName ?? "bg-gray-50/50"}`}>
-				{icon}
-			</div>
-			<div>
-				<p className="text-xs text-muted-foreground">{label}</p>
-				<div className="flex flex-row items-end gap-1">
-					<p className="font-mono font-semibold text-xl">{count}</p>
-					<p className="text-xs text-muted-foreground">Test Cases</p>
-				</div>
-			</div>
-		</div>
-	);
-}
 
 // The viewed org's part of the round: testing, submitted, or pulled back after submitting.
 // "not_submitted" is a finished round the org never submitted.
@@ -257,10 +241,10 @@ export default function TestResultsComponents({
 					)
 				}
 				<div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-					<SummaryCard label="Total Test Cases" count={testResultRows.length} icon={<Clipboard />} />
-					<SummaryCard label="Passed Test Cases" count={passed} icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
-					<SummaryCard label="Failed Test Cases" count={failed} icon={<CircleX className="text-red-800" />} iconClassName="bg-red-50/50 border-red-800" />
-					<SummaryCard label="Blocked Test Cases" count={blocked} icon={<Ban className="text-gray-800" />} />
+					<SummaryCard label="Total Test Cases" count={testResultRows.length} unit="Test Cases" icon={<Clipboard />} />
+					<SummaryCard label="Passed Test Cases" count={passed} unit="Test Cases" icon={<CircleCheck className="text-green-800" />} iconClassName="bg-green-50/50 border-green-800" />
+					<SummaryCard label="Failed Test Cases" count={failed} unit="Test Cases" icon={<CircleX className="text-red-800" />} iconClassName="bg-red-50/50 border-red-800" />
+					<SummaryCard label="Blocked Test Cases" count={blocked} unit="Test Cases" icon={<Ban className="text-gray-800" />} />
 					{/* <SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} /> */}
 				</div>
 				<DataTable

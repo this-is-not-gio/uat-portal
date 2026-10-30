@@ -267,7 +267,7 @@ export type iterationSection = { slug: string; name: string; includedCount: numb
 // Lightweight per-iteration section list — just enough to build the sidebar's
 // Iteration → Section tree without loading every iteration's full result set
 // (getIterationResults) up front.
-export async function getSectionsByIteration(testSuiteId: string, orgId?: string): Promise<Map<string, iterationSection[]>> {
+export async function getSectionsByIteration(testSuiteId: string, orgId?: string, testerId?: string): Promise<Map<string, iterationSection[]>> {
     const supabase = await createClient();
     const { data: iterations, error: iterationsError } = await supabase
         .from("test_iterations")
@@ -281,6 +281,7 @@ export async function getSectionsByIteration(testSuiteId: string, orgId?: string
         .select("id, iteration_id, test_case_id, code, title, section_slug, section_name, section_order, included_in_run")
         .in("iteration_id", iterations.map((i) => i.id));
     if (orgId) query = query.eq("organization_id", orgId);
+    if (testerId) query = query.eq("tester_id", testerId);
     const [{ data, error }, verdictsByIteration] = await Promise.all([
         query.order("section_order", { ascending: true }),
         Promise.all(iterations.map(async (i) => [i.id, await getCaseVerdicts(i.id)] as const)).then((entries) => new Map(entries)),
@@ -397,10 +398,12 @@ export async function getLatestIterationCaseStatuses(testSuiteId: string, orgId?
     );
 }
 
-export async function getIterationResults(iterationId: string, orgId?: string): Promise<testResultRow[]> {
+// testerId limits the rows to one tester's own copies (a tester never gets colleagues' cases).
+export async function getIterationResults(iterationId: string, orgId?: string, testerId?: string): Promise<testResultRow[]> {
     const supabase = await createClient();
     let query = supabase.from("test_case_results").select(RESULT_SELECT).eq("iteration_id", iterationId);
     if (orgId) query = query.eq("organization_id", orgId);
+    if (testerId) query = query.eq("tester_id", testerId);
     const [{ data, error }, previousStatuses] = await Promise.all([
         query
             .order("section_order", { ascending: true })
