@@ -88,6 +88,77 @@ export type Database = {
           },
         ]
       }
+      defect_cases: {
+        Row: {
+          case_code: string | null
+          case_result_id: string | null
+          case_title: string
+          defect_id: string
+          id: string
+        }
+        Insert: {
+          case_code?: string | null
+          case_result_id?: string | null
+          case_title?: string
+          defect_id: string
+          id?: string
+        }
+        Update: {
+          case_code?: string | null
+          case_result_id?: string | null
+          case_title?: string
+          defect_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defect_cases_defect_id_fkey"
+            columns: ["defect_id"]
+            isOneToOne: false
+            referencedRelation: "defects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defect_cases_case_result_id_fkey"
+            columns: ["case_result_id"]
+            isOneToOne: false
+            referencedRelation: "test_case_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      defect_external_refs: {
+        Row: {
+          defect_id: string
+          id: string
+          label: string
+          position: number
+          url: string
+        }
+        Insert: {
+          defect_id: string
+          id?: string
+          label?: string
+          position?: number
+          url: string
+        }
+        Update: {
+          defect_id?: string
+          id?: string
+          label?: string
+          position?: number
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defect_external_refs_defect_id_fkey"
+            columns: ["defect_id"]
+            isOneToOne: false
+            referencedRelation: "defects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       defect_counters: {
         Row: {
           last_number: number
@@ -114,6 +185,9 @@ export type Database = {
       defect_remarks: {
         Row: {
           attachment_ids: string[]
+          case_code: string | null
+          case_result_id: string | null
+          case_title: string
           defect_id: string
           evidence_links: Json
           id: string
@@ -124,6 +198,9 @@ export type Database = {
         }
         Insert: {
           attachment_ids?: string[]
+          case_code?: string | null
+          case_result_id?: string | null
+          case_title?: string
           defect_id: string
           evidence_links?: Json
           id?: string
@@ -134,6 +211,9 @@ export type Database = {
         }
         Update: {
           attachment_ids?: string[]
+          case_code?: string | null
+          case_result_id?: string | null
+          case_title?: string
           defect_id?: string
           evidence_links?: Json
           id?: string
@@ -161,53 +241,50 @@ export type Database = {
       }
       defects: {
         Row: {
-          case_code: string | null
-          case_title: string
+          actual_result: string
           created_at: string
           created_by: string | null
-          description: string
+          expected_result: string
           id: string
           iteration_id: string
-          jira_url: string | null
           number: number
+          precondition: string
           severity: Database["public"]["Enums"]["defect_severity"]
           status: Database["public"]["Enums"]["defect_status"]
+          steps_to_reproduce: string
           summary: string
-          test_case_result_id: string | null
           testing_suite_id: string
           updated_at: string
         }
         Insert: {
-          case_code?: string | null
-          case_title?: string
+          actual_result?: string
           created_at?: string
           created_by?: string | null
-          description?: string
+          expected_result?: string
           id?: string
           iteration_id: string
-          jira_url?: string | null
           number: number
+          precondition?: string
           severity?: Database["public"]["Enums"]["defect_severity"]
           status?: Database["public"]["Enums"]["defect_status"]
+          steps_to_reproduce?: string
           summary: string
-          test_case_result_id?: string | null
           testing_suite_id: string
           updated_at?: string
         }
         Update: {
-          case_code?: string | null
-          case_title?: string
+          actual_result?: string
           created_at?: string
           created_by?: string | null
-          description?: string
+          expected_result?: string
           id?: string
           iteration_id?: string
-          jira_url?: string | null
           number?: number
+          precondition?: string
           severity?: Database["public"]["Enums"]["defect_severity"]
           status?: Database["public"]["Enums"]["defect_status"]
+          steps_to_reproduce?: string
           summary?: string
-          test_case_result_id?: string | null
           testing_suite_id?: string
           updated_at?: string
         }
@@ -224,13 +301,6 @@ export type Database = {
             columns: ["iteration_id"]
             isOneToOne: false
             referencedRelation: "test_iterations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "defects_test_case_result_id_fkey"
-            columns: ["test_case_result_id"]
-            isOneToOne: false
-            referencedRelation: "test_case_results"
             referencedColumns: ["id"]
           },
           {
@@ -1739,30 +1809,18 @@ export type Database = {
       }
       create_defect: {
         Args: {
-          p_case_result_id: string
-          p_description?: string
-          p_jira_url?: string
-          p_remark_ids: string[]
+          p_actual_result?: string
+          p_case_result_ids?: string[]
+          p_expected_result?: string
+          p_external?: Json
+          p_iteration_id: string
+          p_precondition?: string
+          p_remark_ids?: string[]
           p_severity?: Database["public"]["Enums"]["defect_severity"]
+          p_steps_to_reproduce?: string
           p_summary: string
         }
-        Returns: {
-          case_code: string | null
-          case_title: string
-          created_at: string
-          created_by: string | null
-          description: string
-          id: string
-          iteration_id: string
-          jira_url: string | null
-          number: number
-          severity: Database["public"]["Enums"]["defect_severity"]
-          status: Database["public"]["Enums"]["defect_status"]
-          summary: string
-          test_case_result_id: string | null
-          testing_suite_id: string
-          updated_at: string
-        }
+        Returns: Database["public"]["Tables"]["defects"]["Row"]
         SetofOptions: {
           from: "*"
           to: "defects"
@@ -1772,11 +1830,16 @@ export type Database = {
       }
       update_defect: {
         Args: {
+          p_actual_result: string
+          p_case_result_ids?: string[]
           p_defect_id: string
-          p_description: string
-          p_jira_url: string
+          p_expected_result: string
+          p_external?: Json
+          p_precondition: string
+          p_remark_ids?: string[]
           p_severity: Database["public"]["Enums"]["defect_severity"]
           p_status: Database["public"]["Enums"]["defect_status"]
+          p_steps_to_reproduce: string
           p_summary: string
         }
         Returns: Database["public"]["Tables"]["defects"]["Row"]
