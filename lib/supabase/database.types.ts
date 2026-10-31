@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -53,22 +53,23 @@ export type Database = {
           remark_id?: string | null
           size_bytes?: number
           status?: Database["public"]["Enums"]["attachment_status"]
+          test_case_result_id?: string | null
           test_step_result_id?: string | null
           uploaded_by?: string
         }
         Relationships: [
           {
-            foreignKeyName: "attachments_test_case_result_id_fkey"
-            columns: ["test_case_result_id"]
-            isOneToOne: false
-            referencedRelation: "test_case_results"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "attachments_remark_id_fkey"
             columns: ["remark_id"]
             isOneToOne: false
             referencedRelation: "test_remarks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_test_case_result_id_fkey"
+            columns: ["test_case_result_id"]
+            isOneToOne: false
+            referencedRelation: "test_case_results"
             referencedColumns: ["id"]
           },
           {
@@ -83,6 +84,160 @@ export type Database = {
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      defect_counters: {
+        Row: {
+          last_number: number
+          testing_suite_id: string
+        }
+        Insert: {
+          last_number: number
+          testing_suite_id: string
+        }
+        Update: {
+          last_number?: number
+          testing_suite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defect_counters_testing_suite_id_fkey"
+            columns: ["testing_suite_id"]
+            isOneToOne: true
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      defect_remarks: {
+        Row: {
+          attachment_ids: string[]
+          defect_id: string
+          evidence_links: Json
+          id: string
+          remark_id: string | null
+          remark_text: string
+          step_order: number | null
+          step_text: string | null
+        }
+        Insert: {
+          attachment_ids?: string[]
+          defect_id: string
+          evidence_links?: Json
+          id?: string
+          remark_id?: string | null
+          remark_text: string
+          step_order?: number | null
+          step_text?: string | null
+        }
+        Update: {
+          attachment_ids?: string[]
+          defect_id?: string
+          evidence_links?: Json
+          id?: string
+          remark_id?: string | null
+          remark_text?: string
+          step_order?: number | null
+          step_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defect_remarks_defect_id_fkey"
+            columns: ["defect_id"]
+            isOneToOne: false
+            referencedRelation: "defects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defect_remarks_remark_id_fkey"
+            columns: ["remark_id"]
+            isOneToOne: false
+            referencedRelation: "test_remarks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      defects: {
+        Row: {
+          case_code: string | null
+          case_title: string
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          iteration_id: string
+          jira_url: string | null
+          number: number
+          severity: Database["public"]["Enums"]["defect_severity"]
+          status: Database["public"]["Enums"]["defect_status"]
+          summary: string
+          test_case_result_id: string | null
+          testing_suite_id: string
+          updated_at: string
+        }
+        Insert: {
+          case_code?: string | null
+          case_title?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          iteration_id: string
+          jira_url?: string | null
+          number: number
+          severity?: Database["public"]["Enums"]["defect_severity"]
+          status?: Database["public"]["Enums"]["defect_status"]
+          summary: string
+          test_case_result_id?: string | null
+          testing_suite_id: string
+          updated_at?: string
+        }
+        Update: {
+          case_code?: string | null
+          case_title?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          id?: string
+          iteration_id?: string
+          jira_url?: string | null
+          number?: number
+          severity?: Database["public"]["Enums"]["defect_severity"]
+          status?: Database["public"]["Enums"]["defect_status"]
+          summary?: string
+          test_case_result_id?: string | null
+          testing_suite_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "defects_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defects_iteration_id_fkey"
+            columns: ["iteration_id"]
+            isOneToOne: false
+            referencedRelation: "test_iterations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defects_test_case_result_id_fkey"
+            columns: ["test_case_result_id"]
+            isOneToOne: false
+            referencedRelation: "test_case_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "defects_testing_suite_id_fkey"
+            columns: ["testing_suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
             referencedColumns: ["id"]
           },
         ]
@@ -211,38 +366,32 @@ export type Database = {
           },
         ]
       }
-      organization_roles: {
+      iteration_ticked_testers: {
         Row: {
-          created_at: string
-          id: string
-          organization_id: string
-          test_role_id: string
+          iteration_id: string
+          user_id: string
         }
         Insert: {
-          created_at?: string
-          id?: string
-          organization_id: string
-          test_role_id: string
+          iteration_id: string
+          user_id: string
         }
         Update: {
-          created_at?: string
-          id?: string
-          organization_id?: string
-          test_role_id?: string
+          iteration_id?: string
+          user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "organization_roles_organization_id_fkey"
-            columns: ["organization_id"]
+            foreignKeyName: "iteration_ticked_testers_iteration_id_fkey"
+            columns: ["iteration_id"]
             isOneToOne: false
-            referencedRelation: "organizations"
+            referencedRelation: "test_iterations"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "organization_roles_test_role_id_fkey"
-            columns: ["test_role_id"]
+            foreignKeyName: "iteration_ticked_testers_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "test_roles"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -371,6 +520,42 @@ export type Database = {
             columns: ["module_id"]
             isOneToOne: false
             referencedRelation: "manual_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_roles: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          test_role_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          test_role_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          test_role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_roles_test_role_id_fkey"
+            columns: ["test_role_id"]
+            isOneToOne: false
+            referencedRelation: "test_roles"
             referencedColumns: ["id"]
           },
         ]
@@ -508,6 +693,82 @@ export type Database = {
           },
         ]
       }
+      sign_off_comments: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          page: number
+          parent_id: string | null
+          prefix: string
+          quote: string
+          sign_off_id: string
+          suffix: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by: string
+          id?: string
+          page: number
+          parent_id?: string | null
+          prefix?: string
+          quote: string
+          sign_off_id: string
+          suffix?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          page?: number
+          parent_id?: string | null
+          prefix?: string
+          quote?: string
+          sign_off_id?: string
+          suffix?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sign_off_comments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sign_off_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "sign_off_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sign_off_comments_sign_off_id_fkey"
+            columns: ["sign_off_id"]
+            isOneToOne: false
+            referencedRelation: "suite_sign_offs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storage_deletions: {
+        Row: {
+          object_key: string
+          queued_at: string
+        }
+        Insert: {
+          object_key: string
+          queued_at?: string
+        }
+        Update: {
+          object_key?: string
+          queued_at?: string
+        }
+        Relationships: []
+      }
       suite_endpoints: {
         Row: {
           created_at: string
@@ -537,6 +798,39 @@ export type Database = {
           {
             foreignKeyName: "suite_endpoints_testing_suite_id_fkey"
             columns: ["testing_suite_id"]
+            isOneToOne: false
+            referencedRelation: "testing_suites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suite_manual_modules: {
+        Row: {
+          created_at: string
+          module_id: string
+          suite_id: string
+        }
+        Insert: {
+          created_at?: string
+          module_id: string
+          suite_id: string
+        }
+        Update: {
+          created_at?: string
+          module_id?: string
+          suite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suite_manual_modules_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "manual_modules"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suite_manual_modules_suite_id_fkey"
+            columns: ["suite_id"]
             isOneToOne: false
             referencedRelation: "testing_suites"
             referencedColumns: ["id"]
@@ -577,58 +871,6 @@ export type Database = {
             columns: ["testing_suite_id"]
             isOneToOne: false
             referencedRelation: "testing_suites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sign_off_comments: {
-        Row: {
-          body: string
-          created_at: string
-          created_by: string
-          id: string
-          page: number
-          parent_id: string | null
-          prefix: string
-          quote: string
-          sign_off_id: string
-          suffix: string
-        }
-        Insert: {
-          body: string
-          created_at?: string
-          created_by: string
-          id?: string
-          page: number
-          prefix?: string
-          quote: string
-          sign_off_id: string
-          suffix?: string
-        }
-        Update: {
-          body?: string
-          created_at?: string
-          created_by?: string
-          id?: string
-          page?: number
-          prefix?: string
-          quote?: string
-          sign_off_id?: string
-          suffix?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sign_off_comments_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "sign_off_comments_sign_off_id_fkey"
-            columns: ["sign_off_id"]
-            isOneToOne: false
-            referencedRelation: "suite_sign_offs"
             referencedColumns: ["id"]
           },
         ]
@@ -727,39 +969,6 @@ export type Database = {
           {
             foreignKeyName: "suite_sign_offs_testing_suite_id_fkey"
             columns: ["testing_suite_id"]
-            isOneToOne: false
-            referencedRelation: "testing_suites"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      suite_manual_modules: {
-        Row: {
-          created_at: string
-          module_id: string
-          suite_id: string
-        }
-        Insert: {
-          created_at?: string
-          module_id: string
-          suite_id: string
-        }
-        Update: {
-          created_at?: string
-          module_id?: string
-          suite_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "suite_manual_modules_module_id_fkey"
-            columns: ["module_id"]
-            isOneToOne: false
-            referencedRelation: "manual_modules"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "suite_manual_modules_suite_id_fkey"
-            columns: ["suite_id"]
             isOneToOne: false
             referencedRelation: "testing_suites"
             referencedColumns: ["id"]
@@ -1378,22 +1587,6 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      add_sign_off_comment: {
-        Args: { p_body: string; p_page: number; p_prefix: string; p_quote: string; p_sign_off_id: string; p_suffix: string }
-        Returns: Database["public"]["Tables"]["sign_off_comments"]["Row"]
-      }
-      delete_sign_off_comment: {
-        Args: { p_comment_id: string }
-        Returns: undefined
-      }
-      reply_sign_off_comment: {
-        Args: { p_body: string; p_parent_id: string }
-        Returns: Database["public"]["Tables"]["sign_off_comments"]["Row"]
-      }
-      update_sign_off_comment: {
-        Args: { p_comment_id: string; p_body: string }
-        Returns: undefined
-      }
       acknowledge_sign_off: {
         Args: { p_by?: string; p_suite_id: string }
         Returns: {
@@ -1417,6 +1610,34 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "suite_sign_offs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      add_sign_off_comment: {
+        Args: {
+          p_body: string
+          p_page: number
+          p_prefix: string
+          p_quote: string
+          p_sign_off_id: string
+          p_suffix: string
+        }
+        Returns: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          page: number
+          parent_id: string | null
+          prefix: string
+          quote: string
+          sign_off_id: string
+          suffix: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sign_off_comments"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1487,6 +1708,8 @@ export type Database = {
         Args: { p_case_result_id: string }
         Returns: string[]
       }
+      clear_all_stale_drafts: { Args: never; Returns: number }
+      clear_stale_drafts: { Args: never; Returns: number }
       complete_iteration: {
         Args: { p_iteration_id: string }
         Returns: {
@@ -1510,16 +1733,98 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      clear_all_stale_drafts: { Args: Record<PropertyKey, never>; Returns: number }
-      clear_stale_drafts: { Args: Record<PropertyKey, never>; Returns: number }
-      complete_storage_deletions: { Args: { p_keys: string[] }; Returns: undefined }
-      pending_storage_deletions: { Args: { p_limit?: number }; Returns: string[] }
+      complete_storage_deletions: {
+        Args: { p_keys: string[] }
+        Returns: undefined
+      }
+      create_defect: {
+        Args: {
+          p_case_result_id: string
+          p_description?: string
+          p_jira_url?: string
+          p_remark_ids: string[]
+          p_severity?: Database["public"]["Enums"]["defect_severity"]
+          p_summary: string
+        }
+        Returns: {
+          case_code: string | null
+          case_title: string
+          created_at: string
+          created_by: string | null
+          description: string
+          id: string
+          iteration_id: string
+          jira_url: string | null
+          number: number
+          severity: Database["public"]["Enums"]["defect_severity"]
+          status: Database["public"]["Enums"]["defect_status"]
+          summary: string
+          test_case_result_id: string | null
+          testing_suite_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "defects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_defect: {
+        Args: {
+          p_defect_id: string
+          p_description: string
+          p_jira_url: string
+          p_severity: Database["public"]["Enums"]["defect_severity"]
+          p_status: Database["public"]["Enums"]["defect_status"]
+          p_summary: string
+        }
+        Returns: Database["public"]["Tables"]["defects"]["Row"]
+        SetofOptions: {
+          from: "*"
+          to: "defects"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      delete_defect: {
+        Args: { p_defect_id: string }
+        Returns: undefined
+      }
       create_draft_attachment: {
         Args: {
           p_content_type: string
           p_file_name: string
           p_size_bytes: number
           p_step_result_id: string
+        }
+        Returns: {
+          content_type: string
+          created_at: string
+          file_name: string
+          id: string
+          kind: Database["public"]["Enums"]["attachment_kind"]
+          object_key: string
+          remark_id: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["attachment_status"]
+          test_case_result_id: string | null
+          test_step_result_id: string | null
+          uploaded_by: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "attachments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_draft_case_attachment: {
+        Args: {
+          p_case_result_id: string
+          p_content_type: string
+          p_file_name: string
+          p_size_bytes: number
         }
         Returns: {
           content_type: string
@@ -1593,6 +1898,10 @@ export type Database = {
         Returns: string
       }
       delete_section: { Args: { p_section_id: string }; Returns: undefined }
+      delete_sign_off_comment: {
+        Args: { p_comment_id: string }
+        Returns: undefined
+      }
       delete_suite: { Args: { p_suite_id: string }; Returns: undefined }
       delete_test_case: { Args: { p_test_case_id: string }; Returns: undefined }
       delete_test_case_rows: {
@@ -1664,8 +1973,8 @@ export type Database = {
       get_round_coverage: {
         Args: {
           p_suite_id: string
-          p_ticked_user_ids?: string[]
           p_test_case_ids: string[]
+          p_ticked_user_ids?: string[]
         }
         Returns: Json
       }
@@ -1738,19 +2047,6 @@ export type Database = {
         }
       }
       iteration_scope_cases: { Args: { p_iteration_id: string }; Returns: Json }
-      post_case_remark_with_attachments: {
-        Args: { p_case_result_id: string; p_remark: string; p_attachment_ids?: string[] }
-        Returns: { id: string; remark: string; created_at: string }[]
-      }
-      create_draft_case_attachment: {
-        Args: { p_case_result_id: string; p_content_type: string; p_file_name: string; p_size_bytes: number }
-        Returns: Database["public"]["Tables"]["attachments"]["Row"]
-        SetofOptions: { from: "*"; to: "attachments"; isOneToOne: true; isSetofReturn: false }
-      }
-      post_remark_with_attachments: {
-        Args: { p_step_result_id: string; p_remark: string; p_attachment_ids?: string[] }
-        Returns: { id: string; remark: string; created_at: string }[]
-      }
       mark_attachment_ready: {
         Args: { p_attachment_id: string }
         Returns: {
@@ -1778,6 +2074,34 @@ export type Database = {
       org_has_case_role: {
         Args: { p_org_id: string; p_test_role_id: string }
         Returns: boolean
+      }
+      pending_storage_deletions: {
+        Args: { p_limit?: number }
+        Returns: string[]
+      }
+      post_case_remark_with_attachments: {
+        Args: {
+          p_attachment_ids?: string[]
+          p_case_result_id: string
+          p_remark: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          remark: string
+        }[]
+      }
+      post_remark_with_attachments: {
+        Args: {
+          p_attachment_ids?: string[]
+          p_remark: string
+          p_step_result_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          remark: string
+        }[]
       }
       recompute_case_result_status: {
         Args: { p_case_result_id: string }
@@ -1823,7 +2147,11 @@ export type Database = {
         Returns: undefined
       }
       reorder_manual_blocks: {
-        Args: { p_block_ids: string[]; p_module_id: string; p_section_id: string }
+        Args: {
+          p_block_ids: string[]
+          p_module_id: string
+          p_section_id: string
+        }
         Returns: undefined
       }
       reorder_manual_modules: {
@@ -1841,6 +2169,27 @@ export type Database = {
       reorder_test_cases: {
         Args: { p_section_id: string; p_test_case_ids: string[] }
         Returns: undefined
+      }
+      reply_sign_off_comment: {
+        Args: { p_body: string; p_parent_id: string }
+        Returns: {
+          body: string
+          created_at: string
+          created_by: string
+          id: string
+          page: number
+          parent_id: string | null
+          prefix: string
+          quote: string
+          sign_off_id: string
+          suffix: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sign_off_comments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       reset_iteration: {
         Args: { p_iteration_id: string }
@@ -1955,6 +2304,7 @@ export type Database = {
           password: string
           sort_order: number
           test_role_id: string | null
+          tester_name: string
           testing_suite_id: string
           username: string
         }[]
@@ -2124,6 +2474,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_sign_off_comment: {
+        Args: { p_body: string; p_comment_id: string }
+        Returns: undefined
+      }
       upsert_section: {
         Args: {
           p_id?: string
@@ -2182,6 +2536,8 @@ export type Database = {
     Enums: {
       attachment_kind: "image" | "pdf" | "video"
       attachment_status: "pending" | "ready"
+      defect_severity: "critical" | "high" | "medium" | "low"
+      defect_status: "open" | "resolved" | "wont_fix"
       execution_status: "not_run" | "passed" | "skipped" | "failed"
       iteration_status: "not_started" | "in_progress" | "completed" | "stopped"
       org_type: "vendor" | "client" | "external"
@@ -2339,6 +2695,8 @@ export const Constants = {
     Enums: {
       attachment_kind: ["image", "pdf", "video"],
       attachment_status: ["pending", "ready"],
+      defect_severity: ["critical", "high", "medium", "low"],
+      defect_status: ["open", "resolved", "wont_fix"],
       execution_status: ["not_run", "passed", "skipped", "failed"],
       iteration_status: ["not_started", "in_progress", "completed", "stopped"],
       org_type: ["vendor", "client", "external"],

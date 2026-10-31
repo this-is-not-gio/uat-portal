@@ -76,12 +76,16 @@ export default async function TesterTestCasesTab({
 	const lensOrgs = can(currentUser, "view_all_results") ? participants.map((p) => p.organization) : ownParticipation ? [ownParticipation.organization] : [];
 	const lensOrg = lensOrgs.find((o) => o.id === orgId) ?? ownParticipation?.organization ?? lensOrgs[0];
 	const isOwnLens = lensOrg?.id === ownOrgId;
+	// The roster is snapshotted at Start, so a planned round has nobody on it yet. Once it runs, an org
+	// member who isn't on it sees the round listed but none of its cases (a dropped tester still counts).
+	const isNonParticipant = isOwnLens && selectedIteration.status !== "not_started" && !ownParticipation?.testers.some((t) => t.userId === currentUser.id);
 
 	const isRunning = selectedIteration.status === "in_progress";
 	const [rawResults, sectionsByIteration] = await Promise.all([
-		getIterationResults(selectedIteration.id, lensOrg?.id),
-		// Own-org sections for every round, so template-only (e.g. internal) section names never leak.
-		getSectionsByIteration(testSuiteId, ownOrgId),
+		// Your own org's lens lists only your own copies: colleagues' cases (same role or not) stay hidden.
+		getIterationResults(selectedIteration.id, lensOrg?.id, isOwnLens ? currentUser.id : undefined),
+		// Own copies' sections for every round, so template-only (e.g. internal) or colleagues' section names never leak.
+		getSectionsByIteration(testSuiteId, ownOrgId, currentUser.id),
 	]);
 	// Testers only see what the round runs; cases unticked while it was planned stay out.
 	// No live-template diff here: edits reach testers only once the vendor syncs them (syncKind).
@@ -194,6 +198,17 @@ export default async function TesterTestCasesTab({
 					</SidebarGroup>
 				</SidebarContent>
 			</>}>
+			{isNonParticipant ? (
+				<div className="flex-1 flex flex-col items-center justify-center text-center gap-5 py-12">
+					<div className="justify-center bg-muted/50 rounded-xl size-20 flex flex-col items-center gap-2">
+						<ClipboardList size={45} className="text-muted-foreground" />
+					</div>
+					<div className="flex flex-col items-center justify-center gap-1">
+						<p className="font-semibold text-muted-foreground text-lg">You&apos;re not a participant in this iteration</p>
+						<p className="text-xs text-muted-foreground">No test cases are assigned to you in {selectedIteration.name}, so there&apos;s nothing for you to do here.</p>
+					</div>
+				</div>
+			) : (
 			<TesterTestCasesComponents
 				// Remount on round/section/lens switch so client state reseeds from the new rows.
 				key={`${selectedIteration.id}:${selectedIteration.status}:${sectionSlug ?? "all"}:${lensOrg?.id ?? ""}`}
@@ -220,6 +235,7 @@ export default async function TesterTestCasesTab({
 						.map((row) => ({ id: row.id, code: row.code ?? null, title: row.title, sectionName: row.sectionName })),
 				} : null}
 			/>
+			)}
 			</TestCasesSidebar>
 		</>
 	);

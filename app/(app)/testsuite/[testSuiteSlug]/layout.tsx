@@ -52,6 +52,8 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 		getSuiteManualModules(testSuite.id),
 	]);
 	const canMarkReady = draftIssues.length === 0;
+	// Results and defects only exist once testing has started.
+	const pastPlanning = testSuite.status !== "draft" && testSuite.status !== "ready";
 	const isTester = currentUser?.role === "Internal" || currentUser?.role === "External";
 	const reportSignOffs = allSignOffs.filter((s) => s.hasReport);
 	const plannedRound = testSuite.status === "ready"
@@ -275,7 +277,7 @@ export default async function TestSuiteLayout({ children, params }: LayoutProps<
 			</div>
 			{/* Tabs */}
 			<div className="contents print:hidden">
-				<SuiteTabs suiteSlug={testSuite.slug} showManual={canLinkManual || linkedModules.length > 0} showTestResults={!isTester && testSuite.status !== "draft" && testSuite.status !== "ready"} showSignOff={showSignOffTab} />
+				<SuiteTabs suiteSlug={testSuite.slug} showManual={linkedModules.length > 0} showTestResults={!isTester && pastPlanning} showSignOff={showSignOffTab} showDefects={can(currentUser, "view_all_results") && pastPlanning} />
 			</div>
 			<ScrollArea className="min-h-0 flex-1">
 				{/* Content. The staged import lives here so it survives switching tabs. */}

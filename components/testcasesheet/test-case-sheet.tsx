@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
 import {
 	Sheet,
@@ -28,8 +28,6 @@ import {
 	MessageSquareShare,
 	Info,
 	TestTube2,
-	UserCheck,
-	User,
 	CircleCheck,
 	CircleX,
 	CircleOff,
@@ -48,8 +46,9 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { RemarkCard } from "@/components/testcasesheet/remark-card";
 import { RemarkMarkdownField } from "@/components/testcasesheet/remark-markdown-field";
-import { AttachmentsUnavailable, RemarkAttachments, formatSize, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
+import { AttachmentsUnavailable, formatSize, invalidateRemarkAttachments, loadRemarkAttachments } from "@/components/testcasesheet/remark-attachments";
 import type { signedAttachment } from "@/lib/supabase/attachment-actions";
 import { profile, testCase, testRemark, testStepStatus } from "@/lib/supabase/test-cases";
 import type { caseResultState } from "@/lib/supabase/iteration-actions";
@@ -57,10 +56,13 @@ import type { caseCopy, resultArchive } from "@/lib/supabase/test-iterations";
 import { RESULT_CHANGE_FLAG_STYLES } from "@/components/table/test-result-columns";
 import { useDetailLock } from "@/components/table/data-table";
 import { humanizeTimestamp } from "@/lib/utils";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import StepResultButton from "./step-result-buttons";
 import TestCaseResult from "./test-case-result";
+import { CreateDefectDialog, type defectCandidate } from "@/components/defects/create-defect-dialog";
+import { DefectSheet } from "@/components/defects/defect-sheet";
+import { getCaseDefects } from "@/lib/supabase/defect-actions";
+import type { defect } from "@/lib/supabase/defects";
+import { can } from "@/lib/auth/permissions";
 
 const step_status_options: {
 	value: testStepStatus;
@@ -191,10 +193,6 @@ function TesterBreakdown({ copies }: { copies: caseCopy[] }) {
 	);
 }
 
-const author_role_badge_classnames: Record<string, { className: string, Icon: LucideIcon }> = {
-	Internal: { className: "bg-blue-100/60 text-blue-700 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-400 border-blue-700 dark:border-blue-400", Icon: User },
-	External: { className: "bg-green-100/60 text-green-700 hover:bg-green-100 dark:bg-green-950/40 dark:text-green-400 border-green-700 dark:border-green-40０", Icon: UserCheck },
-}
 
 // definition: the live test case (Test Cases tab), no results.
 // execute:    a row of a running iteration; steps, remarks and the case result are editable.
@@ -204,50 +202,10 @@ export type testCaseSheetMode = "definition" | "execute" | "review";
 
 type sheetTestCase = testCase & { statusOverridden?: boolean; executor?: profile; completedAt?: string | null; archives?: resultArchive[]; copies?: caseCopy[] };
 
-// One posted remark (step or case level): author header, markdown body, evidence files.
-function RemarkCard({ remark, files }: { remark: testRemark; files: signedAttachment[] }) {
-	const author_role_badge = remark.author?.role ? author_role_badge_classnames[remark.author.role] : undefined
-	const Icon = author_role_badge?.Icon
-	const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
-	return (<div className="flex flex-row gap-2 group/remark">
-		<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
-			<div className="w-0.5 h-2 bg-accent rounded-full self-center group-first/remark:h-0"></div>
-			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
-				<p className="text-xs font-bold">{initials}</p>
-			</div>
-			<div className="w-0.5 h-full bg-muted rounded-full self-center group-last/remark:h-0"></div>
-		</div>
-		<div className="border w-full min-w-0 bg-accent/10 rounded-xl mb-3 sm:mb-5 group-last/remark:mb-0">
-			{/* Mobile drops the avatar column (the avatar moves in here) and the role badge. */}
-			<div className="flex flex-row items-center justify-between gap-2 border-b p-3 sm:p-4 mb-0 bg-accent/90 rounded-t-xl">
-				<div className="flex-row flex min-w-0 gap-2 items-center">
-					<div className="sm:hidden size-6 shrink-0 rounded-full flex items-center justify-center bg-primary text-white">
-						<p className="text-[10px] font-bold">{initials}</p>
-					</div>
-					<p className="text-xs sm:text-sm font-semibold truncate">{remark.author?.full_name || 'Unknown Author'}</p>
-					<Badge variant="outline" className={cn("hidden sm:inline-flex", author_role_badge?.className || "bg-muted text-foreground border-border")}>
-						{Icon && <Icon className="h-3 w-3" />}
-						{remark.author?.role || 'Unknown Role'}
-					</Badge>
-				</div>
-				<p className="text-xs text-muted-foreground shrink-0">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
-			</div>
-			<div className="p-3 sm:p-4 overflow-x-auto">
-				{remark.remark.trim() && (
-					<div className="typeset text-sm break-words">
-						<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> }}>{remark.remark}</ReactMarkdown>
-					</div>
-				)}
-				<RemarkAttachments attachments={files} />
-			</div>
-		</div>
-	</div>
-	)
-}
-
 export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestCase, mode = "definition", canRemark = mode === "execute", footerActions }: { testCase: T; onChangeTestCase: (updatedTestCase: T) => void; mode?: testCaseSheetMode; canRemark?: boolean; footerActions?: React.ReactNode }) {
 	const showResults = mode !== "definition";
 	const currentUser = useCurrentUser();
+	const canLogDefects = showResults && can(currentUser, "view_all_results");
 	const author = currentUser ? { id: currentUser.id, role: currentUser.role, full_name: currentUser.fullName } : undefined;
 	const [stepStatuses, setStepStatuses] = useState<Record<string, { status: testStepStatus }>>(
 		() => {
@@ -275,6 +233,15 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 		});
 		return () => { cancelled = true; };
 	}, [stepIdsKey, caseResultId]);
+	// Defects citing this case's remarks, loaded in one query (staff only; clients get none).
+	const [caseDefects, setCaseDefects] = useState<defect[]>([]);
+	const [openDefectId, setOpenDefectId] = useState<string | null>(null);
+	const loadCaseDefects = useCallback(() => {
+		if (!canLogDefects) return;
+		getCaseDefects(testCase.id).then((res) => { if (res.ok) setCaseDefects(res.data); });
+	}, [canLogDefects, testCase.id]);
+	useEffect(() => { loadCaseDefects(); }, [loadCaseDefects]);
+	const defectsFor = (remarkId: string) => caseDefects.filter((d) => d.references.some((r) => r.remarkId === remarkId));
 	const [caseState, setCaseState] = useState<caseResultState>({
 		status: testCase.status,
 		statusOverridden: testCase.statusOverridden ?? false,
@@ -293,6 +260,13 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	const hasOwnEvidence = (stepId: string) => hasEvidenceFrom(stepRemarks[stepId] ?? []);
 	// Overall feedback with evidence covers the failure as a whole, so no step needs its own.
 	const caseHasEvidence = hasEvidenceFrom(caseRemarks);
+	// Every remark a defect on this case may cite: remarks of failed steps, and overall feedback while the case is Failed.
+	const toCandidate = (remark: testRemark, label: string, stepText: string | null): defectCandidate => ({ remark, label, stepText, files: remarkFiles[remark.id] ?? remark.attachments ?? [] });
+	const defectCandidates: defectCandidate[] = !canLogDefects ? [] : [
+		...(testCase.stepsToExecute ?? []).flatMap((step, i) =>
+			stepStatuses[step.id]?.status === "Failed" ? (stepRemarks[step.id] ?? []).map((r) => toCandidate(r, `Step ${i + 1}`, step.step)) : []),
+		...(caseState.status === "Failed" ? caseRemarks.map((r) => toCandidate(r, "Overall feedback", null)) : []),
+	];
 	const allSteps = testCase.stepsToExecute ?? [];
 	// "Failed all" (every step Failed) only needs evidence on one step; otherwise each failed step needs its own.
 	const allStepsFailed = allSteps.length > 1 && allSteps.every((step) => stepStatuses[step.id]?.status === "Failed");
@@ -498,7 +472,14 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																<div className="group/with-remark">
 																	{
 																		remarks?.length > 0 ? (
-																																																																					remarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)
+																																																																					remarks.map((remark) => {
+																			const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
+																			// Staff log defects from remarks on failed steps; the DB re-checks both.
+																			const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
+																				? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} onCreated={loadCaseDefects} />
+																				: undefined;
+																			return <RemarkCard key={remark.id} remark={remark} files={files} action={action} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />;
+																		})
 
 																		) : null
 																	}
@@ -557,7 +538,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 					{filesUnavailable && caseRemarks.length > 0 && <AttachmentsUnavailable className="pb-3" />}
 					<div className="group/with-remark">
-						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} />)}
+						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, "Overall feedback", null)} candidates={defectCandidates} onCreated={loadCaseDefects} /> : undefined} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />)}
 						{canRemark && <div className="flex flex-row gap-2 group/remark">
 							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}
@@ -770,6 +751,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					{footerActions}
 				</SheetFooter>
 			) : null}
+			<DefectSheet defect={caseDefects.find((d) => d.id === openDefectId) ?? null} onClose={() => { setOpenDefectId(null); loadCaseDefects(); }} />
 		</SheetContent>
 	)
 }

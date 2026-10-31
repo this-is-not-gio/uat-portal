@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSelectedLayoutSegment } from "next/navigation";
-import { BookCopy, Check, ChevronDown, ClipboardCheck, ClipboardList, LayoutDashboard, ListChecks } from "lucide-react";
+import { BookCopy, Bug, Check, ChevronDown, ClipboardCheck, ClipboardList, LayoutDashboard, ListChecks } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
@@ -11,10 +11,11 @@ type SuiteTabsProps = {
 	showManual: boolean;
 	showTestResults: boolean;
 	showSignOff: boolean;
+	showDefects: boolean;
 };
 
-// Narrow screens collapse tabs into a "More" menu: Sign-off below lg, Test Results and Manual too below md.
-export default function SuiteTabs({ suiteSlug, showManual, showTestResults, showSignOff }: SuiteTabsProps) {
+// Narrow screens collapse tabs into a "More" menu: Defects and Sign-off below lg, Test Results and Manual too below md.
+export default function SuiteTabs({ suiteSlug, showManual, showTestResults, showSignOff, showDefects }: SuiteTabsProps) {
 	// Each tab is a route under the suite, so the URL (not state) decides which one is active.
 	const router = useRouter();
 	const value = useSelectedLayoutSegment() ?? "overview";
@@ -31,7 +32,7 @@ export default function SuiteTabs({ suiteSlug, showManual, showTestResults, show
 	}, []);
 
 	// The menu only appears at widths where at least one tab is collapsed into it.
-	const moreVisibility = showSignOff ? "lg:hidden" : showTestResults || showManual ? "md:hidden" : "hidden";
+	const moreVisibility = showSignOff || showDefects ? "lg:hidden" : showTestResults || showManual ? "md:hidden" : "hidden";
 
 	return (
 		<Tabs value={value} onValueChange={(tab) => goTo(String(tab))} className="w-full px-4 flex flex-col border-b">
@@ -56,13 +57,19 @@ export default function SuiteTabs({ suiteSlug, showManual, showTestResults, show
 						Test Results
 					</TabsTrigger>
 				)}
+				{showDefects && (
+					<TabsTrigger value="defects" className="w-full hidden lg:inline-flex">
+						<Bug data-icon="inline-start" />
+						Defects
+					</TabsTrigger>
+				)}
 				{showSignOff && (
 					<TabsTrigger value="sign-off" className="w-full hidden lg:inline-flex">
 						<ClipboardCheck data-icon="inline-start" />
 						Reports
 					</TabsTrigger>
 				)}
-				{(showManual || showTestResults || showSignOff) && (
+				{(showManual || showTestResults || showSignOff || showDefects) && (
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 						<DropdownMenuTrigger className={`${moreVisibility} inline-flex shrink-0 items-center gap-1 px-2 text-sm font-medium text-foreground/60 hover:text-foreground`}>
 							More
@@ -81,6 +88,13 @@ export default function SuiteTabs({ suiteSlug, showManual, showTestResults, show
 									<ListChecks />
 									Test Results
 									{value === "test-results" && <Check className="ml-auto" />}
+								</DropdownMenuItem>
+							)}
+							{showDefects && (
+								<DropdownMenuItem className="lg:hidden" onClick={() => goTo("defects")}>
+									<Bug />
+									Defects
+									{value === "defects" && <Check className="ml-auto" />}
 								</DropdownMenuItem>
 							)}
 							{showSignOff && (
