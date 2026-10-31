@@ -490,7 +490,7 @@ export async function resetCaseResultToAuto({ caseResultId }: { caseResultId: st
 }
 
 // Exactly one of stepResultId (a step's remark) or caseResultId (overall feedback on the case).
-export async function addResultRemark({ stepResultId, caseResultId, remark, attachmentIds = [] }: { stepResultId?: string; caseResultId?: string; remark: string; attachmentIds?: string[] }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile; attachments: signedAttachment[] }>> {
+export async function addResultRemark({ stepResultId, caseResultId, remark, attachmentIds = [] }: { stepResultId?: string; caseResultId?: string; remark: string; attachmentIds?: string[] }): Promise<actionResult<{ id: string; remark: string; created_at: string; author?: profile; roleName?: string; attachments: signedAttachment[] }>> {
     const user = await requireUser();
     const supabase = await createClient();
     // One transaction: the remark and the links to the caller's ready drafts, or neither (0063).
@@ -501,6 +501,11 @@ export async function addResultRemark({ stepResultId, caseResultId, remark, atta
     const posted = data[0];
     await flushStorageDeletions(supabase);
     const { data: author } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).maybeSingle();
+    // Show the poster's test role when they are this result's tester (an Admin commenting keeps their account role).
+    const { data: owner } = caseResultId
+        ? await supabase.from("test_case_results").select("tester_id, test_role:test_roles ( name )").eq("id", caseResultId).maybeSingle()
+        : await supabase.from("test_step_results").select("case_result:test_case_results ( tester_id, test_role:test_roles ( name ) )").eq("id", stepResultId!).maybeSingle().then((r) => ({ data: r.data?.case_result ?? null }));
+    const roleName = owner?.tester_id === user.id ? owner?.test_role?.name : undefined;
     let attachments: signedAttachment[] = [];
     if (attachmentIds.length > 0) {
         try {
@@ -510,7 +515,7 @@ export async function addResultRemark({ stepResultId, caseResultId, remark, atta
             console.error("Signing attachments failed:", (e as Error).message);
         }
     }
-    return { ok: true, data: { id: posted.id, remark: posted.remark, created_at: posted.created_at, author: author ?? undefined, attachments } };
+    return { ok: true, data: { id: posted.id, remark: posted.remark, created_at: posted.created_at, author: author ?? undefined, roleName, attachments } };
 }
 
 export type scopeOption = { id: string; code: string | null; title: string; issues: string[]; flags: roundCaseFlag[] };

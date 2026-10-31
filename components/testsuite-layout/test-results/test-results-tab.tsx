@@ -8,6 +8,7 @@ import TestResultsComponents, { type participationStatus } from "./test-results-
 import StartIterationDialog from "@/components/testsuite-layout/shared/start-iteration-dialog";
 import { getCurrentUser } from "@/lib/supabase/auth";
 import { can } from "@/lib/auth/permissions";
+import { getIterationDefectsByCase } from "@/lib/supabase/defects";
 import { canWithdrawParticipation, getParticipationProgress, getDraftSignOff, getSignOffContext, unsubmittedParticipantOrgs } from "@/lib/supabase/overview";
 import SignOffDialog from "@/components/testsuite-layout/sign-off/sign-off-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -149,11 +150,14 @@ export default async function TestResultsTab({
 	const pendingByResultId = new Map(pendingChanges.map((change) => [change.testCaseResultId as string, change.change]));
 	// Only the cases planned into the round; left-out rows stay out of the table and scorecards.
 	// Rows removed mid-round stay listed (flagged, kept out of the scorecards).
+	const defectsByCase = selectedIteration && can(currentUser, "view_all_results") ? await getIterationDefectsByCase(selectedIteration.id) : null;
 	const results = rawResults
 		.filter((row) => row.includedInRun || isRemovedFromRound(row))
 		// A case's change is reported against one of its copies; every row of the case shows it.
 		.map((row) => ({
 			...row,
+			// Defects cite one tester's copy; the row counts every copy of the case once per defect.
+			defectCounts: defectsByCase ? countDefects([row.id, ...(row.copies?.map((copy) => copy.id) ?? [])].flatMap((id) => defectsByCase.get(id) ?? [])) : undefined,
 			pendingChange: (row.testCaseId ? pendingByCaseId.get(row.testCaseId) : undefined)
 				?? pendingByResultId.get(row.id)
 				?? row.copies?.map((copy) => pendingByResultId.get(copy.id)).find(Boolean),
@@ -417,4 +421,11 @@ function Tree({ item, testSuiteSlug }: { item: TreeItem; testSuiteSlug: string }
 			</TreeCollapsible>
 		</SidebarMenuItem>
 	)
+}
+
+// Distinct defects by open vs closed (resolved and won't-fix).
+function countDefects(defects: { id: string; status: string }[]) {
+	const distinct = [...new Map(defects.map((d) => [d.id, d])).values()];
+	const open = distinct.filter((d) => d.status === "open").length;
+	return { open, closed: distinct.length - open };
 }
