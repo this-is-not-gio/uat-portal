@@ -39,6 +39,8 @@ export type testRemark = {
     id: string;
     remark: string;
     author?: profile;
+    // The author's test role (e.g. "Action Officer") when they posted as that result's tester; otherwise the card falls back to their account role.
+    roleName?: string;
     created_at?: string;
     attachments?: signedAttachment[];
 };

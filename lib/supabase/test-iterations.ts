@@ -129,6 +129,8 @@ export type testResultRow = testCase & {
     pendingChange?: caseChange["change"];
     // Only on rolled-up rows (getRolledUpResults): every tester's copy of this case, for the breakdown.
     copies?: caseCopy[];
+    // Staff only, set by the Test Results tab: defects citing this case (any tester's copy), by status. Resolved and won't-fix are closed.
+    defectCounts?: { open: number; closed: number };
 };
 
 // One tester's copy of a case: who it is and where they are.
@@ -451,6 +453,7 @@ export async function getIterationResults(iterationId: string, orgId?: string, t
                 id: remark.id,
                 remark: remark.remark,
                 author: remark.profile ?? undefined,
+                roleName: remark.profile?.id === row.tester_id ? row.test_role?.name : undefined,
                 created_at: remark.created_at,
             }))
             .sort((a, b) => a.created_at.localeCompare(b.created_at)),
@@ -463,6 +466,7 @@ export async function getIterationResults(iterationId: string, orgId?: string, t
                 id: remark.id,
                 remark: remark.remark,
                 author: remark.profile ?? undefined,
+                roleName: remark.profile?.id === row.tester_id ? row.test_role?.name : undefined,
                 created_at: remark.created_at,
             })),
         })),

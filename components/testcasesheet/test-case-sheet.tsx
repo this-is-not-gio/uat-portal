@@ -29,6 +29,7 @@ import {
 	Info,
 	TestTube2,
 	CircleCheck,
+	CircleDot,
 	CircleX,
 	CircleOff,
 	Bug,
@@ -37,6 +38,8 @@ import {
 	Users,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
+import { SEVERITY_CLASSNAMES, SEVERITY_ICONS, STATUS_ICON_CLASSNAMES, STATUS_ICONS } from "@/components/defects/defect-badges";
+import { DEFECT_SEVERITIES, DEFECT_STATUS_LABELS } from "@/lib/supabase/defect-format";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -242,6 +245,8 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	}, [canLogDefects, testCase.id]);
 	useEffect(() => { loadCaseDefects(); }, [loadCaseDefects]);
 	const defectsFor = (remarkId: string) => caseDefects.filter((d) => d.references.some((r) => r.remarkId === remarkId));
+	// Defects citing any of a step's remarks, each listed once.
+	const defectsForStep = (stepRemarkList: testRemark[] | undefined) => [...new Map((stepRemarkList ?? []).flatMap((r) => defectsFor(r.id)).map((d) => [d.id, d])).values()];
 	const [caseState, setCaseState] = useState<caseResultState>({
 		status: testCase.status,
 		statusOverridden: testCase.statusOverridden ?? false,
@@ -443,15 +448,18 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																	isPending={isSavingResult}
 																	startTransition={startSavingResult}
 																/>)
-																: mode === "review" && stepStatuses[step.id]?.status === "Failed" ? (
-																	<Button>
-																		<Bug className="size-3.5" />
-																		<p className="text-xs font-medium">Report Bug</p>
-																	</Button>
-																) : null
+																: null
 															}
 														</div>
 														<AccordionTrigger className="w-fit flex-row items-center justify-start gap-1.5 rounded-md border py-1.5 px-3 text-sm font-normal hover:no-underline hover:bg-accent">
+															{canLogDefects && defectsForStep(remarks).length > 0 && (
+																<Tooltip>
+																	<TooltipTrigger render={<Badge variant="outline" className="w-fit gap-1 font-mono"><Bug className="size-3" />{defectsForStep(remarks).length}</Badge>} />
+																	<TooltipContent>
+																		<p className="text-xs">{defectsForStep(remarks).length} {defectsForStep(remarks).length === 1 ? "defect" : "defects"} reported from this step</p>
+																	</TooltipContent>
+																</Tooltip>
+															)}
 															<MessageSquare className="h-3.5 w-3.5" />
 															Remarks {
 																remarks?.length > 0 ? (
@@ -463,23 +471,45 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 													<AccordionContent className="[&_p:not(:last-child)]:mb-0 ">
 														<div className="flex flex-col gap-6 pt-3 sm:gap-10 sm:pt-5">
 															<div className="flex flex-col gap-4">
-																<div className="flex items-center gap-1">
-																	<MessagesSquare size="12" />
-																	<p className="text-xs font-medium">Remarks:</p>
-																</div>
+																{/* Defects reported from this failed step's remarks, above the remark nodes (staff only: clients get no defects). */}
+																{canLogDefects && stepStatuses[step.id]?.status === "Failed" && (() => {
+																	const stepDefects = defectsForStep(remarks);
+																	if (stepDefects.length === 0) return null;
+																	return (
+																		<div className="flex flex-col gap-1">
+																			<p className="flex flex-row items-center gap-1 text-xs font-medium"><Bug className="size-3" />Reported defects </p>
+																			<ul className="flex flex-col gap-1">
+																				{stepDefects.map((d) => {
+																					const StatusIcon = STATUS_ICONS[d.status];
+																					const SeverityIcon = SEVERITY_ICONS[d.severity];
+																					return (
+																						<li key={d.id}>
+																							<button type="button" onClick={() => setOpenDefectId(d.id)} className="flex w-full flex-row items-center gap-2 rounded-md border px-2 py-1.5 text-left hover:bg-accent">
+																								<StatusIcon size={16} className={cn("shrink-0", STATUS_ICON_CLASSNAMES[d.status])} aria-label={DEFECT_STATUS_LABELS[d.status]} />
+																								<span className="shrink-0 font-mono text-xs text-muted-foreground">{d.code}</span>
+																								<span className="min-w-0 flex-1 truncate text-xs font-semibold" title={d.summary}>{d.summary}</span>
+																								<Badge variant="outline" className={cn("shrink-0 gap-1 text-xs font-mono font-semibold", SEVERITY_CLASSNAMES[d.severity])}><SeverityIcon data-icon="inline-start" />{DEFECT_SEVERITIES.find((x) => x.value === d.severity)?.label ?? d.severity}</Badge>
+																							</button>
+																						</li>
+																					);
+																				})}
+																			</ul>
+																		</div>
+																	);
+																})()}
 																{/* The listing failed, so which remarks have files is unknown: one notice per thread, not per remark. */}
 																{filesUnavailable && remarks?.length > 0 && <AttachmentsUnavailable />}
 																<div className="group/with-remark">
 																	{
 																		remarks?.length > 0 ? (
-																																																																					remarks.map((remark) => {
-																			const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
-																			// Staff log defects from remarks on failed steps; the DB re-checks both.
-																			const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
-																				? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} onCreated={loadCaseDefects} />
-																				: undefined;
-																			return <RemarkCard key={remark.id} remark={remark} files={files} action={action} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />;
-																		})
+																			remarks.map((remark) => {
+																				const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
+																				// Staff log defects from remarks on failed steps; the DB re-checks both.
+																				const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
+																					? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} onCreated={loadCaseDefects} />
+																					: undefined;
+																				return <RemarkCard key={remark.id} remark={remark} files={files} action={action} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />;
+																			})
 
 																		) : null
 																	}
@@ -746,6 +776,16 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						/>
 					</div>
 				</SheetFooter>
+			) : mode === "review" && canLogDefects && caseState.status === "Failed" && (defectCandidates.length > 0 || caseDefects.length > 0) ? (
+				// Failed results only; a passed case has nothing to log, so no footer. The first remark is the source, the rest can be added in the dialog.
+				<SheetFooter className="flex flex-row items-center justify-between gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
+					{/* Defects citing this case, as chips like the Test Summary: open vs closed (resolved and won't-fix). */}
+					<div className="flex flex-row items-center gap-2">
+						<p className="text-xs font-medium">Defects:</p>
+						<DefectSummaryCell open={caseDefects.filter((d) => d.status === "open").length} closed={caseDefects.filter((d) => d.status !== "open").length} />
+					</div>
+					{defectCandidates.length > 0 && <CreateDefectDialog caseResultId={testCase.id} source={defectCandidates[0]} candidates={defectCandidates} onCreated={loadCaseDefects} />}
+				</SheetFooter>
 			) : footerActions ? (
 				<SheetFooter className="flex flex-row justify-end gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					{footerActions}
@@ -754,6 +794,32 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 			<DefectSheet defect={caseDefects.find((d) => d.id === openDefectId) ?? null} onClose={() => { setOpenDefectId(null); loadCaseDefects(); }} />
 		</SheetContent>
 	)
+}
+
+// Same chip look as ResultSummaryCell; a zero count gets no chip.
+function DefectSummaryCell({ open, closed }: { open: number; closed: number }) {
+	const chips = [
+		{ label: "Open", count: open, Icon: CircleDot, className: "bg-emerald-600/20 text-emerald-800" },
+		{ label: "Closed", count: closed, Icon: CircleCheck, className: "bg-purple-600/20 text-purple-800" },
+	].filter((chip) => chip.count > 0);
+	if (chips.length === 0) return <p className="text-xs text-muted-foreground">No defects yet</p>;
+	return (
+		<Tooltip>
+			<TooltipTrigger render={
+				<div className="flex flex-row gap-1">
+					{chips.map(({ label, count, Icon, className }) => (
+						<div key={label} className={cn("flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit", className)}>
+							<Icon size={15} />
+							<p className="font-mono text-xs">{count}</p>
+						</div>
+					))}
+				</div>
+			} />
+			<TooltipContent>
+				<p className="text-xs">{chips.map((chip) => `${chip.label}: ${chip.count}`).join(" • ")}</p>
+			</TooltipContent>
+		</Tooltip>
+	);
 }
 
 // Chip colours per step status; Untested never gets a chip.

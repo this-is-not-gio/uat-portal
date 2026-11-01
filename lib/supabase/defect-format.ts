@@ -2,12 +2,14 @@
 
 export const defectCode = (number: number) => `DEF-${String(number).padStart(3, "0")}`;
 
-// DEF-001-TC-1-s-2: defect code, source case, first cited step ("000" when there is none).
-export const defectRef = (d: { code: string; caseCode: string | null; references: { stepOrder: number | null }[] }) =>
-    `${d.code}-${d.caseCode}-${d.references[0]?.stepOrder ? `s-${d.references[0].stepOrder}` : "000"}`;
+// DEF-001-TC-1-s-2: defect code, first cited case, first cited step. Steps are 1-based ("000" when none, or overall feedback).
+export const defectRef = (d: { code: string; primaryCase: { caseCode: string | null } | null; references: { stepOrder: number | null }[] }) => {
+    const step = d.references[0]?.stepOrder;
+    return `${d.code}-${d.primaryCase?.caseCode ?? "000"}-${step != null ? `s-${step + 1}` : "000"}`;
+};
 
-// Same rule create_defect enforces (0080): blank is fine, otherwise an http(s) URL with a dotted host.
-export function jiraUrlError(value: string): string | null {
+// Same rule the defect functions enforce (0082): blank is fine, otherwise an http(s) URL with a dotted host.
+export function externalUrlError(value: string): string | null {
     const url = value.trim();
     if (!url) return null;
     try {
@@ -16,7 +18,7 @@ export function jiraUrlError(value: string): string | null {
     } catch {
         // falls through
     }
-    return "Enter a valid Jira link (https://...).";
+    return "Enter a valid link (https://...).";
 }
 
 export const DEFECT_SEVERITIES = [

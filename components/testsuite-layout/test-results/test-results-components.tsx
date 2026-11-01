@@ -4,7 +4,8 @@ import { Ban, CalendarClock, ChartNoAxesCombined, CircleCheck, CircleDashed, Cir
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
-import { testResultColumns, testResultOverallColumns } from "@/components/table/test-result-columns";
+import { can } from "@/lib/auth/permissions";
+import { defectsColumn, testResultColumns, testResultOverallColumns } from "@/components/table/test-result-columns";
 import { TestCaseSheet } from "@/components/testcasesheet/test-case-sheet";
 import { useState } from "react";
 import { useCurrentUser } from "@/components/current-user-provider";
@@ -142,6 +143,9 @@ export default function TestResultsComponents({
 		});
 	}
 	const [testResultRows, setTestResultRows] = useState<testResultRow[]>(results);
+	// Defects are staff-only: everyone else gets the table without that column.
+	const baseColumns = view === "overall" ? testResultOverallColumns : testResultColumns;
+	const tableColumns = can(currentUser, "view_all_results") ? baseColumns : (baseColumns.filter((column) => column !== defectsColumn) as typeof baseColumns);
 	const [onlyFailedLastRound, setOnlyFailedLastRound] = useState(false);
 	const [onlyChangedMidRound, setOnlyChangedMidRound] = useState(false);
 
@@ -248,7 +252,7 @@ export default function TestResultsComponents({
 					{/* <SummaryCard label="Not Yet Tested" count={notTested} icon={<CircleDashed />} /> */}
 				</div>
 				<DataTable
-						columns={view === "overall" ? testResultOverallColumns : testResultColumns}
+						columns={tableColumns}
 						data={visibleRows}
 						// Removed from the suite: its results stay in this round, but there's nothing left to execute.
 						isRowDisabled={(row) => row.pendingChange === "removed" || isRemovedFromRound(row)}

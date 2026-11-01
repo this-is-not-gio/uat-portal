@@ -22,7 +22,7 @@ export function RemarkCard({ remark, files, action, defects = [], onOpenDefect }
 	const Icon = author_role_badge?.Icon
 	const initials = `${remark.author?.full_name?.charAt(0) || 'U'}${remark.author?.full_name?.charAt(1).toUpperCase() || 'U'}`
 	return (<div className="flex flex-row gap-2 group/remark">
-		<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
+		<div className="hidden sm:flex flex-col items-center group-first/remark:pt-4">
 			<div className="w-0.5 h-2 bg-accent rounded-full self-center group-first/remark:h-0"></div>
 			<div className="size-10 rounded-full p-4 flex flex-col items-center justify-center gap-2 bg-primary text-white">
 				<p className="text-xs font-bold">{initials}</p>
@@ -36,21 +36,12 @@ export function RemarkCard({ remark, files, action, defects = [], onOpenDefect }
 					<div className="sm:hidden size-6 shrink-0 rounded-full flex items-center justify-center bg-primary text-white">
 						<p className="text-[10px] font-bold">{initials}</p>
 					</div>
-					<p className="text-xs sm:text-sm font-semibold truncate">{remark.author?.full_name || 'Unknown Author'}</p>
-					<Badge variant="outline" className={cn("hidden sm:inline-flex", author_role_badge?.className || "bg-muted text-foreground border-border")}>
-						{Icon && <Icon className="h-3 w-3" />}
-						{remark.author?.role || 'Unknown Role'}
-					</Badge>
+					<div className="">
+						<p className="text-xs sm:text-sm font-semibold truncate">{remark.author?.full_name || 'Unknown Author'}</p>
+						<p className="text-xs sm:text-xs text-muted-foreground truncate">{remark.roleName || remark.author?.role || 'Unknown Role'}</p>
+					</div>
 				</div>
-				<div className="flex flex-row items-center gap-2 shrink-0">
-					{defects.map((d) => (
-						<button key={d.id} type="button" onClick={() => onOpenDefect?.(d.id)} title={d.summary} className="cursor-pointer">
-							<Badge variant="outline" className={cn("font-mono", STATUS_CLASSNAMES[d.status])}>{d.code}</Badge>
-						</button>
-					))}
-					{action}
-					<p className="text-xs text-muted-foreground">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
-				</div>
+							<p className="text-xs text-muted-foreground font-mono">{remark.created_at ? humanizeTimestamp(remark.created_at) : 'Unknown Time'}</p>
 			</div>
 			<div className="p-3 sm:p-4 overflow-x-auto">
 				{remark.remark.trim() && (

@@ -2,7 +2,7 @@
 
 import { createColumnHelper } from "@tanstack/react-table"
 import { type DataTableFeatures } from "./data-table-features"
-import { CircleCheck, CircleOffIcon, CircleX, GitPullRequest, History, Info, MessageSquare, RefreshCw, RotateCcw, SkipForward, SquarePlus, Trash2, UserX, type LucideIcon } from "lucide-react"
+import { Bug, CircleCheck, CircleDot, CircleOffIcon, CircleX, GitPullRequest, History, Info, MessageSquare, RefreshCw, RotateCcw, SkipForward, SquarePlus, Trash2, UserX, type LucideIcon } from "lucide-react"
 import { Badge } from "../ui/badge"
 import { TestStatusMapping } from "./columns"
 import { TruncatedText } from "@/components/sidebar/nav-secondary"
@@ -184,6 +184,54 @@ const remarksColumn = columnHelper.display({
 	cell: (info) => <RemarkCountCell row={info.row.original} />,
 })
 
+// Defects reported against this case, as chips: green for open, violet for closed (resolved and won't-fix).
+function DefectCountCell({ row }: { row: testResultRow }) {
+	const { open = 0, closed = 0 } = row.defectCounts ?? {};
+	if (open + closed === 0) return <p className="text-xs text-muted-foreground">—</p>;
+	const chips = [
+		{ label: "Open", count: open, Icon: CircleDot, className: "bg-emerald-600/20 text-emerald-800" },
+		{ label: "Closed", count: closed, Icon: CircleCheck, className: "bg-purple-600/20 text-purple-800" },
+	].filter((chip) => chip.count > 0);
+	return (
+		<Tooltip>
+			<TooltipTrigger render={
+				<div className="flex flex-row gap-1">
+					{chips.map(({ label, count, Icon, className }) => (
+						<div key={label} className={cn("flex flex-row items-center gap-1 rounded-md py-1 px-1.5 w-fit", className)}>
+							<Icon size={15} />
+							<p className="font-mono text-xs">{count}</p>
+						</div>
+					))}
+				</div>
+			} />
+			<TooltipContent>
+				<p className="text-xs">{chips.map((chip) => `${chip.label}: ${chip.count}`).join(" • ")}</p>
+			</TooltipContent>
+		</Tooltip>
+	);
+}
+
+// Staff only: the table drops this column for anyone who can't see defects.
+export const defectsColumn = columnHelper.display({
+	id: "defects",
+	header: () => (
+		<div className="flex flex-row items-center gap-1">
+			<Bug size={14} />
+			<p>Defects</p>
+			<Tooltip>
+				<TooltipTrigger>
+					<Info size={15} className="text-muted-foreground" />
+				</TooltipTrigger>
+				<TooltipContent>
+					<p className="text-xs">Defects reported against this test case. Green is open; violet is closed (resolved or won&apos;t fix).</p>
+				</TooltipContent>
+			</Tooltip>
+		</div>
+	),
+	meta: { className: "hidden lg:table-cell" },
+	cell: (info) => <DefectCountCell row={info.row.original} />,
+})
+
 const submittedResultColumn = columnHelper.display({
 	header: "Submitted Result",
 	meta: { className: "hidden md:table-cell" },
@@ -235,6 +283,7 @@ export const testResultColumns = columnHelper.columns([
 
 	remarksColumn,
 	resultSummaryColumn,
+	defectsColumn,
 	columnHelper.accessor("previousStatus", {
 		meta: { className: "hidden lg:table-cell" },
 		header: () => (

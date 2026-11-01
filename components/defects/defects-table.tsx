@@ -56,10 +56,10 @@ export default function DefectsTable({ defects, suiteSlug, iterationNumber }: { 
 			id: "jira",
 			header: () => <div className="flex justify-end font-mono text-xs text-muted-foreground">{defects.length} reported</div>,
 			cell: ({ row }) => {
-				const jiraUrl = row.original.jiraUrl;
+				const jiraUrl = row.original.externalRefs[0]?.url;
 				if (!jiraUrl) return null;
 				return (
-					<Button variant="ghost" size="icon" aria-label="Open in Jira" onClick={(e) => { e.stopPropagation(); window.open(jiraUrl, "_blank", "noopener,noreferrer") }}>
+					<Button variant="ghost" size="icon" aria-label="Open external link" onClick={(e) => { e.stopPropagation(); window.open(jiraUrl, "_blank", "noopener,noreferrer") }}>
 						<ExternalLink size={16} />
 					</Button>
 				);
