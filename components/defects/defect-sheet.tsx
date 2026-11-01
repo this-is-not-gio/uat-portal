@@ -11,6 +11,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ItemRow, ItemSection, authorOf } from "./create-defect-dialog";
 import { SEVERITY_CLASSNAMES, SEVERITY_ICONS, STATUS_FIELD_CLASSNAMES, STATUS_ICONS } from "./defect-badges";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,7 +23,7 @@ import { RemarkCard } from "@/components/testcasesheet/remark-card";
 import type { testRemark } from "@/lib/supabase/test-cases";
 import { testResultsHref } from "@/components/testsuite-layout/test-results/href";
 import { listAttachmentsByIds, type signedAttachment } from "@/lib/supabase/attachment-actions";
-import { deleteDefect, getDefectThreads, getIterationFailedCases, updateDefect, type defectFields, type defectLinks } from "@/lib/supabase/defect-actions";
+import { deleteDefect, getDefectThreads, getIterationFailedTree, updateDefect, type defectFields, type defectLinks, type failedCaseTree } from "@/lib/supabase/defect-actions";
 import { DEFECT_SEVERITIES, DEFECT_STATUS_LABELS, defectRef, externalUrlError } from "@/lib/supabase/defect-format";
 import type { defect, defectCase, defectSeverity, defectStatus } from "@/lib/supabase/defects";
 import { BADGE_VARIANTS } from "@/components/sidebar/app-sidebar";
@@ -29,7 +31,6 @@ import { cn, humanizeTimestamp, initials } from "@/lib/utils";
 
 const markdownLink = { a: ({ href, children }: { href?: string; children?: React.ReactNode }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a> };
 
-type roundCase = { id: string; code: string | null; title: string };
 type externalDraft = { label: string; url: string };
 type saveResult = { ok: true } | { ok: false; error: string };
 // Saves part of a defect; everything not named stays as it is.
@@ -140,62 +141,111 @@ function MarkdownSection({ Icon, title, hint, placeholder, value, onSave }: { Ic
 	);
 }
 
-// Unlink cited remarks and cases, or add failed cases of the round.
+// Pick what the defect cites from the round's failed cases: a whole case, a failed step's remarks, or overall remarks.
+// A case row opens to its failed steps (each opens to its remarks) and its overall remarks. Linking the whole case
+// disables its own steps and remarks. Anything linked that is no longer a failed case of the round is listed below to unlink.
 function ReferencesEditor({ defect, onSave, onCancel }: { defect: defect; onSave: saveFn; onCancel: () => void }) {
-	const [removedRemarks, setRemovedRemarks] = useState<string[]>([]);
-	const [removedCases, setRemovedCases] = useState<string[]>([]);
-	const [addedCases, setAddedCases] = useState<roundCase[]>([]);
-	const [roundCases, setRoundCases] = useState<roundCase[] | null>(null);
+	const [caseIds, setCaseIds] = useState<string[]>(() => defect.cases.flatMap((c) => (c.caseResultId ? [c.caseResultId] : [])));
+	const [remarkIds, setRemarkIds] = useState<string[]>(() => defect.references.flatMap((r) => (r.remarkId ? [r.remarkId] : [])));
+	const [tree, setTree] = useState<failedCaseTree[] | null>(null);
+	const [loadError, setLoadError] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
 	useEffect(() => {
 		let cancelled = false;
-		getIterationFailedCases(defect.iterationId).then((res) => { if (!cancelled) setRoundCases(res.ok ? res.data : []); });
+		getIterationFailedTree(defect.iterationId).then((res) => {
+			if (cancelled) return;
+			if (res.ok) setTree(res.data);
+			else { setTree([]); setLoadError(res.error); }
+		});
 		return () => { cancelled = true; };
 	}, [defect.iterationId]);
 
-	const keptCaseIds = defect.cases.flatMap((c) => (c.caseResultId && !removedCases.includes(c.caseResultId) ? [c.caseResultId] : []));
-	const addable = (roundCases ?? []).filter((c) => !keptCaseIds.includes(c.id) && !addedCases.some((a) => a.id === c.id));
+	const toggleRemarks = (ids: string[], on: boolean) => setRemarkIds((cur) => (on ? [...new Set([...cur, ...ids])] : cur.filter((id) => !ids.includes(id))));
+	const toggleCase = (c: failedCaseTree) => {
+		const on = !caseIds.includes(c.id);
+		setCaseIds((cur) => (on ? [...cur, c.id] : cur.filter((id) => id !== c.id)));
+		if (on) toggleRemarks([...c.steps.flatMap((s) => s.remarks.map((r) => r.id)), ...c.overall.map((r) => r.id)], false);
+	};
+
+	// Linked items the tree can't show (case no longer failed or removed): kept as they were unless unlinked here.
+	const treeCaseIds = new Set((tree ?? []).map((c) => c.id));
+	const treeRemarkIds = new Set((tree ?? []).flatMap((c) => [...c.steps.flatMap((s) => s.remarks.map((r) => r.id)), ...c.overall.map((r) => r.id)]));
+	const strayCases = defect.cases.filter((c) => c.caseResultId && !treeCaseIds.has(c.caseResultId) && caseIds.includes(c.caseResultId));
+	const strayRemarks = defect.references.filter((r) => r.remarkId && !treeRemarkIds.has(r.remarkId) && remarkIds.includes(r.remarkId));
+
 	function save() {
 		setError(null);
 		startTransition(async () => {
-			const res = await onSave({
-				remarkIds: defect.references.flatMap((r) => (r.remarkId && !removedRemarks.includes(r.remarkId) ? [r.remarkId] : [])),
-				caseResultIds: [...keptCaseIds, ...addedCases.map((c) => c.id)],
-			});
+			const res = await onSave({ remarkIds, caseResultIds: caseIds });
 			if (!res.ok) setError(res.error);
 		});
 	}
-	const items = [
-		...defect.cases.map((c) => ({ key: `c${c.caseResultId ?? c.caseCode}`, id: c.caseResultId, kind: "case" as const, code: c.caseCode, title: c.caseTitle, removed: !!c.caseResultId && removedCases.includes(c.caseResultId) })),
-		...addedCases.map((c) => ({ key: `a${c.id}`, id: c.id, kind: "added" as const, code: c.code, title: c.title, removed: false })),
-		...defect.references.map((r, i) => ({ key: `r${r.remarkId ?? i}`, id: r.remarkId, kind: "remark" as const, code: r.caseCode, title: `${r.stepOrder === null ? "Overall feedback" : `Step ${r.stepOrder + 1}`} remark · ${r.caseTitle}`, removed: !!r.remarkId && removedRemarks.includes(r.remarkId) })),
-	];
 	return (
 		<div className="flex flex-col gap-2">
-			{items.length === 0 && <p className="text-sm text-muted-foreground">Nothing is linked.</p>}
-			{items.map((item) => (
-				<div key={item.key} className={cn("flex flex-row items-center justify-between gap-2 rounded-md border px-3 py-2", item.removed && "opacity-50")}>
-					<p className="min-w-0 text-sm"><span className="font-mono text-xs">{item.code ?? "—"}</span> <span className={cn(item.removed && "line-through")}>{item.title}</span></p>
-					{item.id && (item.removed
-						? <Button variant="ghost" size="sm" disabled={pending} onClick={() => (item.kind === "remark" ? setRemovedRemarks((l) => l.filter((x) => x !== item.id)) : setRemovedCases((l) => l.filter((x) => x !== item.id)))}>Undo</Button>
-						: <Button variant="ghost" size="icon" className="size-7" aria-label="Unlink" disabled={pending} onClick={() => {
-							if (item.kind === "remark") setRemovedRemarks((l) => [...l, item.id!]);
-							else if (item.kind === "case") setRemovedCases((l) => [...l, item.id!]);
-							else setAddedCases((l) => l.filter((c) => c.id !== item.id));
-						}}><X className="size-4" /></Button>)}
-				</div>
-			))}
-			{addable.length > 0 && (
-				<div className="flex flex-col gap-1 pt-1">
-					<p className="text-xs text-muted-foreground">Add a failed test case from this round</p>
-					<div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-						{addable.map((c) => (
-							<button key={c.id} type="button" disabled={pending} onClick={() => setAddedCases((l) => [...l, c])} className="flex flex-row items-center gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted">
-								<Plus className="size-4 shrink-0" /><span className="font-mono text-xs">{c.code ?? "—"}</span><span className="min-w-0 truncate">{c.title}</span>
-							</button>
-						))}
+			{tree === null && <Skeleton className="h-10 w-full" />}
+			{loadError && <p className="text-xs text-destructive">{loadError}</p>}
+			{tree !== null && tree.length === 0 && !loadError && <p className="text-sm text-muted-foreground">This round has no failed test cases.</p>}
+			{tree !== null && tree.length > 0 && (
+				<ScrollArea className="w-full max-w-full rounded-md border [&>[data-slot=scroll-area-viewport]]:max-h-96">
+					<div className="flex w-0 min-w-full flex-col gap-1 p-2 pr-3">
+						<ul className="flex min-w-0 flex-col gap-1">
+							{tree.map((c) => {
+								const caseLinked = caseIds.includes(c.id);
+								const linkedCount = c.steps.flatMap((s) => s.remarks).concat(c.overall).filter((r) => remarkIds.includes(r.id)).length;
+								return (
+									<ItemRow key={c.id} title={[c.code, c.title].filter(Boolean).join(": ")} badge="Failed test case" badgeClass={SEVERITY_CLASSNAMES.critical}
+										sub={linkedCount > 0 ? `${linkedCount} remark${linkedCount === 1 ? "" : "s"} linked` : undefined} added={caseLinked} disabled={pending}
+										defaultExpanded={linkedCount > 0} onToggle={() => toggleCase(c)}>
+										<li className="min-w-0">
+											<ItemSection title="Failed steps" empty={c.steps.length === 0 ? "No failed steps." : undefined}>
+												{c.steps.map((s) => {
+													const ids = s.remarks.map((r) => r.id);
+													const all = ids.length > 0 && ids.every((id) => remarkIds.includes(id));
+													const linked = ids.filter((id) => remarkIds.includes(id)).length;
+													return (
+														<ItemRow key={s.id} title={`Step ${s.order + 1}: ${s.text}`} badge="Failed step" badgeClass={SEVERITY_CLASSNAMES.critical}
+															sub={`${ids.length} remark${ids.length === 1 ? "" : "s"}${linked > 0 ? ` · ${linked} linked` : ""}`} added={all} disabled={pending || caseLinked || ids.length === 0}
+															defaultExpanded={linked > 0} onToggle={() => toggleRemarks(ids, !all)}>
+															{s.remarks.map((r) => (
+																<ItemRow key={r.id} title={r.remark} badge="Step remark" badgeClass={SEVERITY_CLASSNAMES.critical} author={authorOf(r)}
+																	added={remarkIds.includes(r.id)} disabled={pending || caseLinked} onToggle={() => toggleRemarks([r.id], !remarkIds.includes(r.id))} />
+															))}
+														</ItemRow>
+													);
+												})}
+											</ItemSection>
+										</li>
+										<li className="min-w-0">
+											<ItemSection title="Overall remarks" empty={c.overall.length === 0 ? "No overall remarks." : undefined}>
+												{c.overall.map((r) => (
+													<ItemRow key={r.id} title={r.remark} badge="Overall remark" author={authorOf(r)}
+														added={remarkIds.includes(r.id)} disabled={pending || caseLinked} onToggle={() => toggleRemarks([r.id], !remarkIds.includes(r.id))} />
+												))}
+											</ItemSection>
+										</li>
+									</ItemRow>
+								);
+							})}
+						</ul>
 					</div>
+				</ScrollArea>
+			)}
+			{(strayCases.length > 0 || strayRemarks.length > 0) && (
+				<div className="flex flex-col gap-1 pt-1">
+					<p className="text-xs text-muted-foreground">Linked, but no longer a failed case of this round</p>
+					{strayCases.map((c) => (
+						<div key={`c${c.caseResultId}`} className="flex flex-row items-center justify-between gap-2 rounded-md border px-3 py-2">
+							<p className="min-w-0 text-sm"><span className="font-mono text-xs">{c.caseCode ?? "—"}</span> {c.caseTitle}</p>
+							<Button variant="ghost" size="icon" className="size-7" aria-label="Unlink" disabled={pending} onClick={() => setCaseIds((l) => l.filter((id) => id !== c.caseResultId))}><X className="size-4" /></Button>
+						</div>
+					))}
+					{strayRemarks.map((r) => (
+						<div key={`r${r.remarkId}`} className="flex flex-row items-center justify-between gap-2 rounded-md border px-3 py-2">
+							<p className="min-w-0 text-sm"><span className="font-mono text-xs">{r.caseCode ?? "—"}</span> {r.stepOrder === null ? "Overall feedback" : `Step ${r.stepOrder + 1}`} remark · {r.caseTitle}</p>
+							<Button variant="ghost" size="icon" className="size-7" aria-label="Unlink" disabled={pending} onClick={() => setRemarkIds((l) => l.filter((id) => id !== r.remarkId))}><X className="size-4" /></Button>
+						</div>
+					))}
 				</div>
 			)}
 			<SaveBar pending={pending} error={error} onSave={save} onCancel={onCancel} />

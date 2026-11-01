@@ -506,7 +506,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																				const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
 																				// Staff log defects from remarks on failed steps; the DB re-checks both.
 																				const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
-																					? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, `Step ${index + 1}`, step.step)} candidates={defectCandidates} onCreated={loadCaseDefects} />
+																					? <CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} candidates={defectCandidates} onCreated={loadCaseDefects} />
 																					: undefined;
 																				return <RemarkCard key={remark.id} remark={remark} files={files} action={action} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />;
 																			})
@@ -568,7 +568,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 					{filesUnavailable && caseRemarks.length > 0 && <AttachmentsUnavailable className="pb-3" />}
 					<div className="group/with-remark">
-						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} source={toCandidate(remark, "Overall feedback", null)} candidates={defectCandidates} onCreated={loadCaseDefects} /> : undefined} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />)}
+						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} candidates={defectCandidates} onCreated={loadCaseDefects} /> : undefined} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />)}
 						{canRemark && <div className="flex flex-row gap-2 group/remark">
 							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}
@@ -776,15 +776,15 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						/>
 					</div>
 				</SheetFooter>
-			) : mode === "review" && canLogDefects && caseState.status === "Failed" && (defectCandidates.length > 0 || caseDefects.length > 0) ? (
-				// Failed results only; a passed case has nothing to log, so no footer. The first remark is the source, the rest can be added in the dialog.
+			) : mode === "review" && canLogDefects && caseState.status === "Failed" ? (
+				// Failed results only; a passed case has nothing to log, so no footer. The dialog links the whole case, its failed steps or individual remarks.
 				<SheetFooter className="flex flex-row items-center justify-between gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					{/* Defects citing this case, as chips like the Test Summary: open vs closed (resolved and won't-fix). */}
 					<div className="flex flex-row items-center gap-2">
 						<p className="text-xs font-medium">Defects:</p>
 						<DefectSummaryCell open={caseDefects.filter((d) => d.status === "open").length} closed={caseDefects.filter((d) => d.status !== "open").length} />
 					</div>
-					{defectCandidates.length > 0 && <CreateDefectDialog caseResultId={testCase.id} source={defectCandidates[0]} candidates={defectCandidates} onCreated={loadCaseDefects} />}
+					<CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} candidates={defectCandidates} onCreated={loadCaseDefects} />
 				</SheetFooter>
 			) : footerActions ? (
 				<SheetFooter className="flex flex-row justify-end gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">

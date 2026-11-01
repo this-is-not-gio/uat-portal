@@ -194,18 +194,70 @@ export async function getRoundFailedCases(caseResultId: string): Promise<result<
     return { ok: true, data: { iterationId: current.iteration_id, cases: data } };
 }
 
-// Failed cases of a round, for the defect sheet's edit mode. Staff only.
-export async function getIterationFailedCases(iterationId: string): Promise<result<{ id: string; code: string | null; title: string }[]>> {
+export type failedCaseTree = {
+    id: string;
+    code: string | null;
+    title: string;
+    // Failed steps in order, each with the remarks left on it.
+    steps: { id: string; order: number; text: string; remarks: testRemark[] }[];
+    // Overall feedback on the case.
+    overall: testRemark[];
+};
+
+// Failed cases of a round with their failed steps and remarks, for the defect sheet's reference editor. Staff only.
+export async function getIterationFailedTree(iterationId: string): Promise<result<failedCaseTree[]>> {
     const user = await requireUser();
     if (!can(user, "view_all_results")) return denied("view_all_results");
     const supabase = await createClient();
-    const { data, error } = await supabase
+    const { data: cases, error: caseError } = await supabase
         .from("test_case_results")
-        .select("id, code, title")
+        .select("id, code, title, tester_id, test_role:test_roles ( name )")
         .eq("iteration_id", iterationId)
         .eq("included_in_run", true)
         .eq("status", "Failed")
         .order("code", { ascending: true });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data };
+    if (caseError) return { ok: false, error: caseError.message };
+    if (cases.length === 0) return { ok: true, data: [] };
+    const caseIds = cases.map((c) => c.id);
+
+    const { data: stepRows, error: stepError } = await supabase
+        .from("test_step_results")
+        .select("id, step, order_index, test_case_result_id")
+        .in("test_case_result_id", caseIds)
+        .eq("status", "Failed")
+        .order("order_index", { ascending: true });
+    if (stepError) return { ok: false, error: stepError.message };
+    const stepIds = stepRows.map((s) => s.id);
+
+    const remarkSelect = "id, remark, created_at, test_step_result_id, test_case_result_id, author:profiles ( id, full_name, role )";
+    const [stepRemarks, overallRemarks] = await Promise.all([
+        stepIds.length > 0 ? supabase.from("test_remarks").select(remarkSelect).in("test_step_result_id", stepIds).order("created_at", { ascending: true }) : Promise.resolve({ data: [], error: null }),
+        supabase.from("test_remarks").select(remarkSelect).in("test_case_result_id", caseIds).is("test_step_result_id", null).order("created_at", { ascending: true }),
+    ]);
+    const failure = stepRemarks.error ?? overallRemarks.error;
+    if (failure) return { ok: false, error: failure.message };
+
+    const testerOf = new Map(cases.map((c) => [c.id, c]));
+    const toRemark = (r: NonNullable<typeof overallRemarks.data>[number], caseId: string): testRemark => {
+        const owner = testerOf.get(caseId);
+        return { id: r.id, remark: r.remark, created_at: r.created_at, author: r.author ?? undefined, roleName: r.author?.id === owner?.tester_id ? owner?.test_role?.name : undefined };
+    };
+    const stepCase = new Map(stepRows.map((s) => [s.id, s.test_case_result_id]));
+    return {
+        ok: true,
+        data: cases.map((c) => ({
+            id: c.id,
+            code: c.code,
+            title: c.title,
+            steps: stepRows
+                .filter((s) => s.test_case_result_id === c.id)
+                .map((s) => ({
+                    id: s.id,
+                    order: s.order_index,
+                    text: s.step,
+                    remarks: (stepRemarks.data ?? []).filter((r) => r.test_step_result_id === s.id).map((r) => toRemark(r, stepCase.get(s.id) ?? c.id)),
+                })),
+            overall: (overallRemarks.data ?? []).filter((r) => r.test_case_result_id === c.id).map((r) => toRemark(r, c.id)),
+        })),
+    };
 }
