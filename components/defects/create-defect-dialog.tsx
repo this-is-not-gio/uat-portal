@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { SEVERITY_CLASSNAMES } from "./defect-badges";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -32,14 +33,18 @@ export type defectCandidate = {
 	remark: testRemark;
 	label: string;
 	stepText: string | null;
+	// The step's status (Failed, Blocked, Skipped); absent for overall remarks.
+	stepStatus?: string;
 	files: signedAttachment[];
 };
 
-// Logs a defect against a failed test case, failed steps, or individual overall remarks. Nothing starts selected.
+// Logs a defect against a failed or blocked test case, its failed/blocked/skipped steps, or individual overall remarks. Nothing starts selected.
 // Choosing the whole case disables the step and remark lists. The detail fields (precondition, steps,
 // expected/actual) are filled in on the defect itself afterwards.
-export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, candidates, onCreated }: {
+export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, caseStatus, candidates, onCreated }: {
 	caseResultId: string;
+	// Failed or Blocked: names the case row's badge.
+	caseStatus: string;
 	caseCode?: string | null;
 	caseTitle?: string | null;
 	onCreated?: () => void;
@@ -47,6 +52,7 @@ export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, candidat
 }) {
 	const [open, setOpen] = useState(false);
 	const [summary, setSummary] = useState("");
+	const [description, setDescription] = useState("");
 	const [severity, setSeverity] = useState<defectSeverity>("medium");
 	const [externalUrl, setExternalUrl] = useState("");
 	const [urlTouched, setUrlTouched] = useState(false);
@@ -57,12 +63,12 @@ export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, candidat
 	// The round the defect is logged in, loaded when the dialog opens.
 	const [round, setRound] = useState<{ iterationId: string } | null>(null);
 	const [roundError, setRoundError] = useState<string | null>(null);
-	// One option per failed step, holding every remark on it.
-	const steps = candidates.filter((c) => c.stepText !== null).reduce<{ key: string; label: string; name: string; ids: string[]; remarks: testRemark[] }[]>((groups, c) => {
+	// One option per affected (failed, blocked or skipped) step, holding every remark on it.
+	const steps = candidates.filter((c) => c.stepText !== null).reduce<{ key: string; label: string; name: string; status: string; ids: string[]; remarks: testRemark[] }[]>((groups, c) => {
 		const key = `${c.label}|${c.stepText}`;
 		const group = groups.find((g) => g.key === key);
 		if (group) { group.ids.push(c.remark.id); group.remarks.push(c.remark); }
-		else groups.push({ key, label: c.label, name: c.stepText ?? "", ids: [c.remark.id], remarks: [c.remark] });
+		else groups.push({ key, label: c.label, name: c.stepText ?? "", status: c.stepStatus ?? "Failed", ids: [c.remark.id], remarks: [c.remark] });
 		return groups;
 	}, []);
 	const overall = candidates.filter((c) => c.stepText === null);
@@ -84,6 +90,7 @@ export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, candidat
 		setRemarkIds([]);
 		setCaseSelected(false);
 		setSummary("");
+		setDescription("");
 		setSeverity("medium");
 		setExternalUrl("");
 		setUrlTouched(false);
@@ -98,6 +105,7 @@ export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, candidat
 			const result = await createDefect({
 				iterationId: round.iterationId,
 				summary,
+				description,
 				precondition: "",
 				stepsToReproduce: "",
 				expectedResult: "",
@@ -142,20 +150,24 @@ export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, candidat
 						</Label>
 						<Input id="defect-summary" value={summary} maxLength={200} onChange={(e) => setSummary(e.target.value)} disabled={isPending} placeholder="e.g. Save button does nothing on the profile page" />
 					</div>
+					<div className="flex flex-col gap-1">
+						<Label htmlFor="defect-description" className="text-xs text-muted-foreground">Description</Label>
+						<Textarea id="defect-description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isPending} rows={3} placeholder="Anything worth knowing about this defect (optional)" className="resize-none" />
+					</div>
 					<ScrollArea className="w-full max-w-full rounded-md border [&>[data-slot=scroll-area-viewport]]:max-h-72">
 						<div className="flex w-0 min-w-full flex-col gap-3 p-2 pr-3">
-							<ItemSection title="Failed test case">
-								<ItemRow title={[caseCode, caseTitle].filter(Boolean).join(": ") || "This test case"} badgeClass={SEVERITY_CLASSNAMES.critical} badge="Failed test case" added={caseSelected} disabled={isPending}
+							<ItemSection title="Test case">
+								<ItemRow title={[caseCode, caseTitle].filter(Boolean).join(": ") || "This test case"} badgeClass={SEVERITY_CLASSNAMES.critical} badge={`${caseStatus} test case`} added={caseSelected} disabled={isPending}
 									onToggle={() => { setCaseSelected((v) => !v); setRemarkIds([]); }} />
 							</ItemSection>
-							<ItemSection title="Failed steps" empty={steps.length === 0 ? "No failed steps." : undefined}>
+							<ItemSection title="Affected steps" empty={steps.length === 0 ? "No failed, blocked or skipped steps." : undefined}>
 								{steps.map((g) => {
 									const added = g.ids.every((id) => remarkIds.includes(id));
-									return <ItemRow key={g.key} title={`${g.label}: ${g.name}`} badge="Failed step" badgeClass={SEVERITY_CLASSNAMES.critical} sub={`${g.ids.length} remark${g.ids.length === 1 ? "" : "s"}`} added={added} disabled={isPending || caseSelected}
+									return <ItemRow key={g.key} title={`${g.label}: ${g.name}`} badge={`${g.status} step`} badgeClass={SEVERITY_CLASSNAMES.critical} sub={`${g.ids.length} remark${g.ids.length === 1 ? "" : "s"}`} added={added} disabled={isPending || caseSelected}
 										onToggle={() => setRemarkIds((ids) => (added ? ids.filter((id) => !g.ids.includes(id)) : [...new Set([...ids, ...g.ids])]))}>
 										{g.remarks.map((r) => {
 											const remarkAdded = remarkIds.includes(r.id);
-											return <ItemRow key={r.id} title={r.remark} badge="Step remark" badgeClass={SEVERITY_CLASSNAMES.critical} author={authorOf(r)} added={remarkAdded} disabled={isPending || caseSelected}
+											return <ItemRow key={r.id} title={r.remark} badge={`${g.status} step remark`} badgeClass={SEVERITY_CLASSNAMES.critical} author={authorOf(r)} added={remarkAdded} disabled={isPending || caseSelected}
 												onToggle={() => setRemarkIds((ids) => (remarkAdded ? ids.filter((id) => id !== r.id) : [...ids, r.id]))} />;
 										})}
 									</ItemRow>;
@@ -219,7 +231,7 @@ export function ItemSection({ title, empty, children }: { title: string; empty?:
 // "Jane Doe · Action Officer" for a remark, when its author is known.
 export const authorOf = (r: testRemark) => (r.author ? ([r.author.full_name, r.roleName] as [string, string?]) : undefined);
 
-// A row with an Add toggle. Rows given children (failed steps, with their remarks) also get a collapsed-by-default dropdown.
+// A row with an Add toggle. Rows given children (affected steps, with their remarks) also get a collapsed-by-default dropdown.
 export function ItemRow({ author, title, badge, badgeClass, sub, added, disabled, onToggle, defaultExpanded = false, children }: {
 	author?: [string, string?]; title: string; badge: string; badgeClass?: string; sub?: string; added: boolean; disabled: boolean; onToggle: () => void;
 	defaultExpanded?: boolean;

@@ -13,6 +13,7 @@ type result<T = undefined> = { ok: true; data: T } | { ok: false; error: string 
 
 export type defectFields = {
     summary: string;
+    description: string;
     precondition: string;
     stepsToReproduce: string;
     expectedResult: string;
@@ -48,6 +49,7 @@ export async function createDefect(input: defectFields & defectLinks & { iterati
     const { data, error } = await supabase.rpc("create_defect", {
         p_iteration_id: input.iterationId,
         p_summary: checked.summary,
+        p_description: input.description,
         p_precondition: input.precondition,
         p_steps_to_reproduce: input.stepsToReproduce,
         p_expected_result: input.expectedResult,
@@ -75,6 +77,7 @@ export async function updateDefect(input: defectFields & Partial<defectLinks> & 
     const { error } = await supabase.rpc("update_defect", {
         p_defect_id: input.id,
         p_summary: checked.summary,
+        p_description: input.description,
         p_precondition: input.precondition,
         p_steps_to_reproduce: input.stepsToReproduce,
         p_expected_result: input.expectedResult,
@@ -175,7 +178,7 @@ export async function getDefectThreads(defectId: string): Promise<result<{ threa
     return { ok: true, data: { threads, files } };
 }
 
-// The round a case result belongs to and every failed case in it, for the create dialog's "Link items" picker. Staff only.
+// The round a case result belongs to and every failed or blocked case in it, for the create dialog's "Link items" picker. Staff only.
 export async function getRoundFailedCases(caseResultId: string): Promise<result<{ iterationId: string; cases: { id: string; code: string | null; title: string }[] }>> {
     const user = await requireUser();
     if (!can(user, "view_all_results")) return denied("view_all_results");
@@ -188,7 +191,7 @@ export async function getRoundFailedCases(caseResultId: string): Promise<result<
         .select("id, code, title")
         .eq("iteration_id", current.iteration_id)
         .eq("included_in_run", true)
-        .eq("status", "Failed")
+        .in("status", ["Failed", "Blocked"])
         .order("code", { ascending: true });
     if (error) return { ok: false, error: error.message };
     return { ok: true, data: { iterationId: current.iteration_id, cases: data } };
@@ -198,23 +201,25 @@ export type failedCaseTree = {
     id: string;
     code: string | null;
     title: string;
-    // Failed steps in order, each with the remarks left on it.
-    steps: { id: string; order: number; text: string; remarks: testRemark[] }[];
+    // Failed case or Blocked case.
+    status: string;
+    // Failed, blocked and skipped steps in order, each with the remarks left on it.
+    steps: { id: string; order: number; text: string; status: string; remarks: testRemark[] }[];
     // Overall feedback on the case.
     overall: testRemark[];
 };
 
-// Failed cases of a round with their failed steps and remarks, for the defect sheet's reference editor. Staff only.
+// Failed and blocked cases of a round with their failed, blocked and skipped steps and remarks, for the defect sheet's reference editor. Staff only.
 export async function getIterationFailedTree(iterationId: string): Promise<result<failedCaseTree[]>> {
     const user = await requireUser();
     if (!can(user, "view_all_results")) return denied("view_all_results");
     const supabase = await createClient();
     const { data: cases, error: caseError } = await supabase
         .from("test_case_results")
-        .select("id, code, title, tester_id, test_role:test_roles ( name )")
+        .select("id, code, title, status, tester_id, test_role:test_roles ( name )")
         .eq("iteration_id", iterationId)
         .eq("included_in_run", true)
-        .eq("status", "Failed")
+        .in("status", ["Failed", "Blocked"])
         .order("code", { ascending: true });
     if (caseError) return { ok: false, error: caseError.message };
     if (cases.length === 0) return { ok: true, data: [] };
@@ -222,9 +227,9 @@ export async function getIterationFailedTree(iterationId: string): Promise<resul
 
     const { data: stepRows, error: stepError } = await supabase
         .from("test_step_results")
-        .select("id, step, order_index, test_case_result_id")
+        .select("id, step, order_index, status, test_case_result_id")
         .in("test_case_result_id", caseIds)
-        .eq("status", "Failed")
+        .in("status", ["Failed", "Blocked", "Skipped"])
         .order("order_index", { ascending: true });
     if (stepError) return { ok: false, error: stepError.message };
     const stepIds = stepRows.map((s) => s.id);
@@ -249,12 +254,14 @@ export async function getIterationFailedTree(iterationId: string): Promise<resul
             id: c.id,
             code: c.code,
             title: c.title,
+            status: c.status,
             steps: stepRows
                 .filter((s) => s.test_case_result_id === c.id)
                 .map((s) => ({
                     id: s.id,
                     order: s.order_index,
                     text: s.step,
+                    status: s.status,
                     remarks: (stepRemarks.data ?? []).filter((r) => r.test_step_result_id === s.id).map((r) => toRemark(r, stepCase.get(s.id) ?? c.id)),
                 })),
             overall: (overallRemarks.data ?? []).filter((r) => r.test_case_result_id === c.id).map((r) => toRemark(r, c.id)),

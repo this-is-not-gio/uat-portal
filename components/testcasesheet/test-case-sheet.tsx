@@ -265,12 +265,14 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 	const hasOwnEvidence = (stepId: string) => hasEvidenceFrom(stepRemarks[stepId] ?? []);
 	// Overall feedback with evidence covers the failure as a whole, so no step needs its own.
 	const caseHasEvidence = hasEvidenceFrom(caseRemarks);
-	// Every remark a defect on this case may cite: remarks of failed steps, and overall feedback while the case is Failed.
-	const toCandidate = (remark: testRemark, label: string, stepText: string | null): defectCandidate => ({ remark, label, stepText, files: remarkFiles[remark.id] ?? remark.attachments ?? [] });
+	// Every remark a defect on this case may cite: remarks of failed, blocked or skipped steps, and overall feedback while the case is Failed or Blocked.
+	const AFFECTED_STEP = ["Failed", "Blocked", "Skipped"];
+	const caseAffected = caseState.status === "Failed" || caseState.status === "Blocked";
+	const toCandidate = (remark: testRemark, label: string, stepText: string | null, stepStatus?: string): defectCandidate => ({ remark, label, stepText, stepStatus, files: remarkFiles[remark.id] ?? remark.attachments ?? [] });
 	const defectCandidates: defectCandidate[] = !canLogDefects ? [] : [
 		...(testCase.stepsToExecute ?? []).flatMap((step, i) =>
-			stepStatuses[step.id]?.status === "Failed" ? (stepRemarks[step.id] ?? []).map((r) => toCandidate(r, `Step ${i + 1}`, step.step)) : []),
-		...(caseState.status === "Failed" ? caseRemarks.map((r) => toCandidate(r, "Overall feedback", null)) : []),
+			AFFECTED_STEP.includes(stepStatuses[step.id]?.status ?? "") ? (stepRemarks[step.id] ?? []).map((r) => toCandidate(r, `Step ${i + 1}`, step.step, stepStatuses[step.id]?.status)) : []),
+		...(caseAffected ? caseRemarks.map((r) => toCandidate(r, "Overall feedback", null)) : []),
 	];
 	const allSteps = testCase.stepsToExecute ?? [];
 	// "Failed all" (every step Failed) only needs evidence on one step; otherwise each failed step needs its own.
@@ -472,7 +474,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 														<div className="flex flex-col gap-6 pt-3 sm:gap-10 sm:pt-5">
 															<div className="flex flex-col gap-4">
 																{/* Defects reported from this failed step's remarks, above the remark nodes (staff only: clients get no defects). */}
-																{canLogDefects && stepStatuses[step.id]?.status === "Failed" && (() => {
+																{canLogDefects && AFFECTED_STEP.includes(stepStatuses[step.id]?.status ?? "") && (() => {
 																	const stepDefects = defectsForStep(remarks);
 																	if (stepDefects.length === 0) return null;
 																	return (
@@ -504,9 +506,9 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 																		remarks?.length > 0 ? (
 																			remarks.map((remark) => {
 																				const files = remarkFiles[remark.id] ?? remark.attachments ?? [];
-																				// Staff log defects from remarks on failed steps; the DB re-checks both.
-																				const action = canLogDefects && stepStatuses[step.id]?.status === "Failed"
-																					? <CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} candidates={defectCandidates} onCreated={loadCaseDefects} />
+																				// Staff log defects from remarks on failed, blocked or skipped steps; the DB re-checks both.
+																				const action = canLogDefects && AFFECTED_STEP.includes(stepStatuses[step.id]?.status ?? "")
+																					? <CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} caseStatus={caseState.status} candidates={defectCandidates} onCreated={loadCaseDefects} />
 																					: undefined;
 																				return <RemarkCard key={remark.id} remark={remark} files={files} action={action} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />;
 																			})
@@ -568,7 +570,7 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 					</div>
 					{filesUnavailable && caseRemarks.length > 0 && <AttachmentsUnavailable className="pb-3" />}
 					<div className="group/with-remark">
-						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseState.status === "Failed" ? <CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} candidates={defectCandidates} onCreated={loadCaseDefects} /> : undefined} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />)}
+						{caseRemarks.map((remark) => <RemarkCard key={remark.id} remark={remark} files={remarkFiles[remark.id] ?? remark.attachments ?? []} action={canLogDefects && caseAffected ? <CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} caseStatus={caseState.status} candidates={defectCandidates} onCreated={loadCaseDefects} /> : undefined} defects={defectsFor(remark.id)} onOpenDefect={setOpenDefectId} />)}
 						{canRemark && <div className="flex flex-row gap-2 group/remark">
 							<div className="hidden sm:flex flex-col items-center group-first/remark:pt-2">
 								{/* <div className={`w-0.5 bg-accent rounded-full self-center ${caseRemarks.length === 0 ? 'group-first/remark:w-0 h-7' : 'h-8'}`}></div> */}
@@ -776,15 +778,15 @@ export function TestCaseSheet<T extends sheetTestCase>({ testCase, onChangeTestC
 						/>
 					</div>
 				</SheetFooter>
-			) : mode === "review" && canLogDefects && caseState.status === "Failed" ? (
-				// Failed results only; a passed case has nothing to log, so no footer. The dialog links the whole case, its failed steps or individual remarks.
+			) : mode === "review" && canLogDefects && caseAffected ? (
+				// Failed or blocked results only; a passed case has nothing to log, so no footer. The dialog links the whole case, its failed steps or individual remarks.
 				<SheetFooter className="flex flex-row items-center justify-between gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">
 					{/* Defects citing this case, as chips like the Test Summary: open vs closed (resolved and won't-fix). */}
 					<div className="flex flex-row items-center gap-2">
 						<p className="text-xs font-medium">Defects:</p>
 						<DefectSummaryCell open={caseDefects.filter((d) => d.status === "open").length} closed={caseDefects.filter((d) => d.status !== "open").length} />
 					</div>
-					<CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} candidates={defectCandidates} onCreated={loadCaseDefects} />
+					<CreateDefectDialog caseResultId={testCase.id} caseCode={testCase.code} caseTitle={testCase.title} caseStatus={caseState.status} candidates={defectCandidates} onCreated={loadCaseDefects} />
 				</SheetFooter>
 			) : footerActions ? (
 				<SheetFooter className="flex flex-row justify-end gap-2 sticky bottom-0 left-0 right-0 z-10 bg-background/80 backdrop-blur-md border-t p-4">

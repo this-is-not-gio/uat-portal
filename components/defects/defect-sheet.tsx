@@ -38,7 +38,7 @@ type saveFn = (patch: Partial<defectFields> & Partial<defectLinks>) => Promise<s
 
 // The saved fields of a defect, as the update action wants them.
 function fieldsOf(d: defect): defectFields {
-	return { summary: d.summary, precondition: d.precondition, stepsToReproduce: d.stepsToReproduce, expectedResult: d.expectedResult, actualResult: d.actualResult, severity: d.severity };
+	return { summary: d.summary, description: d.description, precondition: d.precondition, stepsToReproduce: d.stepsToReproduce, expectedResult: d.expectedResult, actualResult: d.actualResult, severity: d.severity };
 }
 
 // The full defect: written sections, what it cites (remarks with their evidence, failed cases) and external links.
@@ -141,9 +141,9 @@ function MarkdownSection({ Icon, title, hint, placeholder, value, onSave }: { Ic
 	);
 }
 
-// Pick what the defect cites from the round's failed cases: a whole case, a failed step's remarks, or overall remarks.
-// A case row opens to its failed steps (each opens to its remarks) and its overall remarks. Linking the whole case
-// disables its own steps and remarks. Anything linked that is no longer a failed case of the round is listed below to unlink.
+// Pick what the defect cites from the round's failed or blocked cases: a whole case, an affected step's remarks, or overall remarks.
+// A case row opens to its failed, blocked and skipped steps (each opens to its remarks) and its overall remarks. Linking the whole case
+// disables its own steps and remarks. Anything linked that is no longer a failed or blocked case of the round is listed below to unlink.
 function ReferencesEditor({ defect, onSave, onCancel }: { defect: defect; onSave: saveFn; onCancel: () => void }) {
 	const [caseIds, setCaseIds] = useState<string[]>(() => defect.cases.flatMap((c) => (c.caseResultId ? [c.caseResultId] : [])));
 	const [remarkIds, setRemarkIds] = useState<string[]>(() => defect.references.flatMap((r) => (r.remarkId ? [r.remarkId] : [])));
@@ -185,7 +185,7 @@ function ReferencesEditor({ defect, onSave, onCancel }: { defect: defect; onSave
 		<div className="flex flex-col gap-2">
 			{tree === null && <Skeleton className="h-10 w-full" />}
 			{loadError && <p className="text-xs text-destructive">{loadError}</p>}
-			{tree !== null && tree.length === 0 && !loadError && <p className="text-sm text-muted-foreground">This round has no failed test cases.</p>}
+			{tree !== null && tree.length === 0 && !loadError && <p className="text-sm text-muted-foreground">This round has no failed or blocked test cases.</p>}
 			{tree !== null && tree.length > 0 && (
 				<ScrollArea className="w-full max-w-full rounded-md border [&>[data-slot=scroll-area-viewport]]:max-h-96">
 					<div className="flex w-0 min-w-full flex-col gap-1 p-2 pr-3">
@@ -194,21 +194,21 @@ function ReferencesEditor({ defect, onSave, onCancel }: { defect: defect; onSave
 								const caseLinked = caseIds.includes(c.id);
 								const linkedCount = c.steps.flatMap((s) => s.remarks).concat(c.overall).filter((r) => remarkIds.includes(r.id)).length;
 								return (
-									<ItemRow key={c.id} title={[c.code, c.title].filter(Boolean).join(": ")} badge="Failed test case" badgeClass={SEVERITY_CLASSNAMES.critical}
+									<ItemRow key={c.id} title={[c.code, c.title].filter(Boolean).join(": ")} badge={`${c.status} test case`} badgeClass={SEVERITY_CLASSNAMES.critical}
 										sub={linkedCount > 0 ? `${linkedCount} remark${linkedCount === 1 ? "" : "s"} linked` : undefined} added={caseLinked} disabled={pending}
 										defaultExpanded={linkedCount > 0} onToggle={() => toggleCase(c)}>
 										<li className="min-w-0">
-											<ItemSection title="Failed steps" empty={c.steps.length === 0 ? "No failed steps." : undefined}>
+											<ItemSection title="Affected steps" empty={c.steps.length === 0 ? "No failed, blocked or skipped steps." : undefined}>
 												{c.steps.map((s) => {
 													const ids = s.remarks.map((r) => r.id);
 													const all = ids.length > 0 && ids.every((id) => remarkIds.includes(id));
 													const linked = ids.filter((id) => remarkIds.includes(id)).length;
 													return (
-														<ItemRow key={s.id} title={`Step ${s.order + 1}: ${s.text}`} badge="Failed step" badgeClass={SEVERITY_CLASSNAMES.critical}
+														<ItemRow key={s.id} title={`Step ${s.order + 1}: ${s.text}`} badge={`${s.status} step`} badgeClass={SEVERITY_CLASSNAMES.critical}
 															sub={`${ids.length} remark${ids.length === 1 ? "" : "s"}${linked > 0 ? ` · ${linked} linked` : ""}`} added={all} disabled={pending || caseLinked || ids.length === 0}
 															defaultExpanded={linked > 0} onToggle={() => toggleRemarks(ids, !all)}>
 															{s.remarks.map((r) => (
-																<ItemRow key={r.id} title={r.remark} badge="Step remark" badgeClass={SEVERITY_CLASSNAMES.critical} author={authorOf(r)}
+																<ItemRow key={r.id} title={r.remark} badge={`${s.status} step remark`} badgeClass={SEVERITY_CLASSNAMES.critical} author={authorOf(r)}
 																	added={remarkIds.includes(r.id)} disabled={pending || caseLinked} onToggle={() => toggleRemarks([r.id], !remarkIds.includes(r.id))} />
 															))}
 														</ItemRow>
@@ -233,7 +233,7 @@ function ReferencesEditor({ defect, onSave, onCancel }: { defect: defect; onSave
 			)}
 			{(strayCases.length > 0 || strayRemarks.length > 0) && (
 				<div className="flex flex-col gap-1 pt-1">
-					<p className="text-xs text-muted-foreground">Linked, but no longer a failed case of this round</p>
+					<p className="text-xs text-muted-foreground">Linked, but no longer a failed or blocked case of this round</p>
 					{strayCases.map((c) => (
 						<div key={`c${c.caseResultId}`} className="flex flex-row items-center justify-between gap-2 rounded-md border px-3 py-2">
 							<p className="min-w-0 text-sm"><span className="font-mono text-xs">{c.caseCode ?? "—"}</span> {c.caseTitle}</p>
@@ -379,6 +379,7 @@ function DefectBody({ defect, suiteSlug, iterationNumber, onClose }: { defect: d
 			</SheetHeader>
 
 			<div className="flex flex-col gap-6 px-4 pb-6 md:px-8">
+				<MarkdownSection Icon={FileText} title="Description" hint="General notes about this defect." placeholder="Anything worth knowing about this defect" value={defect.description} onSave={(v) => save({ description: v })} />
 				<MarkdownSection Icon={ListChecks} title="Precondition" hint="What must be true before the steps." placeholder="What must be true before the steps" value={defect.precondition} onSave={(v) => save({ precondition: v })} />
 				<MarkdownSection Icon={ClipboardList} title="Steps to Reproduce" hint="How to trigger the problem." placeholder="Numbered steps that trigger the problem" value={defect.stepsToReproduce} onSave={(v) => save({ stepsToReproduce: v })} />
 				<MarkdownSection Icon={SquareCheck} title="Expected result" hint="What should have happened." placeholder="What should have happened" value={defect.expectedResult} onSave={(v) => save({ expectedResult: v })} />
@@ -407,7 +408,7 @@ function DefectBody({ defect, suiteSlug, iterationNumber, onClose }: { defect: d
 										<div className="flex min-w-0 flex-1 flex-col gap-0.5 pb-4">
 											<div className="flex min-h-10 flex-row flex-wrap items-center justify-between gap-2">
 												<div className="flex flex-col">
-													<p className="text-xs text-muted-foreground">Failed test case</p>
+													<p className="text-xs text-muted-foreground">Test case</p>
 													<p className="text-sm font-semibold"><span className="font-mono text-xs">{c.caseCode ?? "—"}</span> {c.caseTitle}</p>
 												</div>
 												{!c.caseResultId
