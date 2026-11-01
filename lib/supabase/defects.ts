@@ -45,6 +45,7 @@ export type defect = {
     code: string;
     iterationId: string;
     summary: string;
+    description: string;
     precondition: string;
     stepsToReproduce: string;
     expectedResult: string;
@@ -115,6 +116,7 @@ export function toDefect(row: defectRow): defect {
         code: defectCode(row.number),
         iterationId: row.iteration_id,
         summary: row.summary,
+        description: row.description,
         precondition: row.precondition,
         stepsToReproduce: row.steps_to_reproduce,
         expectedResult: row.expected_result,
@@ -176,4 +178,5 @@ export async function getAwaitingDefectCount(iterationId: string, defects: defec
     const reported = new Set(defects.flatMap((d) => [...d.cases, ...d.references].map((c) => c.caseResultId)));
     return data.filter((r) => !reported.has(r.id)).length;
 }
-
+
+

@@ -244,6 +244,7 @@ export type Database = {
           actual_result: string
           created_at: string
           created_by: string | null
+          description: string
           expected_result: string
           id: string
           iteration_id: string
@@ -260,6 +261,7 @@ export type Database = {
           actual_result?: string
           created_at?: string
           created_by?: string | null
+          description?: string
           expected_result?: string
           id?: string
           iteration_id: string
@@ -276,6 +278,7 @@ export type Database = {
           actual_result?: string
           created_at?: string
           created_by?: string | null
+          description?: string
           expected_result?: string
           id?: string
           iteration_id?: string
@@ -1811,6 +1814,7 @@ export type Database = {
         Args: {
           p_actual_result?: string
           p_case_result_ids?: string[]
+          p_description?: string
           p_expected_result?: string
           p_external?: Json
           p_iteration_id: string
@@ -1833,6 +1837,7 @@ export type Database = {
           p_actual_result: string
           p_case_result_ids?: string[]
           p_defect_id: string
+          p_description?: string
           p_expected_result: string
           p_external?: Json
           p_precondition: string

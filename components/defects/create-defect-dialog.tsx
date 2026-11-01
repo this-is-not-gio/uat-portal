@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Bug, Check, Plus, X } from "lucide-react";
+import { Bug, Check, ChevronDown, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { SEVERITY_CLASSNAMES } from "./defect-badges";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
 	Dialog,
@@ -31,38 +33,46 @@ export type defectCandidate = {
 	remark: testRemark;
 	label: string;
 	stepText: string | null;
+	// The step's status (Failed, Blocked, Skipped); absent for overall remarks.
+	stepStatus?: string;
 	files: signedAttachment[];
 };
 
-// Logs a defect from a remark on a failed step or the overall feedback of a failed case. The source remark starts
-// added; other remarks of the same case can be added or removed. Whole test cases aren't linked from here.
-// The detail fields (precondition, steps, expected/actual) are filled in on the defect itself afterwards.
-export function CreateDefectDialog({ caseResultId, source, candidates, onCreated }: {
+// Logs a defect against a failed or blocked test case, its failed/blocked/skipped steps, or individual overall remarks. Nothing starts selected.
+// Choosing the whole case disables the step and remark lists. The detail fields (precondition, steps,
+// expected/actual) are filled in on the defect itself afterwards.
+export function CreateDefectDialog({ caseResultId, caseCode, caseTitle, caseStatus, candidates, onCreated }: {
 	caseResultId: string;
+	// Failed or Blocked: names the case row's badge.
+	caseStatus: string;
+	caseCode?: string | null;
+	caseTitle?: string | null;
 	onCreated?: () => void;
-	source: defectCandidate;
 	candidates: defectCandidate[];
 }) {
 	const [open, setOpen] = useState(false);
 	const [summary, setSummary] = useState("");
+	const [description, setDescription] = useState("");
 	const [severity, setSeverity] = useState<defectSeverity>("medium");
 	const [externalUrl, setExternalUrl] = useState("");
 	const [urlTouched, setUrlTouched] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
-	const [remarkIds, setRemarkIds] = useState<string[]>([source.remark.id]);
+	const [remarkIds, setRemarkIds] = useState<string[]>([]);
+	const [caseSelected, setCaseSelected] = useState(false);
 	// The round the defect is logged in, loaded when the dialog opens.
 	const [round, setRound] = useState<{ iterationId: string } | null>(null);
 	const [roundError, setRoundError] = useState<string | null>(null);
-	const allRemarks = [source, ...candidates.filter((c) => c.remark.id !== source.remark.id)];
-	// One option per step (or the overall feedback), holding every remark on it.
-	const steps = allRemarks.reduce<{ key: string; label: string; name: string; overall: boolean; ids: string[] }[]>((groups, c) => {
-		const key = `${c.label}|${c.stepText ?? ""}`;
+	// One option per affected (failed, blocked or skipped) step, holding every remark on it.
+	const steps = candidates.filter((c) => c.stepText !== null).reduce<{ key: string; label: string; name: string; status: string; ids: string[]; remarks: testRemark[] }[]>((groups, c) => {
+		const key = `${c.label}|${c.stepText}`;
 		const group = groups.find((g) => g.key === key);
-		if (group) group.ids.push(c.remark.id);
-		else groups.push({ key, label: c.label, name: c.stepText ?? "Overall feedback on this test case", overall: c.stepText === null, ids: [c.remark.id] });
+		if (group) { group.ids.push(c.remark.id); group.remarks.push(c.remark); }
+		else groups.push({ key, label: c.label, name: c.stepText ?? "", status: c.stepStatus ?? "Failed", ids: [c.remark.id], remarks: [c.remark] });
 		return groups;
 	}, []);
+	const overall = candidates.filter((c) => c.stepText === null);
+	const selectedCount = caseSelected ? 1 : remarkIds.length;
 	const urlError = externalUrlError(externalUrl);
 
 	useEffect(() => {
@@ -77,8 +87,10 @@ export function CreateDefectDialog({ caseResultId, source, candidates, onCreated
 	}, [open, caseResultId]);
 
 	function reset() {
-		setRemarkIds([source.remark.id]);
+		setRemarkIds([]);
+		setCaseSelected(false);
 		setSummary("");
+		setDescription("");
 		setSeverity("medium");
 		setExternalUrl("");
 		setUrlTouched(false);
@@ -93,13 +105,14 @@ export function CreateDefectDialog({ caseResultId, source, candidates, onCreated
 			const result = await createDefect({
 				iterationId: round.iterationId,
 				summary,
+				description,
 				precondition: "",
 				stepsToReproduce: "",
 				expectedResult: "",
 				actualResult: "",
 				severity,
-				remarkIds,
-				caseResultIds: [],
+				remarkIds: caseSelected ? [] : remarkIds,
+				caseResultIds: caseSelected ? [caseResultId] : [],
 				externalRefs: externalUrl.trim() ? [{ label: "", url: externalUrl }] : [],
 			});
 			if (!result.ok) {
@@ -119,7 +132,7 @@ export function CreateDefectDialog({ caseResultId, source, candidates, onCreated
 				<Bug className="size-3.5" />
 				Create defect
 			</DialogTrigger>
-			<DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+			<DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
 				<DialogHeader className="flex flex-col px-2 py-3">
 					<DialogTitle className="font-heading font-semibold flex flex-row items-center gap-1">
 						<Bug className="size-4" />
@@ -138,27 +151,37 @@ export function CreateDefectDialog({ caseResultId, source, candidates, onCreated
 						<Input id="defect-summary" value={summary} maxLength={200} onChange={(e) => setSummary(e.target.value)} disabled={isPending} placeholder="e.g. Save button does nothing on the profile page" />
 					</div>
 					<div className="flex flex-col gap-1">
-						<p className="text-xs font-medium text-muted-foreground">Add items{remarkIds.length > 0 ? ` (${remarkIds.length} remark${remarkIds.length === 1 ? "" : "s"} added)` : ""}</p>
-						<ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">
-							{steps.map((g) => {
-								const added = g.ids.some((id) => remarkIds.includes(id));
-								return (
-									<li key={g.key} className={`flex flex-row items-center justify-between gap-2 rounded-md border px-2 py-1 ${added ? "bg-muted/40" : ""}`}>
-										<div className="flex min-w-0 flex-col">
-											<p className="truncate text-xs font-semibold" title={g.name}>{g.label}: {g.name}</p>
-											<p className="flex flex-row items-center gap-1.5 text-xs text-muted-foreground">
-												<Badge variant="outline" className={cn("h-4 px-1.5 text-[10px]", g.overall ? "text-muted-foreground" : SEVERITY_CLASSNAMES.critical)}>{g.overall ? "Overall remark" : "Failed step"}</Badge>
-												{g.ids.length} remark{g.ids.length === 1 ? "" : "s"}
-											</p>
-										</div>
-										<Button variant={added ? "secondary" : "outline"} size="sm" className="h-6 shrink-0 gap-1 px-2 text-xs" disabled={isPending} onClick={() => setRemarkIds((ids) => (added ? ids.filter((id) => !g.ids.includes(id)) : [...ids, ...g.ids]))}>
-											{added ? <><Check className="size-3" />Added</> : <><Plus className="size-3" />Add</>}
-										</Button>
-									</li>
-								);
-							})}
-						</ul>
+						<Label htmlFor="defect-description" className="text-xs text-muted-foreground">Description</Label>
+						<Textarea id="defect-description" value={description} onChange={(e) => setDescription(e.target.value)} disabled={isPending} rows={3} placeholder="Anything worth knowing about this defect (optional)" className="resize-none" />
 					</div>
+					<ScrollArea className="w-full max-w-full rounded-md border [&>[data-slot=scroll-area-viewport]]:max-h-72">
+						<div className="flex w-0 min-w-full flex-col gap-3 p-2 pr-3">
+							<ItemSection title="Test case">
+								<ItemRow title={[caseCode, caseTitle].filter(Boolean).join(": ") || "This test case"} badgeClass={SEVERITY_CLASSNAMES.critical} badge={`${caseStatus} test case`} added={caseSelected} disabled={isPending}
+									onToggle={() => { setCaseSelected((v) => !v); setRemarkIds([]); }} />
+							</ItemSection>
+							<ItemSection title="Affected steps" empty={steps.length === 0 ? "No failed, blocked or skipped steps." : undefined}>
+								{steps.map((g) => {
+									const added = g.ids.every((id) => remarkIds.includes(id));
+									return <ItemRow key={g.key} title={`${g.label}: ${g.name}`} badge={`${g.status} step`} badgeClass={SEVERITY_CLASSNAMES.critical} sub={`${g.ids.length} remark${g.ids.length === 1 ? "" : "s"}`} added={added} disabled={isPending || caseSelected}
+										onToggle={() => setRemarkIds((ids) => (added ? ids.filter((id) => !g.ids.includes(id)) : [...new Set([...ids, ...g.ids])]))}>
+										{g.remarks.map((r) => {
+											const remarkAdded = remarkIds.includes(r.id);
+											return <ItemRow key={r.id} title={r.remark} badge={`${g.status} step remark`} badgeClass={SEVERITY_CLASSNAMES.critical} author={authorOf(r)} added={remarkAdded} disabled={isPending || caseSelected}
+												onToggle={() => setRemarkIds((ids) => (remarkAdded ? ids.filter((id) => id !== r.id) : [...ids, r.id]))} />;
+										})}
+									</ItemRow>;
+								})}
+							</ItemSection>
+							<ItemSection title="Overall remarks" empty={overall.length === 0 ? "No overall remarks." : undefined}>
+								{overall.map((c) => {
+									const added = remarkIds.includes(c.remark.id);
+									return <ItemRow key={c.remark.id} title={c.remark.remark} badge="Overall remark" author={authorOf(c.remark)} added={added} disabled={isPending || caseSelected}
+										onToggle={() => setRemarkIds((ids) => (added ? ids.filter((id) => id !== c.remark.id) : [...ids, c.remark.id]))} />;
+								})}
+							</ItemSection>
+						</div>
+					</ScrollArea>
 					{roundError && <p className="text-xs text-destructive">{roundError}</p>}
 					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
 						<div className="flex flex-col gap-1">
@@ -185,12 +208,77 @@ export function CreateDefectDialog({ caseResultId, source, candidates, onCreated
 						<X className="size-4" />
 						Cancel
 					</DialogClose>
-					<Button onClick={onSave} disabled={isPending || !round || !summary.trim() || !!urlError}>
+					<Button onClick={onSave} disabled={isPending || !round || selectedCount === 0 || !summary.trim() || !!urlError}>
 						<Bug className="size-4" />
 						{isPending ? "Saving…" : "Create defect"}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
+	);
+}
+
+export function ItemSection({ title, empty, children }: { title: string; empty?: string; children?: React.ReactNode }) {
+	return (
+		<div className="flex min-w-0 flex-col gap-1">
+			<p className="text-xs font-medium text-muted-foreground">{title}</p>
+			{empty ? <p className="text-xs text-muted-foreground">{empty}</p> : <ul className="flex min-w-0 flex-col gap-1">{children}</ul>}
+		</div>
+	);
+}
+
+
+// "Jane Doe · Action Officer" for a remark, when its author is known.
+export const authorOf = (r: testRemark) => (r.author ? ([r.author.full_name, r.roleName] as [string, string?]) : undefined);
+
+// A row with an Add toggle. Rows given children (affected steps, with their remarks) also get a collapsed-by-default dropdown.
+export function ItemRow({ author, title, badge, badgeClass, sub, added, disabled, onToggle, defaultExpanded = false, children }: {
+	author?: [string, string?]; title: string; badge: string; badgeClass?: string; sub?: string; added: boolean; disabled: boolean; onToggle: () => void;
+	defaultExpanded?: boolean;
+	children?: React.ReactNode;
+}) {
+	const [expanded, setExpanded] = useState(defaultExpanded);
+	return (
+		<li className={cn("flex min-w-0 max-w-full flex-col gap-1 overflow-hidden rounded-md border px-3 py-2", added && "bg-muted/40", disabled && "opacity-50")}>
+			<div className={`flex min-w-0 flex-row gap-2 ${author || sub ? "items-start" : "items-center"}`}>
+				<div className="flex flex-row gap-1">
+
+					{
+						children ?
+							<Button variant="outline" size="icon-xs" className="h-6 shrink-0 gap-1 px-2 text-xs" aria-expanded={expanded} aria-label={expanded ? "Hide remarks" : "Show remarks"} onClick={() => setExpanded((v) => !v)}>
+								<ChevronDown className={cn("size-3 transition-transform", expanded && "rotate-180")} />
+							</Button>
+							: null
+					}
+					<Button variant={added ? "secondary" : "outline"} size="icon-xs" className="h-6 shrink-0 gap-1 px-2 text-xs" disabled={disabled} onClick={onToggle}>
+						{added ? <Check className="size-3" /> : <Plus className="size-3" />}
+					</Button>
+				</div>
+				{
+					author ?
+						<div className="flex min-w-0 flex-1 flex-col gap-1">
+							<div className="flex flex-row justify-between min-w-0 flex-1">
+								<p className="break-all text-xs font-semibold">{author[0]}{author[1] ? ` · ${author[1]}` : ""}</p>
+								<Badge variant="outline" className={cn("h-4 px-1.5 text-[10px]", badgeClass ?? "text-muted-foreground")}>{badge}</Badge>
+							</div>
+							<div className="">
+								<p className="text-xs text-muted-foreground" title={title}>{title}</p>
+							</div>
+						</div>
+						:
+						<div className="flex min-w-0 flex-1 flex-row justify-between">
+							<div className="">
+								<p className="break-all text-xs font-semibold" title={title}>{title}</p>
+								{
+									sub && <p className="text-xs text-muted-foreground">{sub}</p>
+								}
+							</div>
+							<Badge variant="outline" className={cn("h-4 px-1.5 text-[10px]", badgeClass ?? "text-muted-foreground")}>{badge}</Badge>
+						</div>
+				}
+
+			</div>
+			{children && expanded && <ul className="ml-3 flex min-w-0 flex-col gap-1 border-l pl-4">{children}</ul>}
+		</li>
 	);
 }
